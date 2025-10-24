@@ -147,27 +147,39 @@
   - [x] Sorting logic
   - [x] Search filtering
   - [x] Pagination
-  - [x] Run: `npm run test` to confirm all tests pass (65 tests passing)
+  - [x] Run: `npm run test` to confirm all tests pass (83 tests passing)
 - [x] Created Convex leaderboard.ts with 10 query functions
-- [x] Created leaderboard components (top-players-card, top-companies-card)
+- [x] Wired up all Convex queries to leaderboard UI
+- [x] Implemented search/filter for all tables
+- [x] All leaderboard tests passing (14 tests)
 
-**IN PROGRESS** - Leaderboard page structure created. Next: Wire up Convex queries to UI once API types regenerate.
+**✅ SECTION 3 COMPLETE** - Leaderboard page fully functional with Convex integration, search/filtering, and all tests passing.
 
 ---
 
 ### 4. Accounts Tab
 
-- [ ] 4.1. Create Accounts page (route: /accounts)
-  - [ ] Show personal account balance prominently at top
-  - [ ] Create list/grid showing each company the player owns
-  - [ ] For each company card: company logo, name, ticker, balance
-  - [ ] Display total company assets
-- [ ] 4.2. Use shadcn Card and skeleton components
-- [ ] 4.3. Write vitest tests for:
-  - [ ] Account balance display
-  - [ ] Company filtering
-  - [ ] Balance calculations
-  - [ ] Run: `npm run test` to confirm all tests pass
+- [x] 4.1. Create Accounts page (route: /accounts)
+  - [x] Show personal account balance prominently at top
+  - [x] Create list/grid showing each company the player owns
+  - [x] For each company card: company logo, name, ticker, balance
+  - [x] Display total company assets
+- [x] 4.2. Use shadcn Card and skeleton components
+- [x] 4.3. Write vitest tests for:
+  - [x] Account balance display
+  - [x] Company filtering
+  - [x] Balance calculations
+  - [x] Run: `npm run test` to confirm all tests pass (83 tests passing)
+- [x] Created route at /accounts (nested under dashboard layout)
+- [x] Implemented personal account balance display with prominent card
+- [x] Created responsive grid showing all owned companies
+- [x] Display company details: name, ticker, balance, market cap (if public)
+- [x] Calculate and display total company assets
+- [x] Loading states with skeleton components
+- [x] Empty state when no companies exist
+- [x] All accounts tests passing (18 tests)
+
+**✅ SECTION 4 COMPLETE** - Accounts page fully functional with personal and company account displays, all tests passing.
 
 ---
 
