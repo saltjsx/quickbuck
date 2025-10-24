@@ -16,6 +16,19 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { formatCurrency, formatCompactCurrency } from "~/lib/game-utils";
 import { Search, TrendingUp, TrendingDown } from "lucide-react";
+import { getAuth } from "@clerk/react-router/ssr.server";
+import { redirect } from "react-router";
+import type { Route } from "./+types/leaderboard";
+
+export async function loader(args: Route.LoaderArgs) {
+  const { userId } = await getAuth(args);
+
+  if (!userId) {
+    throw redirect("/sign-in");
+  }
+
+  return {};
+}
 
 export default function LeaderboardPage() {
   const [searchQuery, setSearchQuery] = useState("");

@@ -34,6 +34,19 @@ import {
   MessageSquare,
 } from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
+import { getAuth } from "@clerk/react-router/ssr.server";
+import { redirect } from "react-router";
+import type { Route } from "./+types/company-sales";
+
+export async function loader(args: Route.LoaderArgs) {
+  const { userId } = await getAuth(args);
+
+  if (!userId) {
+    throw redirect("/sign-in");
+  }
+
+  return {};
+}
 
 export default function CompanySalesPage() {
   const { userId: clerkUserId } = useAuth();

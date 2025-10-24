@@ -30,6 +30,60 @@ export const createPlayer = mutation({
   },
 });
 
+// Mutation: Get or create player (auto-initialize on first access)
+export const getOrCreatePlayer = mutation({
+  handler: async (ctx) => {
+    // Get the authenticated user's identity
+    const identity = await ctx.auth.getUserIdentity();
+    
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Find or create the user record
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    let userId: Id<"users">;
+    
+    if (!user) {
+      // Create new user if doesn't exist
+      userId = await ctx.db.insert("users", {
+        name: identity.name ?? "Anonymous",
+        email: identity.email ?? "",
+        tokenIdentifier: identity.subject,
+      });
+    } else {
+      userId = user._id;
+    }
+
+    // Check if player exists
+    const existingPlayer = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .unique();
+
+    if (existingPlayer) {
+      return existingPlayer;
+    }
+
+    // Create new player with starting balance of $10,000
+    const now = Date.now();
+    const playerId = await ctx.db.insert("players", {
+      userId: userId,
+      balance: 1000000, // $10,000 in cents
+      netWorth: 1000000,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    const player = await ctx.db.get(playerId);
+    return player;
+  },
+});
+
 // Mutation: Update player balance
 export const updatePlayerBalance = mutation({
   args: {

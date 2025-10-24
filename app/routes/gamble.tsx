@@ -16,6 +16,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
 import { Loader2, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
 import type { Id } from "../../convex/_generated/dataModel";
+import { getAuth } from "@clerk/react-router/ssr.server";
+import { redirect } from "react-router";
+import type { Route } from "./+types/gamble";
+
+export async function loader(args: Route.LoaderArgs) {
+  const { userId } = await getAuth(args);
+
+  if (!userId) {
+    throw redirect("/sign-in");
+  }
+
+  return {};
+}
 
 export default function GamblePage() {
   const { userId: clerkUserId } = useAuth();

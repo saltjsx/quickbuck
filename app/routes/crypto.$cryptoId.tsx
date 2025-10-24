@@ -42,8 +42,21 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import { getAuth } from "@clerk/react-router/ssr.server";
+import { redirect } from "react-router";
+import type { Route } from "./+types/crypto.$cryptoId";
 
 type Timeframe = "1H" | "1D" | "1W" | "1M" | "1Y" | "ALL";
+
+export async function loader(args: Route.LoaderArgs) {
+  const { userId } = await getAuth(args);
+
+  if (!userId) {
+    throw redirect("/sign-in");
+  }
+
+  return {};
+}
 
 export default function CryptoDetailPage() {
   const { cryptoId } = useParams();

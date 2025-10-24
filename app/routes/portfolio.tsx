@@ -24,9 +24,22 @@ import {
   ArrowUpDown,
 } from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
+import { getAuth } from "@clerk/react-router/ssr.server";
+import { redirect } from "react-router";
+import type { Route } from "./+types/portfolio";
 
 type SortField = "value" | "amount" | "name";
 type SortOrder = "asc" | "desc";
+
+export async function loader(args: Route.LoaderArgs) {
+  const { userId } = await getAuth(args);
+
+  if (!userId) {
+    throw redirect("/sign-in");
+  }
+
+  return {};
+}
 
 export default function PortfolioPage() {
   const navigate = useNavigate();
