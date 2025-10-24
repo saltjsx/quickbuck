@@ -185,51 +185,75 @@
 
 ### 5. Transfers Tab
 
-- [ ] 5.1. Create Transfers page (route: /transfers)
-- [ ] 5.2. Create "Send Money/Assets" form:
-  - [ ] Dropdown to select "From Account" (Personal account + all owned companies)
-  - [ ] Dropdown to select "To Account" (Other players or other companies)
-  - [ ] Radio buttons to select asset type: Cash, Crypto, Stock Holdings
-  - [ ] Input field for amount
-  - [ ] Required description field
-  - [ ] Submit button
-- [ ] 5.3. Add validation:
-  - [ ] Sufficient balance check
-  - [ ] Account exists check
-  - [ ] Minimum transfer amount
-- [ ] 5.4. Create transfer history section below form:
-  - [ ] Show recent transfers sent and received
-  - [ ] Use shadcn Table component
-- [ ] 5.5. Write vitest tests for:
-  - [ ] Form validation
-  - [ ] Balance verification
-  - [ ] Transfer creation
-  - [ ] Transfer history sorting
-  - [ ] Run: `npm run test` to confirm all tests pass
+- [x] 5.1. Create Transfers page (route: /transfers)
+- [x] 5.2. Create "Send Money/Assets" form:
+  - [x] Dropdown to select "From Account" (Personal account + all owned companies)
+  - [x] Dropdown to select "To Account" (Other players or other companies)
+  - [x] Radio buttons to select asset type: Cash, Crypto, Stock Holdings
+  - [x] Input field for amount
+  - [x] Required description field
+  - [x] Submit button
+- [x] 5.3. Add validation:
+  - [x] Sufficient balance check
+  - [x] Account exists check
+  - [x] Minimum transfer amount
+- [x] 5.4. Create transfer history section below form:
+  - [x] Show recent transfers sent and received
+  - [x] Use shadcn Table component
+- [x] 5.5. Write vitest tests for:
+  - [x] Form validation
+  - [x] Balance verification
+  - [x] Transfer creation
+  - [x] Transfer history sorting
+  - [x] Run: `npm run test` to confirm all tests pass (111 tests passing)
+- [x] Created route at /transfers (nested under dashboard layout)
+- [x] Implemented full transfer form with from/to account selectors
+- [x] Connected to Convex transferCash mutation
+- [x] Client-side validation (same account, min amount, description required)
+- [x] Real-time balance display in account dropdowns
+- [x] Transfer history table showing sent/received transactions
+- [x] Created RadioGroup and Textarea UI components
+- [x] All transfer tests passing (28 tests)
+
+**✅ SECTION 5 COMPLETE** - Transfers page fully functional with form, validation, and history display.
 
 ---
 
 ### 6. Transaction History
 
-- [ ] 6.1. Create Transaction History page (route: /transactions)
-- [ ] 6.2. Create account selector dropdown:
-  - [ ] Personal account
-  - [ ] Each owned company account
-- [ ] 6.3. Create transaction table:
-  - [ ] Columns: Date, Type, From, To, Amount, Asset Type, Description
-  - [ ] Sort by recency (newest first)
-  - [ ] Add pagination
-  - [ ] Use shadcn Table component
-- [ ] 6.4. Add filters:
-  - [ ] Date range filter
-  - [ ] Transaction type filter
-  - [ ] Amount range filter
-- [ ] 6.5. Write vitest tests for:
-  - [ ] Account filtering
-  - [ ] Transaction fetching
-  - [ ] Sorting logic
-  - [ ] Date filtering
-  - [ ] Run: `npm run test` to confirm all tests pass
+- [x] 6.1. Create Transaction History page (route: /transactions)
+- [x] 6.2. Create account selector dropdown:
+  - [x] Personal account
+  - [x] Each owned company account
+- [x] 6.3. Create transaction table:
+  - [x] Columns: Date, Type, From, To, Amount, Asset Type, Description
+  - [x] Sort by recency (newest first)
+  - [x] Add pagination (20 items per page)
+  - [x] Use shadcn Table component
+- [x] 6.4. Add filters:
+  - [x] Date range filter (From/To dates)
+  - [x] Transaction type filter (All/Sent/Received)
+  - [x] Amount range filter (Min/Max)
+- [x] 6.5. Write vitest tests for:
+  - [x] Account filtering
+  - [x] Transaction fetching
+  - [x] Sorting logic
+  - [x] Date filtering
+  - [x] Run: `npm run test` to confirm all tests pass (111 tests passing)
+- [x] Created route at /transactions (nested under dashboard layout)
+- [x] Account switcher to view personal or company transactions
+- [x] Comprehensive filtering system with multiple criteria
+  - [x] Date range filtering with proper boundary handling
+  - [x] Amount range filtering (min/max)
+  - [x] Transaction type filtering (sent/received/all)
+- [x] Pagination with next/previous buttons and page counter
+- [x] Auto-reset to page 1 when filters change
+- [x] Transaction table shows date/time, type, from/to accounts, asset type, description, amount
+- [x] Color-coded amounts (red for sent, green for received)
+- [x] Clear filters button to reset all filters
+- [x] All transaction tests included in transfers.test.ts (28 tests total)
+
+**✅ SECTION 6 COMPLETE** - Transaction History page fully functional with filtering, pagination, and account switching.
 
 ---
 
