@@ -71,19 +71,11 @@ export default function IntegrationsSection({
               <div className="flex gap-3">
                 <Button size="sm" asChild>
                   <Link
-                    to={
-                      loaderData?.isSignedIn
-                        ? loaderData?.hasActiveSubscription
-                          ? "/dashboard"
-                          : "/pricing"
-                        : "/sign-up"
-                    }
+                    to={loaderData?.isSignedIn ? "/dashboard" : "/sign-up"}
                     prefetch="viewport"
                   >
                     {loaderData?.isSignedIn
-                      ? loaderData?.hasActiveSubscription
-                        ? "Go to Dashboard (Demo)"
-                        : "Subscribe Now (Demo)"
+                      ? "Go to Dashboard (Demo)"
                       : "Get Started (Demo)"}
                   </Link>
                 </Button>
@@ -105,30 +97,32 @@ export default function IntegrationsSection({
   );
 }
 
-const IntegrationCard = memo(({
-  children,
-  className,
-  borderClassName,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  borderClassName?: string;
-}) => {
-  return (
-    <div
-      className={cn(
-        "bg-background relative flex size-20 rounded-xl dark:bg-transparent",
-        className
-      )}
-    >
+const IntegrationCard = memo(
+  ({
+    children,
+    className,
+    borderClassName,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+    borderClassName?: string;
+  }) => {
+    return (
       <div
-        role="presentation"
         className={cn(
-          "absolute inset-0 rounded-xl border border-black/20 dark:border-white/25",
-          borderClassName
+          "bg-background relative flex size-20 rounded-xl dark:bg-transparent",
+          className
         )}
-      />
-      <div className="relative z-20 m-auto size-fit *:size-8">{children}</div>
-    </div>
-  );
-});
+      >
+        <div
+          role="presentation"
+          className={cn(
+            "absolute inset-0 rounded-xl border border-black/20 dark:border-white/25",
+            borderClassName
+          )}
+        />
+        <div className="relative z-20 m-auto size-fit *:size-8">{children}</div>
+      </div>
+    );
+  }
+);

@@ -10,7 +10,6 @@ const menuItems = [
   { name: "Home", href: "#hero" },
   { name: "Features", href: "#features" },
   { name: "Team", href: "#team" },
-  { name: "Pricing", href: "#pricing" },
 ];
 
 export const Navbar = ({
@@ -43,13 +42,11 @@ export const Navbar = ({
   }, []);
 
   // Simple computations don't need useMemo
-  const dashboardLink = !loaderData?.isSignedIn 
-    ? "/sign-up" 
-    : loaderData.hasActiveSubscription ? "/dashboard" : "/pricing";
+  const dashboardLink = !loaderData?.isSignedIn ? "/sign-up" : "/dashboard";
 
-  const dashboardText = !loaderData?.isSignedIn 
+  const dashboardText = !loaderData?.isSignedIn
     ? "Get Started (Demo)"
-    : loaderData.hasActiveSubscription ? "Dashboard" : "Subscribe";
+    : "Dashboard";
   return (
     <header>
       <nav

@@ -1,5 +1,4 @@
 import { httpRouter } from "convex/server";
-import { paymentWebhook } from "./subscriptions";
 import { httpAction } from "./_generated/server";
 import { openai } from "@ai-sdk/openai";
 import { streamText } from "ai";
@@ -92,11 +91,7 @@ http.route({
   }),
 });
 
-http.route({
-  path: "/payments/webhook",
-  method: "POST",
-  handler: paymentWebhook,
-});
+// Payments/webhook route removed — payments are disabled for now.
 
 // Log that routes are configured
 console.log("HTTP routes configured");
