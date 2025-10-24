@@ -16,6 +16,10 @@ export default [
   route("stock/:companyId", "routes/stock.$companyId.tsx"),
   route("crypto", "routes/crypto.tsx"),
   route("crypto/:cryptoId", "routes/crypto.$cryptoId.tsx"),
+  route("portfolio", "routes/portfolio.tsx"),
+  route("company-sales", "routes/company-sales.tsx"),
+  route("gamble", "routes/gamble.tsx"),
+  route("upgrades", "routes/upgrades.tsx"),
   layout("routes/dashboard/layout.tsx", [
     route("dashboard", "routes/dashboard/index.tsx"),
     route("accounts", "routes/dashboard/accounts.tsx"),

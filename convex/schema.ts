@@ -337,6 +337,39 @@ export default defineSchema({
     .index("by_cryptoId_timestamp", ["cryptoId", "timestamp"])
     .index("by_timestamp", ["timestamp"]),
 
+  // Upgrades system
+  upgrades: defineTable({
+    playerId: v.id("players"),
+    upgradeType: v.string(), // e.g., "interest_boost", "stock_returns_boost"
+    name: v.string(),
+    description: v.string(),
+    cost: v.number(), // in cents
+    benefit: v.string(), // e.g., "+10% Daily Interest Rate"
+    isActive: v.boolean(),
+    purchasedAt: v.number(),
+  })
+    .index("by_playerId", ["playerId"])
+    .index("by_upgradeType", ["upgradeType"]),
+
+  // Gambling history
+  gamblingHistory: defineTable({
+    playerId: v.id("players"),
+    gameType: v.union(
+      v.literal("slots"),
+      v.literal("blackjack"),
+      v.literal("dice"),
+      v.literal("roulette")
+    ),
+    betAmount: v.number(), // in cents
+    payout: v.number(), // in cents
+    result: v.union(v.literal("win"), v.literal("loss")),
+    details: v.optional(v.any()), // game-specific details
+    timestamp: v.number(),
+  })
+    .index("by_playerId", ["playerId"])
+    .index("by_gameType", ["gameType"])
+    .index("by_timestamp", ["timestamp"]),
+
   // Configuration table for game settings
   gameConfig: defineTable({
     key: v.string(),

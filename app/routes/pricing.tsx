@@ -28,9 +28,13 @@ export default function IntegratedPricing() {
       userId: isSignedIn ? userId : undefined,
     }
   );
-  const userSubscription = useQuery(api.subscriptions.fetchUserSubscription);
+  const userSubscription = useQuery(
+    api.subscriptions.fetchUserSubscription
+  ) as any;
   const createCheckout = useAction(api.subscriptions.createCheckoutSession);
-  const createPortalUrl = useAction(api.subscriptions.createCustomerPortalUrl);
+  const createPortalUrl = useAction(
+    api.subscriptions.createCustomerPortalUrl
+  ) as any;
   const upsertUser = useMutation(api.users.upsertUser);
 
   // Sync user when signed in

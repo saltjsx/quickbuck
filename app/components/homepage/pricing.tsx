@@ -18,9 +18,13 @@ export default function Pricing({ loaderData }: { loaderData: any }) {
   const [loadingPriceId, setLoadingPriceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const userSubscription = useQuery(api.subscriptions.fetchUserSubscription);
+  const userSubscription = useQuery(
+    api.subscriptions.fetchUserSubscription
+  ) as any;
   const createCheckout = useAction(api.subscriptions.createCheckoutSession);
-  const createPortalUrl = useAction(api.subscriptions.createCustomerPortalUrl);
+  const createPortalUrl = useAction(
+    api.subscriptions.createCustomerPortalUrl
+  ) as any;
   const upsertUser = useMutation(api.users.upsertUser);
 
   const handleSubscribe = async (priceId: string) => {
