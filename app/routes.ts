@@ -16,5 +16,7 @@ export default [
     route("accounts", "routes/dashboard/accounts.tsx"),
     route("transfers", "routes/dashboard/transfers.tsx"),
     route("transactions", "routes/dashboard/transactions.tsx"),
+    route("loans", "routes/dashboard/loans.tsx"),
+    route("companies", "routes/dashboard/companies.tsx"),
   ]),
 ] satisfies RouteConfig;
