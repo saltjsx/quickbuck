@@ -57,7 +57,7 @@ describe("Section 7: Loans - Interest Calculation", () => {
 });
 
 describe("Section 7: Loans - Validation Logic", () => {
-  const MAX_LOAN_AMOUNT = 5000000; // $50,000 in cents
+  const MAX_LOAN_AMOUNT = 500000000; // $5,000,000 in cents
 
   it("should validate loan amount is positive", () => {
     const amount = 1000;

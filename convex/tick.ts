@@ -216,6 +216,19 @@ async function executeBotPurchases(ctx: any, totalBudget: number) {
       createdAt: Date.now(),
     });
     
+    // Log transaction for bot purchase
+    await ctx.db.insert("transactions", {
+      fromAccountId: "bot" as any,
+      fromAccountType: "bot" as any,
+      toAccountId: product.companyId,
+      toAccountType: "company" as const,
+      amount: actualPrice,
+      assetType: "product" as const,
+      assetId: product._id as any,
+      description: `Bot purchased ${quantity}x ${product.name} at $${product.price / 100}`,
+      createdAt: Date.now(),
+    });
+    
     purchases.push({
       productId: product._id,
       companyId: product.companyId,
@@ -293,6 +306,13 @@ async function updateStockPrices(ctx: any) {
         updatedAt: Date.now(),
       });
       
+      // Record price history for charting
+      await ctx.db.insert("stockPriceHistory", {
+        stockId: stock._id,
+        price: finalPrice,
+        timestamp: Date.now(),
+      });
+      
       updates.push({
         stockId: stock._id,
         oldPrice: currentPrice,
@@ -341,6 +361,13 @@ async function updateCryptoPrices(ctx: any) {
         price: newPrice,
         marketCap: newMarketCap,
         updatedAt: Date.now(),
+      });
+      
+      // Record price history for charting
+      await ctx.db.insert("cryptoPriceHistory", {
+        cryptoId: crypto._id,
+        price: newPrice,
+        timestamp: Date.now(),
       });
       
       updates.push({

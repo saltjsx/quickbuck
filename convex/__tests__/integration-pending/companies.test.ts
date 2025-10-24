@@ -1,6 +1,9 @@
 import { convexTest } from "convex-test";
 import { describe, expect, it, beforeEach } from "vitest";
+
+// @ts-ignore - integration tests are pending
 import { api } from "../_generated/api";
+// @ts-ignore - integration tests are pending
 import schema from "../schema";
 
 describe("Company Operations", () => {
