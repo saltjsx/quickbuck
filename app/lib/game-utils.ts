@@ -1,9 +1,9 @@
 /**
- * Calculate time remaining until next tick (20 minutes)
+ * Calculate time remaining until next tick (5 minutes)
  * Returns time in milliseconds
  */
 export function getTimeUntilNextTick(lastTickTime: number): number {
-  const TICK_INTERVAL_MS = 20 * 60 * 1000; // 20 minutes in milliseconds
+  const TICK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
   const now = Date.now();
   const timeSinceLastTick = now - lastTickTime;
   const timeUntilNextTick = TICK_INTERVAL_MS - (timeSinceLastTick % TICK_INTERVAL_MS);

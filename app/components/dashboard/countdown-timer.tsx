@@ -14,7 +14,7 @@ export function CountdownTimer({ lastTickTime }: CountdownTimerProps) {
 
   useEffect(() => {
     if (!lastTickTime) {
-      // If no last tick time, assume next tick in 20 minutes
+      // If no last tick time, assume next tick in 5 minutes
       setTimeRemaining(20 * 60 * 1000);
       return;
     }
@@ -41,7 +41,7 @@ export function CountdownTimer({ lastTickTime }: CountdownTimerProps) {
           {formatTimeRemaining(timeRemaining)}
         </div>
         <p className="text-xs text-muted-foreground">
-          Markets update every 20 minutes
+          Markets update every 5 minutes
         </p>
       </CardContent>
     </Card>

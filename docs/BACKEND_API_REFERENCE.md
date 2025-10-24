@@ -283,7 +283,7 @@ await api.companySales.getPlayerPendingOffers({ playerId });
 
 ### Execute Game Tick
 ```typescript
-// Manually trigger tick (normally runs every 20 minutes)
+// Manually trigger tick (normally runs every 5 minutes)
 await api.tick.executeTick({});
 
 // The tick will:
@@ -323,7 +323,7 @@ await api.gameConfig.getAllConfig({});
 - Loan interest rate: **5% daily**
 - Min company balance for IPO: **$50,000** (5,000,000 cents)
 - Bot budget per tick: **$100,000** (10,000,000 cents)
-- Tick interval: **20 minutes**
+- Tick interval: **5 minutes**
 
 ## Important Notes
 

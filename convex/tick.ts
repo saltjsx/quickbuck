@@ -57,7 +57,7 @@ async function executeTickLogic(ctx: any) {
   };
 }
 
-// Main tick mutation - runs every 20 minutes via cron
+// Main tick mutation - runs every 5 minutes via cron
 export const executeTick = internalMutation({
   handler: async (ctx) => {
     return await executeTickLogic(ctx);
