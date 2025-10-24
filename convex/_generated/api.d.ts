@@ -11,7 +11,9 @@
 import type * as cart from "../cart.js";
 import type * as companies from "../companies.js";
 import type * as companySales from "../companySales.js";
+import type * as crons from "../crons.js";
 import type * as crypto from "../crypto.js";
+import type * as gambling from "../gambling.js";
 import type * as gameConfig from "../gameConfig.js";
 import type * as http from "../http.js";
 import type * as leaderboard from "../leaderboard.js";
@@ -22,6 +24,7 @@ import type * as stocks from "../stocks.js";
 import type * as subscriptions from "../subscriptions.js";
 import type * as tick from "../tick.js";
 import type * as transactions from "../transactions.js";
+import type * as upgrades from "../upgrades.js";
 import type * as users from "../users.js";
 
 import type {
@@ -42,7 +45,9 @@ declare const fullApi: ApiFromModules<{
   cart: typeof cart;
   companies: typeof companies;
   companySales: typeof companySales;
+  crons: typeof crons;
   crypto: typeof crypto;
+  gambling: typeof gambling;
   gameConfig: typeof gameConfig;
   http: typeof http;
   leaderboard: typeof leaderboard;
@@ -53,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   subscriptions: typeof subscriptions;
   tick: typeof tick;
   transactions: typeof transactions;
+  upgrades: typeof upgrades;
   users: typeof users;
 }>;
 declare const fullApiWithMounts: typeof fullApi;

@@ -497,29 +497,25 @@ function DiceRoll({ playerBalance }: { playerBalance: number }) {
 
         <div>
           <Label>Bet Type</Label>
-          <RadioGroup
-            value={betType}
-            onValueChange={(v: any) => setBetType(v)}
-            disabled={rolling}
-          >
+          <RadioGroup value={betType} onValueChange={(v: any) => setBetType(v)}>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="odd" id="odd" />
+              <RadioGroupItem value="odd" id="odd" disabled={rolling} />
               <Label htmlFor="odd">Odd (2x)</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="even" id="even" />
+              <RadioGroupItem value="even" id="even" disabled={rolling} />
               <Label htmlFor="even">Even (2x)</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="under7" id="under7" />
+              <RadioGroupItem value="under7" id="under7" disabled={rolling} />
               <Label htmlFor="under7">Under 7 (2x)</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="over7" id="over7" />
+              <RadioGroupItem value="over7" id="over7" disabled={rolling} />
               <Label htmlFor="over7">Over 7 (2x)</Label>
             </div>
             <div className="flex items-center space-x-2">
-              <RadioGroupItem value="exact7" id="exact7" />
+              <RadioGroupItem value="exact7" id="exact7" disabled={rolling} />
               <Label htmlFor="exact7">Exactly 7 (5x)</Label>
             </div>
           </RadioGroup>
@@ -622,38 +618,34 @@ function Roulette({ playerBalance }: { playerBalance: number }) {
 
         <div>
           <Label>Bet Type</Label>
-          <RadioGroup
-            value={betType}
-            onValueChange={(v: any) => setBetType(v)}
-            disabled={spinning}
-          >
+          <RadioGroup value={betType} onValueChange={(v: any) => setBetType(v)}>
             <div className="grid grid-cols-2 gap-2">
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="red" id="red" />
+                <RadioGroupItem value="red" id="red" disabled={spinning} />
                 <Label htmlFor="red">Red (2x)</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="black" id="black" />
+                <RadioGroupItem value="black" id="black" disabled={spinning} />
                 <Label htmlFor="black">Black (2x)</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="odd" id="rodd" />
+                <RadioGroupItem value="odd" id="rodd" disabled={spinning} />
                 <Label htmlFor="rodd">Odd (2x)</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="even" id="reven" />
+                <RadioGroupItem value="even" id="reven" disabled={spinning} />
                 <Label htmlFor="reven">Even (2x)</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="low" id="low" />
+                <RadioGroupItem value="low" id="low" disabled={spinning} />
                 <Label htmlFor="low">Low 1-18 (2x)</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="high" id="high" />
+                <RadioGroupItem value="high" id="high" disabled={spinning} />
                 <Label htmlFor="high">High 19-36 (2x)</Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="green" id="green" />
+                <RadioGroupItem value="green" id="green" disabled={spinning} />
                 <Label htmlFor="green">Green 0 (36x)</Label>
               </div>
             </div>

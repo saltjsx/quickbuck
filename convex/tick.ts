@@ -1,62 +1,73 @@
 import { v } from "convex/values";
-import { mutation } from "./_generated/server";
+import { mutation, internalMutation } from "./_generated/server";
 
-// Main tick mutation - runs every 20 minutes
-// This can be called by a scheduled function or manually for testing
-export const executeTick = mutation({
+// Shared tick execution logic
+async function executeTickLogic(ctx: any) {
+  const now = Date.now();
+  
+  // Get last tick number
+  const lastTick = await ctx.db
+    .query("tickHistory")
+    .withIndex("by_tickNumber")
+    .order("desc")
+    .first();
+  
+  const tickNumber = (lastTick?.tickNumber || 0) + 1;
+  
+  console.log(`Executing tick #${tickNumber}`);
+  
+  // Get global config for budget
+  const gameConfigDoc = await ctx.db
+    .query("gameConfig")
+    .withIndex("by_key", (q: any) => q.eq("key", "botBudget"))
+    .first();
+  
+  const botBudget = gameConfigDoc?.value || 10000000; // Default $100,000 in cents
+  
+  // Step 1: Bot purchases from marketplace
+  const botPurchases = await executeBotPurchases(ctx, botBudget);
+  
+  // Step 2: Update stock prices based on algorithm
+  const stockPriceUpdates = await updateStockPrices(ctx);
+  
+  // Step 3: Update crypto prices based on algorithm
+  const cryptoPriceUpdates = await updateCryptoPrices(ctx);
+  
+  // Step 4: Apply loan interest
+  await applyLoanInterest(ctx);
+  
+  // Step 5: Record tick history
+  const tickId = await ctx.db.insert("tickHistory", {
+    tickNumber,
+    timestamp: now,
+    botPurchases,
+    stockPriceUpdates,
+    cryptoPriceUpdates,
+    totalBudgetSpent: botPurchases.reduce((sum, p) => sum + p.totalPrice, 0),
+  });
+  
+  console.log(`Tick #${tickNumber} completed`);
+  
+  return {
+    tickNumber,
+    tickId,
+    botPurchases: botPurchases.length,
+    stockUpdates: stockPriceUpdates?.length || 0,
+    cryptoUpdates: cryptoPriceUpdates?.length || 0,
+  };
+}
+
+// Main tick mutation - runs every 20 minutes via cron
+export const executeTick = internalMutation({
   handler: async (ctx) => {
-    const now = Date.now();
-    
-    // Get last tick number
-    const lastTick = await ctx.db
-      .query("tickHistory")
-      .withIndex("by_tickNumber")
-      .order("desc")
-      .first();
-    
-    const tickNumber = (lastTick?.tickNumber || 0) + 1;
-    
-    console.log(`Executing tick #${tickNumber}`);
-    
-    // Get global config for budget
-    let config = await ctx.db
-      .query("gameConfig")
-      .withIndex("by_key", (q) => q.eq("key", "botBudget"))
-      .unique();
-    
-    const botBudget = config?.value || 10000000; // Default $100,000 in cents
-    
-    // Step 1: Bot purchases from marketplace
-    const botPurchases = await executeBotPurchases(ctx, botBudget);
-    
-    // Step 2: Update stock prices based on algorithm
-    const stockPriceUpdates = await updateStockPrices(ctx);
-    
-    // Step 3: Update crypto prices based on algorithm
-    const cryptoPriceUpdates = await updateCryptoPrices(ctx);
-    
-    // Step 4: Apply loan interest
-    await applyLoanInterest(ctx);
-    
-    // Step 5: Record tick history
-    const tickId = await ctx.db.insert("tickHistory", {
-      tickNumber,
-      timestamp: now,
-      botPurchases,
-      stockPriceUpdates,
-      cryptoPriceUpdates,
-      totalBudgetSpent: botPurchases.reduce((sum, p) => sum + p.totalPrice, 0),
-    });
-    
-    console.log(`Tick #${tickNumber} completed`);
-    
-    return {
-      tickNumber,
-      tickId,
-      botPurchases: botPurchases.length,
-      stockUpdates: stockPriceUpdates?.length || 0,
-      cryptoUpdates: cryptoPriceUpdates?.length || 0,
-    };
+    return await executeTickLogic(ctx);
+  },
+});
+
+// Manual trigger for testing (can be called from admin dashboard)
+export const manualTick = mutation({
+  handler: async (ctx) => {
+    return await executeTickLogic(ctx);
   },
 });
 
