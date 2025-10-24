@@ -11,6 +11,7 @@ export default [
   route("sign-up/*", "routes/sign-up.tsx"),
   route("success", "routes/success.tsx"),
   route("leaderboard", "routes/leaderboard.tsx"),
+  route("marketplace", "routes/marketplace.tsx"),
   layout("routes/dashboard/layout.tsx", [
     route("dashboard", "routes/dashboard/index.tsx"),
     route("accounts", "routes/dashboard/accounts.tsx"),
@@ -18,5 +19,6 @@ export default [
     route("transactions", "routes/dashboard/transactions.tsx"),
     route("loans", "routes/dashboard/loans.tsx"),
     route("companies", "routes/dashboard/companies.tsx"),
+    route("company/:companyId", "routes/dashboard/company.$companyId.tsx"),
   ]),
 ] satisfies RouteConfig;

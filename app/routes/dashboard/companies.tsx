@@ -26,6 +26,7 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
+import { useNavigate } from "react-router";
 import {
   Building2,
   Plus,
@@ -38,6 +39,7 @@ import type { Id } from "convex/_generated/dataModel";
 
 export default function ManageCompaniesPage() {
   const { userId: clerkUserId } = useAuth();
+  const navigate = useNavigate();
 
   // Get user and player
   const user = useQuery(
@@ -353,9 +355,13 @@ export default function ManageCompaniesPage() {
 
                     {/* Action Buttons */}
                     <div className="grid grid-cols-2 gap-2">
-                      <Button variant="outline" size="sm" disabled>
-                        <Edit className="mr-2 h-3 w-3" />
-                        Edit
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => navigate(`/company/${company._id}`)}
+                      >
+                        <Building2 className="mr-2 h-3 w-3" />
+                        Dashboard
                       </Button>
                       <Button variant="outline" size="sm" disabled>
                         <Trash2 className="mr-2 h-3 w-3" />
