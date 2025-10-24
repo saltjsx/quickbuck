@@ -88,7 +88,6 @@ describe("Company Operations", () => {
     const stockId = await t.mutation(api.companies.makeCompanyPublic, {
       companyId,
       ticker: "IPO",
-      initialSharePrice: 1000, // $10
       totalShares: 100000,
     });
     
@@ -119,7 +118,6 @@ describe("Company Operations", () => {
       t.mutation(api.companies.makeCompanyPublic, {
         companyId,
         ticker: "POOR",
-        initialSharePrice: 1000,
         totalShares: 100000,
       })
     ).rejects.toThrow("must be at least $50,000");
@@ -140,7 +138,6 @@ describe("Company Operations", () => {
     await t.mutation(api.companies.makeCompanyPublic, {
       companyId: company1Id,
       ticker: "TEST",
-      initialSharePrice: 1000,
       totalShares: 100000,
     });
     
@@ -159,7 +156,6 @@ describe("Company Operations", () => {
       t.mutation(api.companies.makeCompanyPublic, {
         companyId: company2Id,
         ticker: "TEST",
-        initialSharePrice: 1000,
         totalShares: 100000,
       })
     ).rejects.toThrow("already in use");
@@ -180,7 +176,6 @@ describe("Company Operations", () => {
     await t.mutation(api.companies.makeCompanyPublic, {
       companyId,
       ticker: "PUB",
-      initialSharePrice: 1000,
       totalShares: 100000,
     });
     
@@ -205,7 +200,6 @@ describe("Company Operations", () => {
     await t.mutation(api.companies.makeCompanyPublic, {
       companyId,
       ticker: "TICK",
-      initialSharePrice: 1000,
       totalShares: 100000,
     });
     

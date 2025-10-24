@@ -80,6 +80,14 @@ export default function CompanyDashboardPage() {
   const createProduct = useMutation(api.products.createProduct);
   const updateProduct = useMutation(api.products.updateProduct);
   const orderBatch = useMutation(api.products.orderProductBatch);
+  const updateCompanyInfo = useMutation(api.companies.updateCompanyInfo);
+
+  // State for edit company modal
+  const [editCompanyOpen, setEditCompanyOpen] = useState(false);
+  const [editCompanyName, setEditCompanyName] = useState("");
+  const [editCompanyDescription, setEditCompanyDescription] = useState("");
+  const [editCompanyLogo, setEditCompanyLogo] = useState("");
+  const [editCompanyTags, setEditCompanyTags] = useState("");
 
   // State for add product modal
   const [addProductOpen, setAddProductOpen] = useState(false);
@@ -94,7 +102,9 @@ export default function CompanyDashboardPage() {
 
   // State for edit product modal
   const [editProductOpen, setEditProductOpen] = useState(false);
-  const [editProductId, setEditProductId] = useState<Id<"products"> | null>(null);
+  const [editProductId, setEditProductId] = useState<Id<"products"> | null>(
+    null
+  );
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editPrice, setEditPrice] = useState("");
@@ -103,7 +113,9 @@ export default function CompanyDashboardPage() {
 
   // State for order batch modal
   const [orderBatchOpen, setOrderBatchOpen] = useState(false);
-  const [orderProductId, setOrderProductId] = useState<Id<"products"> | null>(null);
+  const [orderProductId, setOrderProductId] = useState<Id<"products"> | null>(
+    null
+  );
   const [batchQuantity, setBatchQuantity] = useState("");
   const [batchError, setBatchError] = useState("");
 
@@ -152,7 +164,9 @@ export default function CompanyDashboardPage() {
       setProductPrice("");
       setProductImage("");
       setProductTags("");
-      setSuccess("Product created successfully! Now order a batch to add inventory.");
+      setSuccess(
+        "Product created successfully! Now order a batch to add inventory."
+      );
       setAddProductOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create product");
@@ -219,6 +233,50 @@ export default function CompanyDashboardPage() {
     setOrderBatchOpen(true);
   };
 
+  // Handle edit company details
+  const openEditCompanyModal = () => {
+    if (!company) return;
+    setEditCompanyName(company.name);
+    setEditCompanyDescription(company.description || "");
+    setEditCompanyLogo(company.logo || "");
+    setEditCompanyTags(company.tags?.join(", ") || "");
+    setEditCompanyOpen(true);
+  };
+
+  const handleEditCompany = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!company || !editCompanyName.trim()) {
+      setError("Company name is required");
+      return;
+    }
+
+    const tags = editCompanyTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
+    setIsSubmitting(true);
+    try {
+      await updateCompanyInfo({
+        companyId: company._id,
+        name: editCompanyName.trim(),
+        description: editCompanyDescription.trim() || undefined,
+        logo: editCompanyLogo.trim() || undefined,
+        tags: tags.length > 0 ? tags : undefined,
+      });
+
+      setEditCompanyOpen(false);
+      setSuccess("Company details updated successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update company");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleOrderBatch = async (e: React.FormEvent) => {
     e.preventDefault();
     setBatchError("");
@@ -243,20 +301,28 @@ export default function CompanyDashboardPage() {
       setOrderProductId(null);
       setBatchQuantity("");
       setSuccess(
-        `Successfully ordered ${quantity} units! Total cost: ${formatCurrency(result.totalCost)}`
+        `Successfully ordered ${quantity} units! Total cost: ${formatCurrency(
+          result.totalCost
+        )}`
       );
     } catch (err) {
-      setBatchError(err instanceof Error ? err.message : "Failed to order batch");
+      setBatchError(
+        err instanceof Error ? err.message : "Failed to order batch"
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   // Calculate stats
-  const totalRevenue = products?.reduce((sum, p) => sum + p.totalRevenue, 0) || 0;
-  const totalProductionCosts = products?.reduce((sum, p) => sum + p.productionCost * p.totalSold, 0) || 0;
+  const totalRevenue =
+    products?.reduce((sum, p) => sum + p.totalRevenue, 0) || 0;
+  const totalProductionCosts =
+    products?.reduce((sum, p) => sum + p.productionCost * p.totalSold, 0) || 0;
   const totalProfit = totalRevenue - totalProductionCosts;
-  const totalStockValue = products?.reduce((sum, p) => sum + (p.stock || 0) * p.productionCost, 0) || 0;
+  const totalStockValue =
+    products?.reduce((sum, p) => sum + (p.stock || 0) * p.productionCost, 0) ||
+    0;
 
   if (!company) {
     return (
@@ -292,125 +358,144 @@ export default function CompanyDashboardPage() {
                         {company.ticker}
                       </Badge>
                     )}
-                    {company.isPublic && <Badge variant="default">Public</Badge>}
+                    {company.isPublic && (
+                      <Badge variant="default">Public</Badge>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Add Product Button */}
-            <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Product
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Create New Product</DialogTitle>
-                  <DialogDescription>
-                    Define your product details. You'll order inventory separately.
-                  </DialogDescription>
-                </DialogHeader>
-                <form onSubmit={handleAddProduct} className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
+            {/* Action Buttons */}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={openEditCompanyModal}>
+                <Edit className="mr-2 h-4 w-4" />
+                Edit Details
+              </Button>
+              <Dialog open={addProductOpen} onOpenChange={setAddProductOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Create Product
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                  <DialogHeader>
+                    <DialogTitle>Create New Product</DialogTitle>
+                    <DialogDescription>
+                      Define your product details. You'll order inventory
+                      separately.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleAddProduct} className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="product-name">Product Name *</Label>
+                        <Input
+                          id="product-name"
+                          placeholder="e.g., Premium Widget"
+                          value={productName}
+                          onChange={(e) => setProductName(e.target.value)}
+                          required
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="product-price">
+                          Selling Price ($) *
+                        </Label>
+                        <Input
+                          id="product-price"
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          placeholder="19.99"
+                          value={productPrice}
+                          onChange={(e) => setProductPrice(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
-                      <Label htmlFor="product-name">Product Name *</Label>
-                      <Input
-                        id="product-name"
-                        placeholder="e.g., Premium Widget"
-                        value={productName}
-                        onChange={(e) => setProductName(e.target.value)}
-                        required
+                      <Label htmlFor="product-description">Description</Label>
+                      <Textarea
+                        id="product-description"
+                        placeholder="Describe your product..."
+                        value={productDescription}
+                        onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                          setProductDescription(e.target.value)
+                        }
+                        rows={3}
                       />
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="product-price">Selling Price ($) *</Label>
+                      <Label htmlFor="product-image">Image URL</Label>
                       <Input
-                        id="product-price"
-                        type="number"
-                        step="0.01"
-                        min="0.01"
-                        placeholder="19.99"
-                        value={productPrice}
-                        onChange={(e) => setProductPrice(e.target.value)}
-                        required
+                        id="product-image"
+                        type="url"
+                        placeholder="https://example.com/image.jpg"
+                        value={productImage}
+                        onChange={(e) => setProductImage(e.target.value)}
                       />
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="product-description">Description</Label>
-                    <Textarea
-                      id="product-description"
-                      placeholder="Describe your product..."
-                      value={productDescription}
-                      onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                        setProductDescription(e.target.value)
-                      }
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="product-image">Image URL</Label>
-                    <Input
-                      id="product-image"
-                      type="url"
-                      placeholder="https://example.com/image.jpg"
-                      value={productImage}
-                      onChange={(e) => setProductImage(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="product-tags">Tags (comma-separated)</Label>
-                    <Input
-                      id="product-tags"
-                      placeholder="electronics, gadget, premium"
-                      value={productTags}
-                      onChange={(e) => setProductTags(e.target.value)}
-                    />
-                  </div>
-
-                  {productPrice && (
-                    <div className="rounded-md bg-muted p-4">
-                      <p className="text-sm font-medium mb-1">Production Cost Estimate:</p>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        (35-67% of selling price, randomly determined)
-                      </p>
-                      <p className="text-lg font-semibold text-orange-600">
-                        ~$
-                        {((parseFloat(productPrice) * 0.35 + parseFloat(productPrice) * 0.67) / 2).toFixed(2)}{" "}
-                        per unit
-                      </p>
+                    <div className="space-y-2">
+                      <Label htmlFor="product-tags">
+                        Tags (comma-separated)
+                      </Label>
+                      <Input
+                        id="product-tags"
+                        placeholder="electronics, gadget, premium"
+                        value={productTags}
+                        onChange={(e) => setProductTags(e.target.value)}
+                      />
                     </div>
-                  )}
 
-                  {error && (
-                    <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      {error}
-                    </div>
-                  )}
+                    {productPrice && (
+                      <div className="rounded-md bg-muted p-4">
+                        <p className="text-sm font-medium mb-1">
+                          Production Cost Estimate:
+                        </p>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          (35-67% of selling price, randomly determined)
+                        </p>
+                        <p className="text-lg font-semibold text-orange-600">
+                          ~$
+                          {(
+                            (parseFloat(productPrice) * 0.35 +
+                              parseFloat(productPrice) * 0.67) /
+                            2
+                          ).toFixed(2)}{" "}
+                          per unit
+                        </p>
+                      </div>
+                    )}
 
-                  <DialogFooter>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setAddProductOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button type="submit" disabled={isSubmitting}>
-                      {isSubmitting ? "Creating..." : "Create Product"}
-                    </Button>
-                  </DialogFooter>
-                </form>
-              </DialogContent>
-            </Dialog>
+                    {error && (
+                      <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                        <AlertCircle className="h-4 w-4" />
+                        {error}
+                      </div>
+                    )}
+
+                    <DialogFooter>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => setAddProductOpen(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button type="submit" disabled={isSubmitting}>
+                        {isSubmitting ? "Creating..." : "Create Product"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           {/* Description */}
@@ -448,7 +533,9 @@ export default function CompanyDashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{formatCurrency(totalRevenue)}</p>
+                <p className="text-2xl font-bold">
+                  {formatCurrency(totalRevenue)}
+                </p>
               </CardContent>
             </Card>
 
@@ -494,13 +581,18 @@ export default function CompanyDashboardPage() {
             </CardHeader>
             <CardContent>
               {!products ? (
-                <p className="text-sm text-muted-foreground">Loading products...</p>
+                <p className="text-sm text-muted-foreground">
+                  Loading products...
+                </p>
               ) : products.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-12 text-center">
                   <Package className="mb-4 h-16 w-16 text-muted-foreground opacity-50" />
-                  <h3 className="mb-2 text-lg font-semibold">No products yet</h3>
+                  <h3 className="mb-2 text-lg font-semibold">
+                    No products yet
+                  </h3>
                   <p className="mb-4 text-sm text-muted-foreground max-w-sm">
-                    Create your first product to start selling in the marketplace
+                    Create your first product to start selling in the
+                    marketplace
                   </p>
                   <Button onClick={() => setAddProductOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
@@ -738,12 +830,15 @@ export default function CompanyDashboardPage() {
                 {orderProductId && products && (
                   <>
                     {(() => {
-                      const product = products.find((p) => p._id === orderProductId);
+                      const product = products.find(
+                        (p) => p._id === orderProductId
+                      );
                       if (!product) return null;
 
                       const quantity = parseInt(batchQuantity) || 0;
                       const totalCost = product.productionCost * quantity;
-                      const profit = (product.price - product.productionCost) * quantity;
+                      const profit =
+                        (product.price - product.productionCost) * quantity;
 
                       return (
                         <>
@@ -752,7 +847,9 @@ export default function CompanyDashboardPage() {
                               <span className="text-sm text-muted-foreground">
                                 Product:
                               </span>
-                              <span className="font-medium">{product.name}</span>
+                              <span className="font-medium">
+                                {product.name}
+                              </span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-sm text-muted-foreground">
@@ -775,19 +872,25 @@ export default function CompanyDashboardPage() {
                                 Profit per unit:
                               </span>
                               <span className="font-medium text-blue-600">
-                                {formatCurrency(product.price - product.productionCost)}
+                                {formatCurrency(
+                                  product.price - product.productionCost
+                                )}
                               </span>
                             </div>
                             <div className="flex justify-between">
                               <span className="text-sm text-muted-foreground">
                                 Current stock:
                               </span>
-                              <span className="font-medium">{product.stock || 0}</span>
+                              <span className="font-medium">
+                                {product.stock || 0}
+                              </span>
                             </div>
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="batch-quantity">Quantity to Order *</Label>
+                            <Label htmlFor="batch-quantity">
+                              Quantity to Order *
+                            </Label>
                             <Input
                               id="batch-quantity"
                               type="number"
@@ -855,6 +958,83 @@ export default function CompanyDashboardPage() {
                   </Button>
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? "Ordering..." : "Order Batch"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Company Details Modal */}
+          <Dialog open={editCompanyOpen} onOpenChange={setEditCompanyOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Edit Company Details</DialogTitle>
+                <DialogDescription>
+                  Update your company information
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleEditCompany} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="company-name">Company Name *</Label>
+                  <Input
+                    id="company-name"
+                    value={editCompanyName}
+                    onChange={(e) => setEditCompanyName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company-description">Description</Label>
+                  <Textarea
+                    id="company-description"
+                    value={editCompanyDescription}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                      setEditCompanyDescription(e.target.value)
+                    }
+                    rows={3}
+                    placeholder="Describe your company..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company-logo">Logo URL</Label>
+                  <Input
+                    id="company-logo"
+                    type="url"
+                    value={editCompanyLogo}
+                    onChange={(e) => setEditCompanyLogo(e.target.value)}
+                    placeholder="https://example.com/logo.png"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company-tags">Tags (comma-separated)</Label>
+                  <Input
+                    id="company-tags"
+                    value={editCompanyTags}
+                    onChange={(e) => setEditCompanyTags(e.target.value)}
+                    placeholder="technology, startup, innovation"
+                  />
+                </div>
+
+                {error && (
+                  <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    {error}
+                  </div>
+                )}
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditCompanyOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Saving..." : "Save Changes"}
                   </Button>
                 </DialogFooter>
               </form>

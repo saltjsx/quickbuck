@@ -38,7 +38,6 @@ describe("Stock Market Operations", () => {
     stockId = await t.mutation(api.companies.makeCompanyPublic, {
       companyId,
       ticker: "TEST",
-      initialSharePrice: 1000, // $10
       totalShares: 100000,
     });
   });

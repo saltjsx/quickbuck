@@ -40,9 +40,10 @@ await api.companies.createCompany({
 await api.companies.makeCompanyPublic({
   companyId,
   ticker: "MYC",
-  initialSharePrice: 1000, // $10.00 in cents
   totalShares: 1000000
 });
+// Note: Market cap is automatically set to company balance * 5
+// Share price is automatically calculated as: market cap / total shares
 
 // Get player's companies
 await api.companies.getPlayerCompanies({ playerId });
@@ -366,8 +367,9 @@ if (company.balance >= 5000000) {
   await api.companies.makeCompanyPublic({
     companyId,
     ticker: "TECH",
-    initialSharePrice: 1000, // $10/share
     totalShares: 100000
+    // Market cap will be automatically set to: company.balance * 5
+    // Share price will be automatically calculated: marketCap / totalShares
   });
 }
 ```

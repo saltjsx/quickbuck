@@ -92,8 +92,7 @@ export const makeCompanyPublic = mutation({
   args: {
     companyId: v.id("companies"),
     ticker: v.string(),
-    initialSharePrice: v.number(), // in cents
-    totalShares: v.number(),
+    totalShares: v.number(), // Only players set the number of shares
   },
   handler: async (ctx, args) => {
     const company = await ctx.db.get(args.companyId);
@@ -109,6 +108,10 @@ export const makeCompanyPublic = mutation({
       throw new Error("Company is already public");
     }
 
+    if (args.totalShares <= 0) {
+      throw new Error("Total shares must be positive");
+    }
+
     // Check if ticker is already taken
     const existingStock = await ctx.db
       .query("stocks")
@@ -119,7 +122,10 @@ export const makeCompanyPublic = mutation({
       throw new Error("Ticker symbol already in use");
     }
 
-    const marketCap = args.initialSharePrice * args.totalShares;
+    // Market cap is always 5x the company balance
+    const marketCap = company.balance * 5;
+    // Share price is calculated from market cap and total shares
+    const initialSharePrice = Math.floor(marketCap / args.totalShares);
     const now = Date.now();
 
     // Update company
@@ -135,7 +141,7 @@ export const makeCompanyPublic = mutation({
     const stockId = await ctx.db.insert("stocks", {
       companyId: args.companyId,
       ticker: args.ticker,
-      price: args.initialSharePrice,
+      price: initialSharePrice,
       totalShares: args.totalShares,
       marketCap,
       createdAt: now,

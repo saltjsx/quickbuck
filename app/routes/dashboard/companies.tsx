@@ -76,7 +76,6 @@ export default function ManageCompaniesPage() {
   const [selectedCompanyId, setSelectedCompanyId] =
     useState<Id<"companies"> | null>(null);
   const [stockTicker, setStockTicker] = useState("");
-  const [sharePrice, setSharePrice] = useState("");
   const [totalShares, setTotalShares] = useState("1000000");
 
   // State for edit modal
@@ -145,13 +144,7 @@ export default function ManageCompaniesPage() {
       return;
     }
 
-    const price = parseFloat(sharePrice);
     const shares = parseInt(totalShares);
-
-    if (isNaN(price) || price <= 0) {
-      setError("Invalid share price");
-      return;
-    }
 
     if (isNaN(shares) || shares <= 0) {
       setError("Invalid number of shares");
@@ -163,13 +156,11 @@ export default function ManageCompaniesPage() {
       await makeCompanyPublic({
         companyId: selectedCompanyId,
         ticker: stockTicker.trim().toUpperCase(),
-        initialSharePrice: Math.round(price * 100), // Convert to cents
         totalShares: shares,
       });
 
       // Reset form and close modal
       setStockTicker("");
-      setSharePrice("");
       setTotalShares("1000000");
       setPublicModalOpen(false);
       setSelectedCompanyId(null);
@@ -431,7 +422,8 @@ export default function ManageCompaniesPage() {
               <DialogHeader>
                 <DialogTitle>Make Company Public (IPO)</DialogTitle>
                 <DialogDescription>
-                  Set the initial stock price and number of shares
+                  Set the number of shares. The share price will be calculated
+                  automatically based on your company balance.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleMakePublic} className="space-y-4">
@@ -450,20 +442,6 @@ export default function ManageCompaniesPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="share-price">Initial Share Price ($) *</Label>
-                  <Input
-                    id="share-price"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    placeholder="10.00"
-                    value={sharePrice}
-                    onChange={(e) => setSharePrice(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
                   <Label htmlFor="total-shares">Total Shares *</Label>
                   <Input
                     id="total-shares"
@@ -477,18 +455,15 @@ export default function ManageCompaniesPage() {
                   />
                 </div>
 
-                {sharePrice && totalShares && (
-                  <div className="rounded-md bg-muted p-3">
-                    <p className="text-sm font-medium">Initial Market Cap:</p>
-                    <p className="text-lg font-bold">
-                      {formatCurrency(
-                        Math.round(
-                          parseFloat(sharePrice) * parseInt(totalShares) * 100
-                        )
-                      )}
-                    </p>
-                  </div>
-                )}
+                <div className="rounded-md bg-blue-50 p-3 text-sm">
+                  <p className="text-muted-foreground mb-2">
+                    <strong>How it works:</strong>
+                  </p>
+                  <ul className="space-y-1 text-xs text-muted-foreground list-disc list-inside">
+                    <li>Market Cap = Your company balance × 5</li>
+                    <li>Share Price = Market Cap ÷ Total Shares</li>
+                  </ul>
+                </div>
 
                 {error && (
                   <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
