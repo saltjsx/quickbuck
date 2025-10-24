@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 
 // Mutation: Buy stock
 export const buyStock = mutation({
@@ -87,6 +87,17 @@ export const buyStock = mutation({
       createdAt: Date.now(),
     });
 
+    // Record trade for price history
+    await ctx.db.insert("stockTrades", {
+      stockId: args.stockId,
+      companyId: stock.companyId,
+      shares: args.shares,
+      pricePerShare: stock.price,
+      totalValue: totalCost,
+      tradeType: "buy",
+      timestamp: Date.now(),
+    });
+
     return existingHolding?._id;
   },
 });
@@ -159,6 +170,17 @@ export const sellStock = mutation({
       assetId: args.stockId,
       description: `Sold ${args.shares} shares of ${stock.ticker}`,
       createdAt: Date.now(),
+    });
+
+    // Record trade for price history
+    await ctx.db.insert("stockTrades", {
+      stockId: args.stockId,
+      companyId: stock.companyId,
+      shares: args.shares,
+      pricePerShare: stock.price,
+      totalValue: totalValue,
+      tradeType: "sell",
+      timestamp: Date.now(),
     });
 
     return totalValue;
@@ -278,5 +300,101 @@ export const getTopStockHolders = query({
       .collect();
 
     return holders.sort((a, b) => b.shares - a.shares).slice(0, args.limit);
+  },
+});
+
+// Query: Get stock price history for charting
+export const getStockPriceHistory = query({
+  args: {
+    stockId: v.id("stocks"),
+    timeframe: v.optional(v.union(
+      v.literal("1H"),
+      v.literal("1D"),
+      v.literal("1W"),
+      v.literal("1M"),
+      v.literal("1Y"),
+      v.literal("ALL")
+    )),
+  },
+  handler: async (ctx, args) => {
+    const timeframe = args.timeframe || "1W";
+    const now = Date.now();
+    let startTime = 0;
+
+    // Calculate start time based on timeframe
+    switch (timeframe) {
+      case "1H":
+        startTime = now - 60 * 60 * 1000; // 1 hour ago
+        break;
+      case "1D":
+        startTime = now - 24 * 60 * 60 * 1000; // 1 day ago
+        break;
+      case "1W":
+        startTime = now - 7 * 24 * 60 * 60 * 1000; // 1 week ago
+        break;
+      case "1M":
+        startTime = now - 30 * 24 * 60 * 60 * 1000; // 1 month ago
+        break;
+      case "1Y":
+        startTime = now - 365 * 24 * 60 * 60 * 1000; // 1 year ago
+        break;
+      case "ALL":
+        startTime = 0; // All time
+        break;
+    }
+
+    const history = await ctx.db
+      .query("stockPriceHistory")
+      .withIndex("by_stockId_timestamp", (q) => 
+        q.eq("stockId", args.stockId).gte("timestamp", startTime)
+      )
+      .order("asc")
+      .collect();
+
+    return history;
+  },
+});
+
+// Query: Get recent stock trades
+export const getRecentStockTrades = query({
+  args: {
+    stockId: v.id("stocks"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+    
+    const trades = await ctx.db
+      .query("stockTrades")
+      .withIndex("by_stockId", (q) => q.eq("stockId", args.stockId))
+      .order("desc")
+      .take(limit);
+
+    return trades;
+  },
+});
+
+// Mutation: Record price history (called during tick or price updates)
+export const recordStockPriceHistory = mutation({
+  args: {
+    stockId: v.id("stocks"),
+    price: v.number(),
+    open: v.optional(v.number()),
+    high: v.optional(v.number()),
+    low: v.optional(v.number()),
+    close: v.optional(v.number()),
+    volume: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("stockPriceHistory", {
+      stockId: args.stockId,
+      price: args.price,
+      timestamp: Date.now(),
+      open: args.open,
+      high: args.high,
+      low: args.low,
+      close: args.close,
+      volume: args.volume,
+    });
   },
 });

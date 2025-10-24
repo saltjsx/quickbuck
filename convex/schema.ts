@@ -284,6 +284,59 @@ export default defineSchema({
     .index("by_timestamp", ["timestamp"])
     .index("by_tickNumber", ["tickNumber"]),
 
+  stockPriceHistory: defineTable({
+    stockId: v.id("stocks"),
+    price: v.number(), // in cents
+    timestamp: v.number(),
+    open: v.optional(v.number()), // for candlestick
+    high: v.optional(v.number()),
+    low: v.optional(v.number()),
+    close: v.optional(v.number()),
+    volume: v.optional(v.number()),
+  })
+    .index("by_stockId", ["stockId"])
+    .index("by_stockId_timestamp", ["stockId", "timestamp"])
+    .index("by_timestamp", ["timestamp"]),
+
+  stockTrades: defineTable({
+    stockId: v.id("stocks"),
+    companyId: v.id("companies"),
+    shares: v.number(),
+    pricePerShare: v.number(), // in cents
+    totalValue: v.number(), // in cents
+    tradeType: v.union(v.literal("buy"), v.literal("sell")),
+    timestamp: v.number(),
+  })
+    .index("by_stockId", ["stockId"])
+    .index("by_stockId_timestamp", ["stockId", "timestamp"])
+    .index("by_timestamp", ["timestamp"]),
+
+  cryptoPriceHistory: defineTable({
+    cryptoId: v.id("cryptocurrencies"),
+    price: v.number(), // in cents
+    timestamp: v.number(),
+    open: v.optional(v.number()),
+    high: v.optional(v.number()),
+    low: v.optional(v.number()),
+    close: v.optional(v.number()),
+    volume: v.optional(v.number()),
+  })
+    .index("by_cryptoId", ["cryptoId"])
+    .index("by_cryptoId_timestamp", ["cryptoId", "timestamp"])
+    .index("by_timestamp", ["timestamp"]),
+
+  cryptoTrades: defineTable({
+    cryptoId: v.id("cryptocurrencies"),
+    amount: v.number(), // number of tokens
+    pricePerToken: v.number(), // in cents
+    totalValue: v.number(), // in cents
+    tradeType: v.union(v.literal("buy"), v.literal("sell")),
+    timestamp: v.number(),
+  })
+    .index("by_cryptoId", ["cryptoId"])
+    .index("by_cryptoId_timestamp", ["cryptoId", "timestamp"])
+    .index("by_timestamp", ["timestamp"]),
+
   // Configuration table for game settings
   gameConfig: defineTable({
     key: v.string(),

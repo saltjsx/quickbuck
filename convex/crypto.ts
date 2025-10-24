@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { Id } from "./_generated/dataModel";
+import type { Id } from "./_generated/dataModel";
 
 // Mutation: Create cryptocurrency
 export const createCryptocurrency = mutation({
@@ -147,6 +147,16 @@ export const buyCryptocurrency = mutation({
       createdAt: Date.now(),
     });
 
+    // Record trade
+    await ctx.db.insert("cryptoTrades", {
+      cryptoId: args.cryptoId,
+      amount: args.amount,
+      pricePerToken: crypto.price,
+      totalValue: totalCost,
+      tradeType: "buy",
+      timestamp: Date.now(),
+    });
+
     return existingHolding?._id;
   },
 });
@@ -218,6 +228,16 @@ export const sellCryptocurrency = mutation({
       assetId: args.cryptoId,
       description: `Sold ${args.amount} ${crypto.ticker}`,
       createdAt: Date.now(),
+    });
+
+    // Record trade
+    await ctx.db.insert("cryptoTrades", {
+      cryptoId: args.cryptoId,
+      amount: args.amount,
+      pricePerToken: crypto.price,
+      totalValue: totalValue,
+      tradeType: "sell",
+      timestamp: Date.now(),
     });
 
     return totalValue;
@@ -329,5 +349,101 @@ export const getTopCryptosByMarketCap = query({
   handler: async (ctx, args) => {
     const cryptos = await ctx.db.query("cryptocurrencies").collect();
     return cryptos.sort((a, b) => b.marketCap - a.marketCap).slice(0, args.limit);
+  },
+});
+
+// Query: Get crypto price history for charting
+export const getCryptoPriceHistory = query({
+  args: {
+    cryptoId: v.id("cryptocurrencies"),
+    timeframe: v.optional(v.union(
+      v.literal("1H"),
+      v.literal("1D"),
+      v.literal("1W"),
+      v.literal("1M"),
+      v.literal("1Y"),
+      v.literal("ALL")
+    )),
+  },
+  handler: async (ctx, args) => {
+    const timeframe = args.timeframe || "1W";
+    const now = Date.now();
+    let startTime = 0;
+
+    // Calculate start time based on timeframe
+    switch (timeframe) {
+      case "1H":
+        startTime = now - 60 * 60 * 1000;
+        break;
+      case "1D":
+        startTime = now - 24 * 60 * 60 * 1000;
+        break;
+      case "1W":
+        startTime = now - 7 * 24 * 60 * 60 * 1000;
+        break;
+      case "1M":
+        startTime = now - 30 * 24 * 60 * 60 * 1000;
+        break;
+      case "1Y":
+        startTime = now - 365 * 24 * 60 * 60 * 1000;
+        break;
+      case "ALL":
+        startTime = 0;
+        break;
+    }
+
+    const history = await ctx.db
+      .query("cryptoPriceHistory")
+      .withIndex("by_cryptoId_timestamp", (q) => 
+        q.eq("cryptoId", args.cryptoId).gte("timestamp", startTime)
+      )
+      .order("asc")
+      .collect();
+
+    return history;
+  },
+});
+
+// Query: Get recent crypto trades
+export const getRecentCryptoTrades = query({
+  args: {
+    cryptoId: v.id("cryptocurrencies"),
+    limit: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = args.limit || 20;
+    
+    const trades = await ctx.db
+      .query("cryptoTrades")
+      .withIndex("by_cryptoId", (q) => q.eq("cryptoId", args.cryptoId))
+      .order("desc")
+      .take(limit);
+
+    return trades;
+  },
+});
+
+// Mutation: Record price history (called during tick or price updates)
+export const recordCryptoPriceHistory = mutation({
+  args: {
+    cryptoId: v.id("cryptocurrencies"),
+    price: v.number(),
+    open: v.optional(v.number()),
+    high: v.optional(v.number()),
+    low: v.optional(v.number()),
+    close: v.optional(v.number()),
+    volume: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.insert("cryptoPriceHistory", {
+      cryptoId: args.cryptoId,
+      price: args.price,
+      timestamp: Date.now(),
+      open: args.open,
+      high: args.high,
+      low: args.low,
+      close: args.close,
+      volume: args.volume,
+    });
   },
 });

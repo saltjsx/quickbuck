@@ -27,7 +27,7 @@ import {
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
 import {
-  Building2,
+  Coins,
   TrendingUp,
   TrendingDown,
   ArrowLeft,
@@ -45,8 +45,8 @@ import {
 
 type Timeframe = "1H" | "1D" | "1W" | "1M" | "1Y" | "ALL";
 
-export default function StockDetailPage() {
-  const { companyId } = useParams();
+export default function CryptoDetailPage() {
+  const { cryptoId } = useParams();
   const navigate = useNavigate();
   const { userId: clerkUserId } = useAuth();
 
@@ -60,14 +60,10 @@ export default function StockDetailPage() {
     user ? { userId: user._id as Id<"users"> } : "skip"
   );
 
-  // Get company and stock data
-  const company = useQuery(
-    api.companies.getCompany,
-    companyId ? { companyId: companyId as Id<"companies"> } : "skip"
-  );
-  const stock = useQuery(
-    api.stocks.getCompanyStockInfo,
-    companyId ? { companyId: companyId as Id<"companies"> } : "skip"
+  // Get crypto data
+  const crypto = useQuery(
+    api.crypto.getCryptocurrency,
+    cryptoId ? { cryptoId: cryptoId as Id<"cryptocurrencies"> } : "skip"
   );
 
   // Get player's companies for account selector
@@ -76,32 +72,35 @@ export default function StockDetailPage() {
     player?._id ? { playerId: player._id } : "skip"
   );
 
-  // Get top stock holders
+  // Get top crypto holders
   const topHolders = useQuery(
-    api.stocks.getTopStockHolders,
-    companyId ? { companyId: companyId as Id<"companies">, limit: 10 } : "skip"
+    api.crypto.getTopCryptoHolders,
+    cryptoId
+      ? { cryptoId: cryptoId as Id<"cryptocurrencies">, limit: 10 }
+      : "skip"
   );
 
   // Price history and timeframe
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>("1W");
   const priceHistory = useQuery(
-    api.stocks.getStockPriceHistory,
-    stock?._id ? { stockId: stock._id, timeframe: selectedTimeframe } : "skip"
+    api.crypto.getCryptoPriceHistory,
+    crypto?._id
+      ? { cryptoId: crypto._id, timeframe: selectedTimeframe }
+      : "skip"
   );
 
   // Recent trades
   const recentTrades = useQuery(
-    api.stocks.getRecentStockTrades,
-    stock?._id ? { stockId: stock._id, limit: 20 } : "skip"
+    api.crypto.getRecentCryptoTrades,
+    crypto?._id ? { cryptoId: crypto._id, limit: 20 } : "skip"
   );
 
   // Mutations
-  const buyStock = useMutation(api.stocks.buyStock);
-  const sellStock = useMutation(api.stocks.sellStock);
+  const buyCrypto = useMutation(api.crypto.buyCryptocurrency);
 
   // Purchase state
-  const [purchaseType, setPurchaseType] = useState<"shares" | "dollars">(
-    "shares"
+  const [purchaseType, setPurchaseType] = useState<"tokens" | "dollars">(
+    "tokens"
   );
   const [purchaseAmount, setPurchaseAmount] = useState("");
   const [selectedAccount, setSelectedAccount] = useState<{
@@ -113,76 +112,80 @@ export default function StockDetailPage() {
   const [success, setSuccess] = useState("");
 
   // Calculate price change
-  const priceChange = stock?.previousPrice
-    ? ((stock.price - stock.previousPrice) / stock.previousPrice) * 100
+  const priceChange = crypto?.previousPrice
+    ? ((crypto.price - crypto.previousPrice) / crypto.previousPrice) * 100
     : 0;
   const isPositive = priceChange >= 0;
 
   // Calculate estimated values
-  const estimatedShares =
-    purchaseType === "dollars" && stock
-      ? Math.floor((parseFloat(purchaseAmount) * 100) / stock.price)
+  const estimatedTokens =
+    purchaseType === "dollars" && crypto
+      ? Math.floor((parseFloat(purchaseAmount) * 100) / crypto.price)
       : parseFloat(purchaseAmount) || 0;
 
   const estimatedCost =
-    purchaseType === "shares" && stock
-      ? Math.round(parseFloat(purchaseAmount) * stock.price)
+    purchaseType === "tokens" && crypto
+      ? Math.round(parseFloat(purchaseAmount) * crypto.price)
       : Math.round(parseFloat(purchaseAmount) * 100);
 
-  // Handle buy stock
-  const handleBuyStock = async (e: React.FormEvent) => {
+  // Handle buy crypto
+  const handleBuyCrypto = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
 
-    if (!player || !stock || !selectedAccount) {
+    if (!player || !crypto || !selectedAccount) {
       setError("Missing required information");
       return;
     }
 
-    const shares =
-      purchaseType === "shares"
+    const tokens =
+      purchaseType === "tokens"
         ? Math.floor(parseFloat(purchaseAmount))
-        : estimatedShares;
+        : estimatedTokens;
 
-    if (shares <= 0) {
-      setError("Invalid number of shares");
+    if (tokens <= 0) {
+      setError("Invalid number of tokens");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await buyStock({
+      await buyCrypto({
         userId: player._id,
-        stockId: stock._id,
-        shares,
+        cryptoId: crypto._id,
+        amount: tokens,
         accountType: selectedAccount.type,
         accountId: selectedAccount.id,
       });
 
       setSuccess(
-        `Successfully purchased ${shares} shares for ${formatCurrency(
-          shares * stock.price
-        )}`
+        `Successfully purchased ${tokens.toLocaleString()} ${
+          crypto.ticker
+        } for ${formatCurrency(Math.floor(tokens * crypto.price))}`
       );
       setPurchaseAmount("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to purchase stock");
+      setError(
+        err instanceof Error ? err.message : "Failed to purchase crypto"
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   // Calculate ownership percentages
-  const calculateOwnershipPercentage = (shares: number) => {
-    if (!stock || !stock.totalShares) return 0;
-    return (shares / stock.totalShares) * 100;
+  const calculateOwnershipPercentage = (amount: number) => {
+    if (!crypto || !crypto.circulatingSupply) return 0;
+    return (amount / crypto.circulatingSupply) * 100;
   };
 
-  if (!company || !stock) {
+  if (!crypto) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-muted-foreground">Loading stock information...</p>
+        <p className="text-muted-foreground">
+          Loading cryptocurrency information...
+        </p>
       </div>
     );
   }
@@ -197,26 +200,25 @@ export default function StockDetailPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => navigate("/stocks")}
+                onClick={() => navigate("/crypto")}
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div className="flex items-center gap-3">
-                <Building2 className="h-12 w-12 text-muted-foreground" />
+                <div className="rounded-full bg-primary/10 p-3">
+                  <Coins className="h-10 w-10 text-primary" />
+                </div>
                 <div>
                   <div className="flex items-center gap-2">
                     <Badge
                       variant="outline"
                       className="font-mono text-lg font-bold"
                     >
-                      {stock.ticker}
+                      {crypto.ticker}
                     </Badge>
-                    {company.isPublic && (
-                      <Badge variant="default">Public</Badge>
-                    )}
                   </div>
                   <h1 className="text-3xl font-bold tracking-tight">
-                    {company.name}
+                    {crypto.name}
                   </h1>
                 </div>
               </div>
@@ -224,8 +226,8 @@ export default function StockDetailPage() {
           </div>
 
           {/* Description */}
-          {company.description && (
-            <p className="text-muted-foreground">{company.description}</p>
+          {crypto.description && (
+            <p className="text-muted-foreground">{crypto.description}</p>
           )}
 
           <div className="grid gap-4 lg:grid-cols-3">
@@ -235,11 +237,11 @@ export default function StockDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <DollarSign className="h-5 w-5" />
-                    Buy Shares
+                    Buy Tokens
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleBuyStock} className="space-y-4">
+                  <form onSubmit={handleBuyCrypto} className="space-y-4">
                     {/* Account Selector */}
                     <div className="space-y-2">
                       <Label>Payment Account</Label>
@@ -285,12 +287,12 @@ export default function StockDetailPage() {
                         <Button
                           type="button"
                           variant={
-                            purchaseType === "shares" ? "default" : "outline"
+                            purchaseType === "tokens" ? "default" : "outline"
                           }
-                          onClick={() => setPurchaseType("shares")}
+                          onClick={() => setPurchaseType("tokens")}
                           className="flex-1"
                         >
-                          Share Amount
+                          Token Amount
                         </Button>
                         <Button
                           type="button"
@@ -308,17 +310,17 @@ export default function StockDetailPage() {
                     {/* Amount Input */}
                     <div className="space-y-2">
                       <Label htmlFor="amount">
-                        {purchaseType === "shares"
-                          ? "Number of Shares"
+                        {purchaseType === "tokens"
+                          ? "Number of Tokens"
                           : "Dollar Amount"}
                       </Label>
                       <Input
                         id="amount"
                         type="number"
-                        step={purchaseType === "shares" ? "1" : "0.01"}
+                        step={purchaseType === "tokens" ? "1" : "0.01"}
                         min="0.01"
                         placeholder={
-                          purchaseType === "shares" ? "100" : "1000.00"
+                          purchaseType === "tokens" ? "1000" : "100.00"
                         }
                         value={purchaseAmount}
                         onChange={(e) => setPurchaseAmount(e.target.value)}
@@ -330,11 +332,11 @@ export default function StockDetailPage() {
                     {purchaseAmount && (
                       <div className="rounded-md bg-muted p-3 space-y-1">
                         <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">Shares:</span>
+                          <span className="text-muted-foreground">Tokens:</span>
                           <span className="font-medium">
-                            {purchaseType === "shares"
+                            {purchaseType === "tokens"
                               ? parseFloat(purchaseAmount).toLocaleString()
-                              : estimatedShares.toLocaleString()}
+                              : estimatedTokens.toLocaleString()}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -347,10 +349,10 @@ export default function StockDetailPage() {
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">
-                            Price per Share:
+                            Price per Token:
                           </span>
                           <span className="font-medium">
-                            {formatCurrency(stock.price)}
+                            {formatCurrency(crypto.price)}
                           </span>
                         </div>
                       </div>
@@ -372,28 +374,28 @@ export default function StockDetailPage() {
                       disabled={isSubmitting || !selectedAccount}
                       className="w-full"
                     >
-                      {isSubmitting ? "Processing..." : "Buy Shares"}
+                      {isSubmitting ? "Processing..." : "Buy Tokens"}
                     </Button>
                   </form>
                 </CardContent>
               </Card>
             </div>
 
-            {/* Right Column - Stock Info */}
+            {/* Right Column - Crypto Info */}
             <div className="lg:col-span-2 space-y-4">
               {/* Stats Cards */}
               <div className="grid gap-4 md:grid-cols-3">
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Stock Price
+                      Price
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold text-green-600">
-                      {formatCurrency(stock.price)}
+                      {formatCurrency(crypto.price)}
                     </p>
-                    {stock.previousPrice && (
+                    {crypto.previousPrice && (
                       <div className="flex items-center gap-1 mt-1">
                         {isPositive ? (
                           <TrendingUp className="h-3 w-3 text-green-600" />
@@ -421,7 +423,7 @@ export default function StockDetailPage() {
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold text-purple-600">
-                      {formatCurrency(stock.marketCap || 0)}
+                      {formatCurrency(crypto.marketCap || 0)}
                     </p>
                   </CardContent>
                 </Card>
@@ -429,33 +431,33 @@ export default function StockDetailPage() {
                 <Card>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Total Shares
+                      Volume (24h)
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <p className="text-2xl font-bold">
-                      {stock.totalShares.toLocaleString()}
+                      {formatCurrency(crypto.volume)}
                     </p>
                   </CardContent>
                 </Card>
               </div>
 
-              {/* Ownership Breakdown */}
+              {/* Top Holders */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Top Shareholders</CardTitle>
+                  <CardTitle>Top Holders</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {!topHolders || topHolders.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                      No shareholders yet
+                      No holders yet
                     </p>
                   ) : (
                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Rank</TableHead>
-                          <TableHead>Shares</TableHead>
+                          <TableHead>Tokens</TableHead>
                           <TableHead>Ownership</TableHead>
                           <TableHead>Value</TableHead>
                         </TableRow>
@@ -467,18 +469,20 @@ export default function StockDetailPage() {
                               #{index + 1}
                             </TableCell>
                             <TableCell>
-                              {holder.shares.toLocaleString()}
+                              {holder.amount.toLocaleString()}
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">
                                 {calculateOwnershipPercentage(
-                                  holder.shares
+                                  holder.amount
                                 ).toFixed(2)}
                                 %
                               </Badge>
                             </TableCell>
                             <TableCell className="font-medium text-green-600">
-                              {formatCurrency(holder.shares * stock.price)}
+                              {formatCurrency(
+                                Math.floor(holder.amount * crypto.price)
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -523,12 +527,10 @@ export default function StockDetailPage() {
                           dataKey="timestamp"
                           tickFormatter={(ts) => {
                             const date = new Date(ts);
-                            if (selectedTimeframe === "1H") {
-                              return date.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              });
-                            } else if (selectedTimeframe === "1D") {
+                            if (
+                              selectedTimeframe === "1H" ||
+                              selectedTimeframe === "1D"
+                            ) {
                               return date.toLocaleTimeString([], {
                                 hour: "2-digit",
                                 minute: "2-digit",
@@ -587,8 +589,8 @@ export default function StockDetailPage() {
                         <TableRow>
                           <TableHead>Time</TableHead>
                           <TableHead>Type</TableHead>
-                          <TableHead>Shares</TableHead>
-                          <TableHead>Price/Share</TableHead>
+                          <TableHead>Tokens</TableHead>
+                          <TableHead>Price/Token</TableHead>
                           <TableHead>Total Value</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -615,10 +617,10 @@ export default function StockDetailPage() {
                               </Badge>
                             </TableCell>
                             <TableCell>
-                              {trade.shares.toLocaleString()}
+                              {trade.amount.toLocaleString()}
                             </TableCell>
                             <TableCell>
-                              {formatCurrency(trade.pricePerShare)}
+                              {formatCurrency(trade.pricePerToken)}
                             </TableCell>
                             <TableCell className="font-medium">
                               {formatCurrency(trade.totalValue)}
