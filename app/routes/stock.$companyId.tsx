@@ -574,9 +574,10 @@ export default function StockDetailPage() {
                         <Line
                           type="monotone"
                           dataKey="price"
-                          stroke="hsl(var(--primary))"
-                          strokeWidth={2}
+                          stroke="#22c55e"
+                          strokeWidth={3}
                           dot={false}
+                          isAnimationActive={true}
                         />
                       </LineChart>
                     </ResponsiveContainer>
