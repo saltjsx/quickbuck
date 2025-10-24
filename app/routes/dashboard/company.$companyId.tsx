@@ -33,13 +33,15 @@ import {
   Building2,
   Plus,
   Edit,
-  Trash2,
-  DollarSign,
-  TrendingUp,
   Package,
+  ShoppingCart,
   ArrowLeft,
+  History,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
+import { cn } from "~/lib/utils";
 
 export default function CompanyDashboardPage() {
   const { companyId } = useParams();
@@ -68,39 +70,48 @@ export default function CompanyDashboardPage() {
     companyId ? { companyId: companyId as Id<"companies"> } : "skip"
   );
 
+  // Get batch order history
+  const batchOrders = useQuery(
+    api.products.getProductBatchOrders,
+    companyId ? { companyId: companyId as Id<"companies"> } : "skip"
+  );
+
   // Mutations
   const createProduct = useMutation(api.products.createProduct);
   const updateProduct = useMutation(api.products.updateProduct);
-  const updateCompanyBalance = useMutation(api.companies.updateCompanyBalance);
+  const orderBatch = useMutation(api.products.orderProductBatch);
 
   // State for add product modal
   const [addProductOpen, setAddProductOpen] = useState(false);
   const [productName, setProductName] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [productPrice, setProductPrice] = useState("");
-  const [productQuantity, setProductQuantity] = useState("");
+  const [productImage, setProductImage] = useState("");
+  const [productTags, setProductTags] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   // State for edit product modal
   const [editProductOpen, setEditProductOpen] = useState(false);
-  const [editProductId, setEditProductId] = useState<Id<"products"> | null>(
-    null
-  );
+  const [editProductId, setEditProductId] = useState<Id<"products"> | null>(null);
   const [editName, setEditName] = useState("");
   const [editDescription, setEditDescription] = useState("");
   const [editPrice, setEditPrice] = useState("");
+  const [editImage, setEditImage] = useState("");
+  const [editTags, setEditTags] = useState("");
 
-  // Calculate production cost (35%-67% of price)
-  const calculateProductionCost = (price: number) => {
-    const percentage = 0.35 + Math.random() * 0.32; // 35% to 67%
-    return Math.floor(price * percentage);
-  };
+  // State for order batch modal
+  const [orderBatchOpen, setOrderBatchOpen] = useState(false);
+  const [orderProductId, setOrderProductId] = useState<Id<"products"> | null>(null);
+  const [batchQuantity, setBatchQuantity] = useState("");
+  const [batchError, setBatchError] = useState("");
 
   // Handle add product
   const handleAddProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
 
     if (!company) {
       setError("Company not found");
@@ -112,11 +123,6 @@ export default function CompanyDashboardPage() {
       return;
     }
 
-    if (!productDescription.trim()) {
-      setError("Product description is required");
-      return;
-    }
-
     const price = parseFloat(productPrice);
     if (isNaN(price) || price <= 0) {
       setError("Invalid price");
@@ -124,39 +130,29 @@ export default function CompanyDashboardPage() {
     }
 
     const priceCents = Math.round(price * 100);
-    const productionCost = calculateProductionCost(priceCents);
-
-    if (company.balance < productionCost) {
-      setError(
-        `Insufficient balance. Production cost: ${formatCurrency(
-          productionCost
-        )}`
-      );
-      return;
-    }
+    const tags = productTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
 
     setIsSubmitting(true);
     try {
       await createProduct({
         companyId: company._id,
         name: productName.trim(),
-        description: productDescription.trim(),
+        description: productDescription.trim() || undefined,
         price: priceCents,
-        productionCost,
-        stock: productQuantity ? parseInt(productQuantity) : undefined,
-      });
-
-      // Deduct production cost from company balance
-      await updateCompanyBalance({
-        companyId: company._id,
-        amount: -productionCost,
+        image: productImage.trim() || undefined,
+        tags: tags.length > 0 ? tags : undefined,
       });
 
       // Reset form and close modal
       setProductName("");
       setProductDescription("");
       setProductPrice("");
-      setProductQuantity("");
+      setProductImage("");
+      setProductTags("");
+      setSuccess("Product created successfully! Now order a batch to add inventory.");
       setAddProductOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create product");
@@ -171,12 +167,15 @@ export default function CompanyDashboardPage() {
     setEditName(product.name);
     setEditDescription(product.description || "");
     setEditPrice((product.price / 100).toFixed(2));
+    setEditImage(product.image || "");
+    setEditTags(product.tags?.join(", ") || "");
     setEditProductOpen(true);
   };
 
   const handleEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
 
     if (!editProductId) return;
 
@@ -186,17 +185,25 @@ export default function CompanyDashboardPage() {
       return;
     }
 
+    const tags = editTags
+      .split(",")
+      .map((t) => t.trim())
+      .filter((t) => t.length > 0);
+
     setIsSubmitting(true);
     try {
       await updateProduct({
         productId: editProductId,
         name: editName.trim(),
-        description: editDescription.trim(),
+        description: editDescription.trim() || undefined,
         price: Math.round(price * 100),
+        image: editImage.trim() || undefined,
+        tags: tags.length > 0 ? tags : undefined,
       });
 
       setEditProductOpen(false);
       setEditProductId(null);
+      setSuccess("Product updated successfully!");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to update product");
     } finally {
@@ -204,12 +211,52 @@ export default function CompanyDashboardPage() {
     }
   };
 
+  // Handle order batch
+  const openOrderBatchModal = (productId: Id<"products">) => {
+    setOrderProductId(productId);
+    setBatchQuantity("");
+    setBatchError("");
+    setOrderBatchOpen(true);
+  };
+
+  const handleOrderBatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBatchError("");
+    setSuccess("");
+
+    if (!orderProductId) return;
+
+    const quantity = parseInt(batchQuantity);
+    if (isNaN(quantity) || quantity <= 0) {
+      setBatchError("Invalid quantity");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await orderBatch({
+        productId: orderProductId,
+        quantity: quantity,
+      });
+
+      setOrderBatchOpen(false);
+      setOrderProductId(null);
+      setBatchQuantity("");
+      setSuccess(
+        `Successfully ordered ${quantity} units! Total cost: ${formatCurrency(result.totalCost)}`
+      );
+    } catch (err) {
+      setBatchError(err instanceof Error ? err.message : "Failed to order batch");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Calculate stats
-  const totalRevenue =
-    products?.reduce((sum, p) => sum + p.totalRevenue, 0) || 0;
-  const totalProductionCosts =
-    products?.reduce((sum, p) => sum + p.productionCost, 0) || 0;
+  const totalRevenue = products?.reduce((sum, p) => sum + p.totalRevenue, 0) || 0;
+  const totalProductionCosts = products?.reduce((sum, p) => sum + p.productionCost * p.totalSold, 0) || 0;
   const totalProfit = totalRevenue - totalProductionCosts;
+  const totalStockValue = products?.reduce((sum, p) => sum + (p.stock || 0) * p.productionCost, 0) || 0;
 
   if (!company) {
     return (
@@ -229,7 +276,7 @@ export default function CompanyDashboardPage() {
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => navigate("/companies")}
+                onClick={() => navigate("/dashboard")}
               >
                 <ArrowLeft className="h-5 w-5" />
               </Button>
@@ -245,9 +292,7 @@ export default function CompanyDashboardPage() {
                         {company.ticker}
                       </Badge>
                     )}
-                    {company.isPublic && (
-                      <Badge variant="default">Public</Badge>
-                    )}
+                    {company.isPublic && <Badge variant="default">Public</Badge>}
                   </div>
                 </div>
               </div>
@@ -258,87 +303,95 @@ export default function CompanyDashboardPage() {
               <DialogTrigger asChild>
                 <Button>
                   <Plus className="mr-2 h-4 w-4" />
-                  Add Product
+                  Create Product
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent className="max-w-2xl">
                 <DialogHeader>
-                  <DialogTitle>Add New Product</DialogTitle>
+                  <DialogTitle>Create New Product</DialogTitle>
                   <DialogDescription>
-                    Create a new product for your company
+                    Define your product details. You'll order inventory separately.
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleAddProduct} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="product-name">Product Name *</Label>
-                    <Input
-                      id="product-name"
-                      placeholder="Enter product name"
-                      value={productName}
-                      onChange={(e) => setProductName(e.target.value)}
-                      required
-                    />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="product-name">Product Name *</Label>
+                      <Input
+                        id="product-name"
+                        placeholder="e.g., Premium Widget"
+                        value={productName}
+                        onChange={(e) => setProductName(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="product-price">Selling Price ($) *</Label>
+                      <Input
+                        id="product-price"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="19.99"
+                        value={productPrice}
+                        onChange={(e) => setProductPrice(e.target.value)}
+                        required
+                      />
+                    </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="product-description">Description *</Label>
+                    <Label htmlFor="product-description">Description</Label>
                     <Textarea
                       id="product-description"
-                      placeholder="Describe your product"
+                      placeholder="Describe your product..."
                       value={productDescription}
                       onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
                         setProductDescription(e.target.value)
                       }
                       rows={3}
-                      required
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="product-price">Price ($) *</Label>
+                    <Label htmlFor="product-image">Image URL</Label>
                     <Input
-                      id="product-price"
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      placeholder="10.00"
-                      value={productPrice}
-                      onChange={(e) => setProductPrice(e.target.value)}
-                      required
+                      id="product-image"
+                      type="url"
+                      placeholder="https://example.com/image.jpg"
+                      value={productImage}
+                      onChange={(e) => setProductImage(e.target.value)}
                     />
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="product-quantity">
-                      Quantity to Produce (optional)
-                    </Label>
+                    <Label htmlFor="product-tags">Tags (comma-separated)</Label>
                     <Input
-                      id="product-quantity"
-                      type="number"
-                      min="1"
-                      placeholder="Leave empty for unlimited stock"
-                      value={productQuantity}
-                      onChange={(e) => setProductQuantity(e.target.value)}
+                      id="product-tags"
+                      placeholder="electronics, gadget, premium"
+                      value={productTags}
+                      onChange={(e) => setProductTags(e.target.value)}
                     />
                   </div>
 
                   {productPrice && (
-                    <div className="rounded-md bg-muted p-3">
-                      <p className="text-sm text-muted-foreground">
-                        Production cost (35-67% of price):
+                    <div className="rounded-md bg-muted p-4">
+                      <p className="text-sm font-medium mb-1">Production Cost Estimate:</p>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        (35-67% of selling price, randomly determined)
                       </p>
-                      <p className="text-lg font-semibold">
-                        {formatCurrency(
-                          calculateProductionCost(
-                            Math.round(parseFloat(productPrice) * 100)
-                          )
-                        )}
+                      <p className="text-lg font-semibold text-orange-600">
+                        ~$
+                        {((parseFloat(productPrice) * 0.35 + parseFloat(productPrice) * 0.67) / 2).toFixed(2)}{" "}
+                        per unit
                       </p>
                     </div>
                   )}
 
                   {error && (
-                    <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                      <AlertCircle className="h-4 w-4" />
                       {error}
                     </div>
                   )}
@@ -365,6 +418,14 @@ export default function CompanyDashboardPage() {
             <p className="text-muted-foreground">{company.description}</p>
           )}
 
+          {/* Success Message */}
+          {success && (
+            <div className="flex items-center gap-2 rounded-md bg-green-500/10 p-3 text-sm text-green-600">
+              <CheckCircle2 className="h-4 w-4" />
+              {success}
+            </div>
+          )}
+
           {/* Stats Cards */}
           <div className="grid gap-4 md:grid-cols-4">
             <Card>
@@ -387,23 +448,22 @@ export default function CompanyDashboardPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">
-                  {formatCurrency(totalRevenue)}
-                </p>
+                <p className="text-2xl font-bold">{formatCurrency(totalRevenue)}</p>
               </CardContent>
             </Card>
 
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Profit
+                  Net Profit
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p
-                  className={`text-2xl font-bold ${
+                  className={cn(
+                    "text-2xl font-bold",
                     totalProfit >= 0 ? "text-green-600" : "text-red-600"
-                  }`}
+                  )}
                 >
                   {formatCurrency(totalProfit)}
                 </p>
@@ -413,11 +473,13 @@ export default function CompanyDashboardPage() {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Products
+                  Inventory Value
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-2xl font-bold">{products?.length || 0}</p>
+                <p className="text-2xl font-bold text-orange-600">
+                  {formatCurrency(totalStockValue)}
+                </p>
               </CardContent>
             </Card>
           </div>
@@ -427,102 +489,190 @@ export default function CompanyDashboardPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Package className="h-5 w-5" />
-                Products
+                Products & Inventory
               </CardTitle>
             </CardHeader>
             <CardContent>
               {!products ? (
-                <p className="text-sm text-muted-foreground">
-                  Loading products...
-                </p>
+                <p className="text-sm text-muted-foreground">Loading products...</p>
               ) : products.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <Package className="mb-4 h-12 w-12 text-muted-foreground" />
-                  <h3 className="mb-2 text-lg font-semibold">
-                    No products yet
-                  </h3>
-                  <p className="mb-4 text-sm text-muted-foreground">
-                    Add your first product to start selling
+                <div className="flex flex-col items-center justify-center py-12 text-center">
+                  <Package className="mb-4 h-16 w-16 text-muted-foreground opacity-50" />
+                  <h3 className="mb-2 text-lg font-semibold">No products yet</h3>
+                  <p className="mb-4 text-sm text-muted-foreground max-w-sm">
+                    Create your first product to start selling in the marketplace
                   </p>
                   <Button onClick={() => setAddProductOpen(true)}>
                     <Plus className="mr-2 h-4 w-4" />
-                    Add Product
+                    Create Product
                   </Button>
                 </div>
               ) : (
+                <div className="space-y-4">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Product</TableHead>
+                        <TableHead>Price</TableHead>
+                        <TableHead>Cost/Unit</TableHead>
+                        <TableHead>Stock</TableHead>
+                        <TableHead>Sold</TableHead>
+                        <TableHead>Revenue</TableHead>
+                        <TableHead>Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {products.map((product) => (
+                        <TableRow key={product._id}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{product.name}</p>
+                              {product.tags && product.tags.length > 0 && (
+                                <div className="flex gap-1 mt-1">
+                                  {product.tags.slice(0, 3).map((tag, idx) => (
+                                    <Badge
+                                      key={idx}
+                                      variant="secondary"
+                                      className="text-xs"
+                                    >
+                                      {tag}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatCurrency(product.price)}
+                          </TableCell>
+                          <TableCell className="text-orange-600">
+                            {formatCurrency(product.productionCost)}
+                          </TableCell>
+                          <TableCell>
+                            <span
+                              className={cn(
+                                "font-medium",
+                                (product.stock || 0) === 0
+                                  ? "text-red-600"
+                                  : (product.stock || 0) < 10
+                                  ? "text-orange-600"
+                                  : "text-green-600"
+                              )}
+                            >
+                              {product.stock || 0}
+                            </span>
+                          </TableCell>
+                          <TableCell>{product.totalSold}</TableCell>
+                          <TableCell className="font-medium text-green-600">
+                            {formatCurrency(product.totalRevenue)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => openOrderBatchModal(product._id)}
+                              >
+                                <ShoppingCart className="mr-1 h-3 w-3" />
+                                Order Batch
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => openEditModal(product)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Batch Order History */}
+          {batchOrders && batchOrders.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" />
+                  Recent Batch Orders
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Product</TableHead>
                       <TableHead>Description</TableHead>
-                      <TableHead>Price</TableHead>
-                      <TableHead>Production Cost</TableHead>
-                      <TableHead>Total Sold</TableHead>
-                      <TableHead>Revenue</TableHead>
-                      <TableHead>Actions</TableHead>
+                      <TableHead className="text-right">Cost</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {products.map((product) => (
-                      <TableRow key={product._id}>
+                    {batchOrders.slice(0, 10).map((order: any) => (
+                      <TableRow key={order._id}>
+                        <TableCell className="text-sm">
+                          {new Date(order.createdAt).toLocaleDateString()}
+                        </TableCell>
                         <TableCell className="font-medium">
-                          {product.name}
+                          {order.productName}
                         </TableCell>
-                        <TableCell className="max-w-xs truncate text-sm text-muted-foreground">
-                          {product.description}
+                        <TableCell className="text-sm text-muted-foreground">
+                          {order.description}
                         </TableCell>
-                        <TableCell>{formatCurrency(product.price)}</TableCell>
-                        <TableCell>
-                          {formatCurrency(product.productionCost)}
-                        </TableCell>
-                        <TableCell>{product.totalSold}</TableCell>
-                        <TableCell className="font-medium text-green-600">
-                          {formatCurrency(product.totalRevenue)}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openEditModal(product)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" disabled>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                        <TableCell className="text-right font-medium text-orange-600">
+                          -{formatCurrency(order.amount)}
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Edit Product Modal */}
           <Dialog open={editProductOpen} onOpenChange={setEditProductOpen}>
-            <DialogContent>
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Edit Product</DialogTitle>
                 <DialogDescription>
-                  Update product information
+                  Update product details (doesn't affect existing inventory)
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleEditProduct} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="edit-name">Product Name *</Label>
-                  <Input
-                    id="edit-name"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    required
-                  />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-name">Product Name *</Label>
+                    <Input
+                      id="edit-name"
+                      value={editName}
+                      onChange={(e) => setEditName(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-price">Selling Price ($) *</Label>
+                    <Input
+                      id="edit-price"
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      value={editPrice}
+                      onChange={(e) => setEditPrice(e.target.value)}
+                      required
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-description">Description *</Label>
+                  <Label htmlFor="edit-description">Description</Label>
                   <Textarea
                     id="edit-description"
                     value={editDescription}
@@ -530,25 +680,31 @@ export default function CompanyDashboardPage() {
                       setEditDescription(e.target.value)
                     }
                     rows={3}
-                    required
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="edit-price">Price ($) *</Label>
+                  <Label htmlFor="edit-image">Image URL</Label>
                   <Input
-                    id="edit-price"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={editPrice}
-                    onChange={(e) => setEditPrice(e.target.value)}
-                    required
+                    id="edit-image"
+                    type="url"
+                    value={editImage}
+                    onChange={(e) => setEditImage(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-tags">Tags (comma-separated)</Label>
+                  <Input
+                    id="edit-tags"
+                    value={editTags}
+                    onChange={(e) => setEditTags(e.target.value)}
                   />
                 </div>
 
                 {error && (
-                  <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4" />
                     {error}
                   </div>
                 )}
@@ -563,6 +719,142 @@ export default function CompanyDashboardPage() {
                   </Button>
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? "Updating..." : "Update Product"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Order Batch Modal */}
+          <Dialog open={orderBatchOpen} onOpenChange={setOrderBatchOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Order Product Batch</DialogTitle>
+                <DialogDescription>
+                  Manufacture inventory to sell in the marketplace
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleOrderBatch} className="space-y-4">
+                {orderProductId && products && (
+                  <>
+                    {(() => {
+                      const product = products.find((p) => p._id === orderProductId);
+                      if (!product) return null;
+
+                      const quantity = parseInt(batchQuantity) || 0;
+                      const totalCost = product.productionCost * quantity;
+                      const profit = (product.price - product.productionCost) * quantity;
+
+                      return (
+                        <>
+                          <div className="rounded-md bg-muted p-4 space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">
+                                Product:
+                              </span>
+                              <span className="font-medium">{product.name}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">
+                                Cost per unit:
+                              </span>
+                              <span className="font-medium text-orange-600">
+                                {formatCurrency(product.productionCost)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">
+                                Selling price:
+                              </span>
+                              <span className="font-medium text-green-600">
+                                {formatCurrency(product.price)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">
+                                Profit per unit:
+                              </span>
+                              <span className="font-medium text-blue-600">
+                                {formatCurrency(product.price - product.productionCost)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-sm text-muted-foreground">
+                                Current stock:
+                              </span>
+                              <span className="font-medium">{product.stock || 0}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="batch-quantity">Quantity to Order *</Label>
+                            <Input
+                              id="batch-quantity"
+                              type="number"
+                              min="1"
+                              placeholder="e.g., 100"
+                              value={batchQuantity}
+                              onChange={(e) => setBatchQuantity(e.target.value)}
+                              required
+                            />
+                          </div>
+
+                          {quantity > 0 && (
+                            <div className="rounded-md border-2 border-primary/20 bg-primary/5 p-4 space-y-2">
+                              <div className="flex justify-between text-lg">
+                                <span className="font-medium">Total Cost:</span>
+                                <span className="font-bold text-orange-600">
+                                  {formatCurrency(totalCost)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">
+                                  Potential Profit:
+                                </span>
+                                <span className="font-semibold text-green-600">
+                                  {formatCurrency(profit)}
+                                </span>
+                              </div>
+                              <div className="flex justify-between text-sm">
+                                <span className="text-muted-foreground">
+                                  Your Balance:
+                                </span>
+                                <span
+                                  className={cn(
+                                    "font-semibold",
+                                    company.balance >= totalCost
+                                      ? "text-green-600"
+                                      : "text-red-600"
+                                  )}
+                                >
+                                  {formatCurrency(company.balance)}
+                                </span>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </>
+                )}
+
+                {batchError && (
+                  <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    {batchError}
+                  </div>
+                )}
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setOrderBatchOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Ordering..." : "Order Batch"}
                   </Button>
                 </DialogFooter>
               </form>

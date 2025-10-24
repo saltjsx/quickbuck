@@ -1,17 +1,16 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
-// Mutation: Create product
+// Mutation: Create product (no initial stock, just the product listing)
 export const createProduct = mutation({
   args: {
     companyId: v.id("companies"),
     name: v.string(),
     description: v.optional(v.string()),
-    price: v.number(), // in cents
-    productionCost: v.number(), // in cents
+    price: v.number(), // in cents - selling price to customers
     image: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
-    stock: v.optional(v.number()), // null/undefined means unlimited
     maxPerOrder: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
@@ -26,15 +25,19 @@ export const createProduct = mutation({
 
     const now = Date.now();
 
+    // Calculate production cost (35%-67% of selling price)
+    const costPercentage = 0.35 + Math.random() * 0.32;
+    const productionCost = Math.floor(args.price * costPercentage);
+
     const productId = await ctx.db.insert("products", {
       companyId: args.companyId,
       name: args.name,
       description: args.description,
       price: args.price,
-      productionCost: args.productionCost,
+      productionCost: productionCost,
       image: args.image,
       tags: args.tags,
-      stock: args.stock,
+      stock: 0, // Start with 0 stock - must order batches
       maxPerOrder: args.maxPerOrder,
       totalRevenue: 0,
       totalSold: 0,
@@ -49,17 +52,82 @@ export const createProduct = mutation({
   },
 });
 
-// Mutation: Update product
+// Mutation: Order a batch of products (manufacture inventory)
+export const orderProductBatch = mutation({
+  args: {
+    productId: v.id("products"),
+    quantity: v.number(),
+  },
+  handler: async (ctx, args) => {
+    if (args.quantity <= 0) {
+      throw new Error("Quantity must be positive");
+    }
+
+    const product = await ctx.db.get(args.productId);
+    if (!product) {
+      throw new Error("Product not found");
+    }
+
+    const company = await ctx.db.get(product.companyId);
+    if (!company) {
+      throw new Error("Company not found");
+    }
+
+    // Calculate total production cost for this batch
+    const totalCost = product.productionCost * args.quantity;
+
+    // Check if company has sufficient balance
+    if (company.balance < totalCost) {
+      throw new Error(
+        `Insufficient balance. Need ${totalCost / 100} but have ${company.balance / 100}`
+      );
+    }
+
+    const now = Date.now();
+
+    // Deduct cost from company balance
+    await ctx.db.patch(product.companyId, {
+      balance: company.balance - totalCost,
+      updatedAt: now,
+    });
+
+    // Add stock to product
+    await ctx.db.patch(args.productId, {
+      stock: (product.stock || 0) + args.quantity,
+      updatedAt: now,
+    });
+
+    // Create transaction record
+    await ctx.db.insert("transactions", {
+      fromAccountId: product.companyId,
+      fromAccountType: "company" as const,
+      toAccountId: product.companyId,
+      toAccountType: "company" as const,
+      amount: totalCost,
+      assetType: "product" as const,
+      assetId: args.productId,
+      description: `Ordered ${args.quantity} units of ${product.name}`,
+      createdAt: now,
+    });
+
+    return {
+      productId: args.productId,
+      quantity: args.quantity,
+      totalCost,
+      newStock: (product.stock || 0) + args.quantity,
+    };
+  },
+});
+
+// Mutation: Update product (metadata only, not stock or production cost)
 export const updateProduct = mutation({
   args: {
     productId: v.id("products"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
     price: v.optional(v.number()),
-    productionCost: v.optional(v.number()),
     image: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
-    stock: v.optional(v.number()),
     maxPerOrder: v.optional(v.number()),
     qualityRating: v.optional(v.number()),
     isActive: v.optional(v.boolean()),
@@ -72,8 +140,16 @@ export const updateProduct = mutation({
       throw new Error("Product not found");
     }
 
+    // If price is being updated, recalculate production cost
+    let productionCost = product.productionCost;
+    if (updates.price !== undefined) {
+      const costPercentage = 0.35 + Math.random() * 0.32;
+      productionCost = Math.floor(updates.price * costPercentage);
+    }
+
     await ctx.db.patch(productId, {
       ...updates,
+      productionCost,
       updatedAt: Date.now(),
     });
 
@@ -204,6 +280,35 @@ export const getProductsByPriceRange = query({
     return allProducts.filter(
       (p) => p.price >= args.minPrice && p.price <= args.maxPrice
     );
+  },
+});
+
+// Query: Get product batch order history
+export const getProductBatchOrders = query({
+  args: {
+    companyId: v.id("companies"),
+  },
+  handler: async (ctx, args) => {
+    const transactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.companyId))
+      .filter((q) => q.eq(q.field("assetType"), "product"))
+      .order("desc")
+      .take(50);
+
+    // Enrich with product names
+    const enriched = await Promise.all(
+      transactions.map(async (tx) => {
+        if (!tx.assetId) return { ...tx, productName: "Unknown" };
+        const product = await ctx.db.get(tx.assetId as Id<"products">);
+        return {
+          ...tx,
+          productName: product?.name || "Unknown",
+        };
+      })
+    );
+
+    return enriched;
   },
 });
 
