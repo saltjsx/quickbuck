@@ -10,6 +10,7 @@ export const createCompany = mutation({
     ticker: v.optional(v.string()),
     description: v.optional(v.string()),
     logo: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -20,6 +21,7 @@ export const createCompany = mutation({
       ticker: args.ticker,
       description: args.description,
       logo: args.logo,
+      tags: args.tags,
       balance: 0,
       isPublic: false,
       reputationScore: 0.5, // Start with neutral reputation
@@ -29,6 +31,36 @@ export const createCompany = mutation({
     });
 
     return companyId;
+  },
+});
+
+// Mutation: Update company info
+export const updateCompanyInfo = mutation({
+  args: {
+    companyId: v.id("companies"),
+    name: v.optional(v.string()),
+    description: v.optional(v.string()),
+    logo: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+  },
+  handler: async (ctx, args) => {
+    const company = await ctx.db.get(args.companyId);
+    if (!company) {
+      throw new Error("Company not found");
+    }
+
+    const updates: any = {
+      updatedAt: Date.now(),
+    };
+
+    if (args.name !== undefined) updates.name = args.name;
+    if (args.description !== undefined) updates.description = args.description;
+    if (args.logo !== undefined) updates.logo = args.logo;
+    if (args.tags !== undefined) updates.tags = args.tags;
+
+    await ctx.db.patch(args.companyId, updates);
+
+    return await ctx.db.get(args.companyId);
   },
 });
 

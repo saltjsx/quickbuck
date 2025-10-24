@@ -1,19 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Button } from "~/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
 import {
   Table,
   TableBody,
@@ -22,12 +15,22 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { Textarea } from "~/components/ui/textarea";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
-import { ArrowRight, Send, History } from "lucide-react";
+import {
+  Send,
+  History,
+  Search,
+  User,
+  Building2,
+  ArrowDownUp,
+  CheckCircle2,
+  AlertCircle,
+} from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
+import { cn } from "~/lib/utils";
+
+type RecipientType = "player" | "company" | null;
 
 export default function TransfersPage() {
   const { userId: clerkUserId } = useAuth();
@@ -42,26 +45,20 @@ export default function TransfersPage() {
     user ? { userId: user._id as Id<"users"> } : "skip"
   );
 
-  // Get player companies
-  const companies = useQuery(
-    api.companies.getPlayerCompanies,
-    player?._id ? { playerId: player._id } : "skip"
-  );
-
   // Get transaction history
   const transactions = useQuery(
     api.transactions.getPlayerTransactionHistory,
     player?._id ? { playerId: player._id, limit: 10 } : "skip"
   );
 
-  // Get all players for recipient selection
-  const allPlayers = useQuery(api.leaderboard.getAllPlayersSorted, {
+  // Get all players
+  const allPlayersResult = useQuery(api.leaderboard.getAllPlayersSorted, {
     sortBy: "netWorth",
     limit: 100,
   });
 
-  // Get all companies for recipient selection
-  const allCompanies = useQuery(api.leaderboard.getAllCompaniesSorted, {
+  // Get all companies
+  const allCompaniesResult = useQuery(api.leaderboard.getAllCompaniesSorted, {
     sortBy: "marketCap",
     limit: 100,
   });
@@ -70,14 +67,59 @@ export default function TransfersPage() {
   const transferCash = useMutation(api.transactions.transferCash);
 
   // Form state
-  const [fromAccount, setFromAccount] = useState("");
-  const [toAccount, setToAccount] = useState("");
-  const [assetType, setAssetType] = useState("cash");
+  const [recipientType, setRecipientType] = useState<RecipientType>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRecipient, setSelectedRecipient] = useState<{
+    id: string;
+    type: "player" | "company";
+    name: string;
+  } | null>(null);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Filter players and companies based on search
+  const filteredPlayers = useMemo(() => {
+    if (!allPlayersResult?.players || recipientType !== "player") return [];
+
+    return allPlayersResult.players
+      .filter((p) => p._id !== player?._id) // Exclude current player
+      .filter((p) =>
+        p.userName.toLowerCase().includes(searchQuery.toLowerCase())
+      );
+  }, [allPlayersResult, player, recipientType, searchQuery]);
+
+  const filteredCompanies = useMemo(() => {
+    if (!allCompaniesResult?.companies || recipientType !== "company")
+      return [];
+
+    return allCompaniesResult.companies.filter(
+      (c) =>
+        c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.ticker?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [allCompaniesResult, recipientType, searchQuery]);
+
+  // Handle recipient type selection
+  const handleRecipientTypeSelect = (type: RecipientType) => {
+    setRecipientType(type);
+    setSearchQuery("");
+    setSelectedRecipient(null);
+    setError("");
+  };
+
+  // Handle recipient selection
+  const handleRecipientSelect = (
+    id: string,
+    type: "player" | "company",
+    name: string
+  ) => {
+    setSelectedRecipient({ id, type, name });
+    setSearchQuery("");
+    setError("");
+  };
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
@@ -86,54 +128,50 @@ export default function TransfersPage() {
     setSuccess("");
 
     // Validation
-    if (!fromAccount) {
-      setError("Please select a from account");
-      return;
-    }
-    if (!toAccount) {
-      setError("Please select a recipient account");
-      return;
-    }
-    if (fromAccount === toAccount) {
-      setError("Cannot transfer to the same account");
+    if (!selectedRecipient) {
+      setError("Please select a recipient");
       return;
     }
     if (!amount || parseFloat(amount) <= 0) {
       setError("Please enter a valid amount");
       return;
     }
-    if (parseFloat(amount) < 1) {
-      setError("Minimum transfer amount is $0.01");
+    if (!description.trim()) {
+      setError("Please add a description");
       return;
     }
-    if (!description.trim()) {
-      setError("Please enter a description");
+
+    const amountInCents = Math.round(parseFloat(amount) * 100);
+
+    // Check balance
+    if (player && amountInCents > player.balance) {
+      setError("Insufficient balance");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      // Parse from and to accounts
-      const [fromType, fromId] = fromAccount.split(":");
-      const [toType, toId] = toAccount.split(":");
-
-      const amountInCents = Math.round(parseFloat(amount) * 100);
-
       await transferCash({
-        fromAccountId: fromId as Id<"players"> | Id<"companies">,
-        fromAccountType: fromType as "player" | "company",
-        toAccountId: toId as Id<"players"> | Id<"companies">,
-        toAccountType: toType as "player" | "company",
+        fromAccountId: player!._id,
+        fromAccountType: "player",
+        toAccountId: selectedRecipient.id as Id<"players"> | Id<"companies">,
+        toAccountType: selectedRecipient.type,
         amount: amountInCents,
         description: description.trim(),
       });
 
-      setSuccess("Transfer completed successfully!");
+      setSuccess(
+        `Successfully transferred ${formatCurrency(amountInCents)} to ${
+          selectedRecipient.name
+        }`
+      );
+
       // Reset form
       setAmount("");
       setDescription("");
-      setToAccount("");
+      setSelectedRecipient(null);
+      setRecipientType(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Transfer failed");
     } finally {
@@ -149,149 +187,252 @@ export default function TransfersPage() {
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Transfers</h1>
             <p className="text-muted-foreground">
-              Send money and assets between accounts
+              Send money to players and companies
             </p>
           </div>
+
+          {/* Current Balance */}
+          {player && (
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                      Available Balance
+                    </p>
+                    <p className="text-2xl font-bold">
+                      {formatCurrency(player.balance)}
+                    </p>
+                  </div>
+                  <ArrowDownUp className="h-8 w-8 text-muted-foreground" />
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Transfer Form */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Send className="h-5 w-5" />
-                Send Money/Assets
+                Send Money
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* From Account */}
-                <div className="space-y-2">
-                  <Label htmlFor="from-account">From Account</Label>
-                  <Select value={fromAccount} onValueChange={setFromAccount}>
-                    <SelectTrigger id="from-account">
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {player && (
-                        <SelectItem value={`player:${player._id}`}>
-                          Personal Account - {formatCurrency(player.balance)}
-                        </SelectItem>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Step 1: Select Recipient Type */}
+                <div className="space-y-3">
+                  <Label>Select Recipient Type</Label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleRecipientTypeSelect("player")}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all hover:border-primary/50",
+                        recipientType === "player"
+                          ? "border-primary bg-primary/5"
+                          : "border-border"
                       )}
-                      {companies?.map((company) => (
-                        <SelectItem
-                          key={company._id}
-                          value={`company:${company._id}`}
+                    >
+                      <User className="h-6 w-6" />
+                      <span className="font-medium">Player</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRecipientTypeSelect("company")}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all hover:border-primary/50",
+                        recipientType === "company"
+                          ? "border-primary bg-primary/5"
+                          : "border-border"
+                      )}
+                    >
+                      <Building2 className="h-6 w-6" />
+                      <span className="font-medium">Company</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Step 2: Search and Select Recipient */}
+                {recipientType && (
+                  <div className="space-y-3">
+                    <Label>
+                      {selectedRecipient
+                        ? "Selected Recipient"
+                        : `Search ${
+                            recipientType === "player" ? "Players" : "Companies"
+                          }`}
+                    </Label>
+
+                    {selectedRecipient ? (
+                      <div className="flex items-center justify-between rounded-lg border-2 border-primary bg-primary/5 p-4">
+                        <div className="flex items-center gap-3">
+                          {selectedRecipient.type === "player" ? (
+                            <User className="h-5 w-5" />
+                          ) : (
+                            <Building2 className="h-5 w-5" />
+                          )}
+                          <div>
+                            <p className="font-medium">
+                              {selectedRecipient.name}
+                            </p>
+                            <p className="text-xs text-muted-foreground capitalize">
+                              {selectedRecipient.type}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedRecipient(null)}
                         >
-                          {company.name} - {formatCurrency(company.balance)}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex items-center justify-center py-2">
-                  <ArrowRight className="h-5 w-5 text-muted-foreground" />
-                </div>
-
-                {/* To Account */}
-                <div className="space-y-2">
-                  <Label htmlFor="to-account">To Account</Label>
-                  <Select value={toAccount} onValueChange={setToAccount}>
-                    <SelectTrigger id="to-account">
-                      <SelectValue placeholder="Select recipient" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <div className="px-2 py-1.5 text-sm font-semibold">
-                        Players
+                          Change
+                        </Button>
                       </div>
-                      {allPlayers?.players
-                        .filter((p) => p._id !== player?._id)
-                        .map((p) => (
-                          <SelectItem key={p._id} value={`player:${p._id}`}>
-                            {p.userName} (Player)
-                          </SelectItem>
-                        ))}
-                      <div className="px-2 py-1.5 text-sm font-semibold">
-                        Companies
-                      </div>
-                      {allCompanies?.companies
-                        .filter((c) => c.ownerId !== player?._id)
-                        .map((c) => (
-                          <SelectItem key={c._id} value={`company:${c._id}`}>
-                            {c.name} ({c.ticker || "Private"})
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                    ) : (
+                      <>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                          <Input
+                            placeholder={`Search ${
+                              recipientType === "player"
+                                ? "by player name"
+                                : "by company name or ticker"
+                            }...`}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="pl-9"
+                          />
+                        </div>
 
-                {/* Asset Type */}
-                <div className="space-y-2">
-                  <Label>Asset Type</Label>
-                  <RadioGroup value={assetType} onValueChange={setAssetType}>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="cash" id="cash" />
-                      <Label htmlFor="cash" className="font-normal">
-                        Cash
-                      </Label>
+                        {/* Search Results */}
+                        {searchQuery && (
+                          <div className="max-h-60 space-y-1 overflow-y-auto rounded-lg border p-2">
+                            {recipientType === "player" &&
+                              filteredPlayers.length > 0 &&
+                              filteredPlayers.map((p) => (
+                                <button
+                                  key={p._id}
+                                  type="button"
+                                  onClick={() =>
+                                    handleRecipientSelect(
+                                      p._id,
+                                      "player",
+                                      p.userName
+                                    )
+                                  }
+                                  className="flex w-full items-center justify-between rounded-md p-3 text-left transition-colors hover:bg-accent"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <User className="h-4 w-4 text-muted-foreground" />
+                                    <div>
+                                      <p className="font-medium">
+                                        {p.userName}
+                                      </p>
+                                      <p className="text-xs text-muted-foreground">
+                                        Net Worth: {formatCurrency(p.netWorth)}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+
+                            {recipientType === "company" &&
+                              filteredCompanies.length > 0 &&
+                              filteredCompanies.map((c) => (
+                                <button
+                                  key={c._id}
+                                  type="button"
+                                  onClick={() =>
+                                    handleRecipientSelect(
+                                      c._id,
+                                      "company",
+                                      c.name
+                                    )
+                                  }
+                                  className="flex w-full items-center justify-between rounded-md p-3 text-left transition-colors hover:bg-accent"
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <Building2 className="h-4 w-4 text-muted-foreground" />
+                                    <div>
+                                      <p className="font-medium">{c.name}</p>
+                                      <p className="text-xs text-muted-foreground">
+                                        {c.ticker && `${c.ticker} • `}
+                                        {c.marketCap
+                                          ? `Market Cap: ${formatCurrency(
+                                              c.marketCap
+                                            )}`
+                                          : `Balance: ${formatCurrency(
+                                              c.balance
+                                            )}`}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </button>
+                              ))}
+
+                            {((recipientType === "player" &&
+                              filteredPlayers.length === 0) ||
+                              (recipientType === "company" &&
+                                filteredCompanies.length === 0)) && (
+                              <p className="p-3 text-center text-sm text-muted-foreground">
+                                No results found
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
+
+                {/* Step 3: Amount and Description */}
+                {selectedRecipient && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="amount">Amount ($)</Label>
+                      <Input
+                        id="amount"
+                        type="number"
+                        step="0.01"
+                        min="0.01"
+                        placeholder="0.00"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        required
+                      />
+                      {amount && parseFloat(amount) > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          You will send:{" "}
+                          {formatCurrency(Math.round(parseFloat(amount) * 100))}
+                        </p>
+                      )}
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="crypto" id="crypto" disabled />
-                      <Label
-                        htmlFor="crypto"
-                        className="font-normal text-muted-foreground"
-                      >
-                        Crypto (Coming soon)
-                      </Label>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Input
+                        id="description"
+                        placeholder="What is this transfer for?"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        required
+                      />
                     </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="stock" id="stock" disabled />
-                      <Label
-                        htmlFor="stock"
-                        className="font-normal text-muted-foreground"
-                      >
-                        Stock Holdings (Coming soon)
-                      </Label>
-                    </div>
-                  </RadioGroup>
-                </div>
+                  </>
+                )}
 
-                {/* Amount */}
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Amount ($)</Label>
-                  <Input
-                    id="amount"
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    placeholder="0.00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    required
-                  />
-                </div>
-
-                {/* Description */}
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description *</Label>
-                  <Textarea
-                    id="description"
-                    placeholder="What is this transfer for?"
-                    value={description}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
-                      setDescription(e.target.value)
-                    }
-                    required
-                  />
-                </div>
-
-                {/* Error/Success Messages */}
+                {/* Messages */}
                 {error && (
-                  <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4" />
                     {error}
                   </div>
                 )}
                 {success && (
-                  <div className="rounded-md bg-green-500/10 p-3 text-sm text-green-600">
+                  <div className="flex items-center gap-2 rounded-md bg-green-500/10 p-3 text-sm text-green-600">
+                    <CheckCircle2 className="h-4 w-4" />
                     {success}
                   </div>
                 )}
@@ -299,7 +440,7 @@ export default function TransfersPage() {
                 {/* Submit Button */}
                 <Button
                   type="submit"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || !selectedRecipient}
                   className="w-full"
                 >
                   {isSubmitting ? "Processing..." : "Send Transfer"}
@@ -345,9 +486,10 @@ export default function TransfersPage() {
                           </TableCell>
                           <TableCell>
                             <span
-                              className={`text-xs font-medium ${
+                              className={cn(
+                                "text-xs font-medium",
                                 isSent ? "text-red-600" : "text-green-600"
-                              }`}
+                              )}
                             >
                               {isSent ? "Sent" : "Received"}
                             </span>
@@ -356,9 +498,10 @@ export default function TransfersPage() {
                             {tx.description}
                           </TableCell>
                           <TableCell
-                            className={`text-right font-medium ${
+                            className={cn(
+                              "text-right font-medium",
                               isSent ? "text-red-600" : "text-green-600"
-                            }`}
+                            )}
                           >
                             {isSent ? "-" : "+"}
                             {formatCurrency(tx.amount)}

@@ -9,24 +9,41 @@ async function findPlayerByToken(ctx: any) {
     throw new Error("Not authenticated");
   }
 
-  const user = await ctx.db
+  // Find or create the user record
+  let user = await ctx.db
     .query("users")
     .withIndex("by_token", (q: any) =>
-      q.eq("tokenIdentifier", identity.tokenIdentifier)
+      q.eq("tokenIdentifier", identity.subject)
     )
     .unique();
 
   if (!user) {
-    throw new Error("User not found");
+    // Create new user if doesn't exist
+    const userId = await ctx.db.insert("users", {
+      name: identity.name ?? "Anonymous",
+      email: identity.email ?? "",
+      tokenIdentifier: identity.subject,
+    });
+    user = await ctx.db.get(userId);
   }
 
-  const player = await ctx.db
+  // Find or create the player record
+  let player = await ctx.db
     .query("players")
     .withIndex("by_userId", (q: any) => q.eq("userId", user._id))
     .unique();
 
   if (!player) {
-    throw new Error("Player not found");
+    // Create new player if doesn't exist
+    const now = Date.now();
+    const playerId = await ctx.db.insert("players", {
+      userId: user._id,
+      balance: 1000000, // $10,000 in cents
+      netWorth: 1000000,
+      createdAt: now,
+      updatedAt: now,
+    });
+    player = await ctx.db.get(playerId);
   }
 
   return player;

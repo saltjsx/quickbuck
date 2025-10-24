@@ -19,6 +19,7 @@ import type * as http from "../http.js";
 import type * as leaderboard from "../leaderboard.js";
 import type * as loans from "../loans.js";
 import type * as players from "../players.js";
+import type * as portfolio from "../portfolio.js";
 import type * as products from "../products.js";
 import type * as stocks from "../stocks.js";
 import type * as subscriptions from "../subscriptions.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   leaderboard: typeof leaderboard;
   loans: typeof loans;
   players: typeof players;
+  portfolio: typeof portfolio;
   products: typeof products;
   stocks: typeof stocks;
   subscriptions: typeof subscriptions;

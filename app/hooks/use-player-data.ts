@@ -6,7 +6,8 @@ import type { Id } from "convex/_generated/dataModel";
 import { useEffect } from "react";
 
 export function usePlayerData(clerkUserId: string | null) {
-  // Auto-initialize player on first access
+  // Mutations for user and player creation
+  const upsertUser = useMutation(api.users.upsertUser);
   const getOrCreatePlayer = useMutation(api.players.getOrCreatePlayer);
   
   // First, get the Convex user ID by looking up the token identifier
@@ -21,14 +22,20 @@ export function usePlayerData(clerkUserId: string | null) {
     user ? { userId: user._id as Id<"users"> } : "skip"
   );
 
-  // Auto-initialize player if they don't exist yet
+  // Ensure user exists, then ensure player exists
   useEffect(() => {
-    if (clerkUserId && user && !player) {
-      getOrCreatePlayer().catch((err) => {
-        console.error("Failed to initialize player:", err);
-      });
+    if (clerkUserId) {
+      // First, ensure the user exists in the database
+      upsertUser()
+        .then(() => {
+          // After user is upserted, ensure player exists
+          return getOrCreatePlayer();
+        })
+        .catch((err) => {
+          console.error("Failed to initialize user/player:", err);
+        });
     }
-  }, [clerkUserId, user, player, getOrCreatePlayer]);
+  }, [clerkUserId, upsertUser, getOrCreatePlayer]);
 
   // Get player balance
   const balance = useQuery(

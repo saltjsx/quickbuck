@@ -78,6 +78,7 @@ export default function CompanyDashboardPage() {
   const [productName, setProductName] = useState("");
   const [productDescription, setProductDescription] = useState("");
   const [productPrice, setProductPrice] = useState("");
+  const [productQuantity, setProductQuantity] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -142,6 +143,7 @@ export default function CompanyDashboardPage() {
         description: productDescription.trim(),
         price: priceCents,
         productionCost,
+        stock: productQuantity ? parseInt(productQuantity) : undefined,
       });
 
       // Deduct production cost from company balance
@@ -154,6 +156,7 @@ export default function CompanyDashboardPage() {
       setProductName("");
       setProductDescription("");
       setProductPrice("");
+      setProductQuantity("");
       setAddProductOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create product");
@@ -302,6 +305,20 @@ export default function CompanyDashboardPage() {
                       value={productPrice}
                       onChange={(e) => setProductPrice(e.target.value)}
                       required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="product-quantity">
+                      Quantity to Produce (optional)
+                    </Label>
+                    <Input
+                      id="product-quantity"
+                      type="number"
+                      min="1"
+                      placeholder="Leave empty for unlimited stock"
+                      value={productQuantity}
+                      onChange={(e) => setProductQuantity(e.target.value)}
                     />
                   </div>
 

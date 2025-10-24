@@ -66,6 +66,8 @@ export default function ManageCompaniesPage() {
   const [companyName, setCompanyName] = useState("");
   const [companyTicker, setCompanyTicker] = useState("");
   const [companyDescription, setCompanyDescription] = useState("");
+  const [companyLogo, setCompanyLogo] = useState("");
+  const [companyTags, setCompanyTags] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -108,12 +110,18 @@ export default function ManageCompaniesPage() {
         name: companyName.trim(),
         ticker: companyTicker.trim() || undefined,
         description: companyDescription.trim() || undefined,
+        logo: companyLogo.trim() || undefined,
+        tags: companyTags.trim()
+          ? companyTags.split(",").map((tag) => tag.trim())
+          : undefined,
       });
 
       // Reset form and close modal
       setCompanyName("");
       setCompanyTicker("");
       setCompanyDescription("");
+      setCompanyLogo("");
+      setCompanyTags("");
       setCreateModalOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create company");
@@ -250,6 +258,29 @@ export default function ManageCompaniesPage() {
                         setCompanyDescription(e.target.value)
                       }
                       rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="company-logo">Logo URL (optional)</Label>
+                    <Input
+                      id="company-logo"
+                      type="url"
+                      placeholder="https://example.com/logo.png"
+                      value={companyLogo}
+                      onChange={(e) => setCompanyLogo(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="company-tags">
+                      Tags (optional, comma-separated)
+                    </Label>
+                    <Input
+                      id="company-tags"
+                      placeholder="e.g., tech, startup, innovation"
+                      value={companyTags}
+                      onChange={(e) => setCompanyTags(e.target.value)}
                     />
                   </div>
 

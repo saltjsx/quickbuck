@@ -83,6 +83,7 @@ export default function CryptoMarketPage() {
     name: "",
     ticker: "",
     description: "",
+    image: "",
   });
   const [createError, setCreateError] = useState("");
   const [isCreating, setIsCreating] = useState(false);
@@ -126,11 +127,12 @@ export default function CryptoMarketPage() {
         name: createForm.name,
         ticker: upperTicker,
         description: createForm.description,
+        image: createForm.image.trim() || undefined,
         initialSupply: 100000000, // 100 million tokens
       });
 
       setIsCreateModalOpen(false);
-      setCreateForm({ name: "", ticker: "", description: "" });
+      setCreateForm({ name: "", ticker: "", description: "", image: "" });
 
       // Navigate to the new crypto detail page
       navigate(`/crypto/${cryptoId}`);
@@ -259,6 +261,22 @@ export default function CryptoMarketPage() {
                         })
                       }
                       rows={3}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="image">Logo URL (optional)</Label>
+                    <Input
+                      id="image"
+                      type="url"
+                      placeholder="https://example.com/logo.png"
+                      value={createForm.image}
+                      onChange={(e) =>
+                        setCreateForm({
+                          ...createForm,
+                          image: e.target.value,
+                        })
+                      }
                     />
                   </div>
 

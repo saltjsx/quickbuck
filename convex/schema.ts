@@ -25,6 +25,7 @@ export default defineSchema({
     ticker: v.optional(v.string()), // only for public companies
     description: v.optional(v.string()),
     logo: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
     balance: v.number(), // in cents
     marketCap: v.optional(v.number()), // in cents, for public companies
     isPublic: v.boolean(),
