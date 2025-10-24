@@ -58,6 +58,7 @@
     "@types/node": "^20",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",
+    "@vitest/coverage-v8": "^4.0.2",
     "@vitest/ui": "^4.0.2",
     "convex-test": "^0.0.38",
     "glob": "^11.0.3",
