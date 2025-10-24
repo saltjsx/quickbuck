@@ -14,6 +14,7 @@ import type * as companySales from "../companySales.js";
 import type * as crypto from "../crypto.js";
 import type * as gameConfig from "../gameConfig.js";
 import type * as http from "../http.js";
+import type * as leaderboard from "../leaderboard.js";
 import type * as loans from "../loans.js";
 import type * as players from "../players.js";
 import type * as products from "../products.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   crypto: typeof crypto;
   gameConfig: typeof gameConfig;
   http: typeof http;
+  leaderboard: typeof leaderboard;
   loans: typeof loans;
   players: typeof players;
   products: typeof products;

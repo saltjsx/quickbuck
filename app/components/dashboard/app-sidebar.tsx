@@ -1,9 +1,6 @@
-import { IconDashboard, IconSettings } from "@tabler/icons-react";
-import { MessageCircle } from "lucide-react";
+import { IconDashboard } from "@tabler/icons-react";
 import { Link } from "react-router";
 import { NavMain } from "./nav-main";
-import { NavSecondary } from "./nav-secondary";
-import { NavUser } from "./nav-user";
 import {
   Sidebar,
   SidebarContent,
@@ -12,6 +9,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
 } from "~/components/ui/sidebar";
+import { UserButton } from "@clerk/react-router";
 
 const data = {
   navMain: [
@@ -19,18 +17,6 @@ const data = {
       title: "Dashboard",
       url: "/dashboard",
       icon: IconDashboard,
-    },
-    {
-      title: "Chat",
-      url: "/dashboard/chat",
-      icon: MessageCircle,
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "/dashboard/settings",
-      icon: IconSettings,
     },
   ],
 };
@@ -48,16 +34,19 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <Link to="/" prefetch="viewport">
-              <span className="text-base font-semibold">Ras Mic Inc.</span>
+              <span className="text-base font-semibold">Quickbuck</span>
             </Link>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
         <NavMain items={data.navMain} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
-      <SidebarFooter>{user && <NavUser user={user} />}</SidebarFooter>
+      <SidebarFooter>
+        <div className="flex justify-center">
+          <UserButton />
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }
