@@ -349,13 +349,23 @@ export const getPlayerInventory = query({
       .withIndex("by_playerId", (q) => q.eq("playerId", args.playerId))
       .collect();
 
-    // Enrich with product data
+    // Enrich with product and company data
     const enriched = await Promise.all(
       inventory.map(async (item) => {
         const product = await ctx.db.get(item.productId);
+        let companyName = "Unknown";
+        if (product) {
+          const company = await ctx.db.get(product.companyId);
+          if (company) {
+            companyName = company.name;
+          }
+        }
         return {
           ...item,
           product,
+          companyName,
+          productName: product?.name || "Unknown",
+          productImage: product?.image,
         };
       })
     );

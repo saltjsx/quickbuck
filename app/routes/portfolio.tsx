@@ -73,6 +73,12 @@ export default function PortfolioPage() {
     player?._id ? { playerId: player._id } : "skip"
   );
 
+  // Get player inventory (marketplace items)
+  const playerInventory = useQuery(
+    api.products.getPlayerInventory,
+    player?._id ? { playerId: player._id } : "skip"
+  );
+
   // Sorting state
   const [stockSort, setStockSort] = useState<{
     field: SortField;
@@ -416,7 +422,7 @@ export default function PortfolioPage() {
             </CardContent>
           </Card>
 
-          {/* Collections Section (Marketplace Items) - Placeholder for now */}
+          {/* Collections Section (Marketplace Items) */}
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -425,14 +431,59 @@ export default function PortfolioPage() {
                   <CardTitle>Collections</CardTitle>
                 </div>
                 <Badge variant="outline" className="text-lg font-semibold">
-                  {formatCurrency(0)}
+                  {formatCurrency(
+                    playerInventory?.reduce(
+                      (sum, item) => sum + item.totalPrice,
+                      0
+                    ) || 0
+                  )}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground text-center py-8">
-                No marketplace items owned yet
-              </p>
+              {!playerInventory || playerInventory.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No marketplace items owned yet
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Item</TableHead>
+                      <TableHead>Company</TableHead>
+                      <TableHead className="text-right">Quantity</TableHead>
+                      <TableHead className="text-right">Total Paid</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {playerInventory.map((item) => (
+                      <TableRow key={item._id}>
+                        <TableCell className="font-medium">
+                          {item.productName}
+                        </TableCell>
+                        <TableCell>{item.companyName}</TableCell>
+                        <TableCell className="text-right">
+                          {item.quantity}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(item.totalPrice)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell colSpan={3}>Total</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(
+                          playerInventory.reduce(
+                            (sum, item) => sum + item.totalPrice,
+                            0
+                          )
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </div>
