@@ -265,26 +265,39 @@ async function updateStockPrices(ctx: any) {
     const fundamentalMarketCap = Math.floor(revenueAnnual * multiple);
     const fundamentalPrice = Math.floor(fundamentalMarketCap / stock.totalShares);
     
-    // Price movement (simplified - random walk with mean reversion)
     const currentPrice = stock.price;
-    const alpha = 0.08; // Mean reversion factor
     const volatility = company.volatilityEst || 0.6;
     const tickVolatility = volatility / Math.sqrt(105120); // 5-min ticks, 24/7
     
-    // Random component
-    const randomFactor = 1 + tickVolatility * (Math.random() * 2 - 1);
+    // Generate more realistic price movements with ups and downs
+    // Use a combination of random walk and Perlin-like noise for smoother transitions
+    const random1 = Math.random() * 2 - 1; // -1 to 1
+    const random2 = Math.random() * 2 - 1; // -1 to 1
     
-    // Mean reversion toward fundamental
+    // Combine multiple noise sources for more natural movement
+    const shortTermNoise = random1 * tickVolatility;
+    const mediumTermNoise = random2 * tickVolatility * 0.5;
+    const combinedNoise = shortTermNoise + mediumTermNoise;
+    
+    // Add trend bias that can shift over time
+    const trendSeed = (Date.now() / 3600000 + stock._id.slice(-4)) % 100; // Changes hourly
+    const trendBias = Math.sin(trendSeed * 0.1) * tickVolatility * 0.3;
+    
+    // Random walk component (can go up or down)
+    const randomFactor = 1 + combinedNoise + trendBias;
+    
+    // Mean reversion toward fundamental (weaker than before for more volatility)
+    const alpha = 0.03; // Reduced mean reversion for more natural movement
     const targetPrice = currentPrice * randomFactor;
     const newPrice = Math.floor(
       targetPrice * (1 - alpha) + fundamentalPrice * alpha
     );
     
-    // Ensure price is positive and not too volatile (max 20% change per tick)
-    const maxChange = currentPrice * 0.2;
+    // Allow wider price swings per tick (up to 30% instead of 20%)
+    const maxChange = currentPrice * 0.3;
     const clampedPrice = Math.max(
-      Math.floor(currentPrice * 0.8),
-      Math.min(Math.floor(currentPrice * 1.2), newPrice)
+      Math.floor(currentPrice * 0.7),
+      Math.min(Math.floor(currentPrice * 1.3), newPrice)
     );
     
     const finalPrice = Math.max(100, clampedPrice); // Min $1.00

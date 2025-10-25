@@ -262,3 +262,94 @@ export const getTopCompaniesByBalance = query({
     return companies.sort((a, b) => b.balance - a.balance).slice(0, args.limit);
   },
 });
+
+// Mutation: Delete company
+export const deleteCompany = mutation({
+  args: {
+    companyId: v.id("companies"),
+    ownerId: v.id("players"), // For validation
+  },
+  handler: async (ctx, args) => {
+    const company = await ctx.db.get(args.companyId);
+    if (!company) {
+      throw new Error("Company not found");
+    }
+
+    // Verify ownership
+    if (company.ownerId !== args.ownerId) {
+      throw new Error("Only the company owner can delete the company");
+    }
+
+    // Check if company is public - cannot delete public companies with shareholders
+    if (company.isPublic) {
+      // Check for any shareholders
+      const shareholders = await ctx.db
+        .query("userStockHoldings")
+        .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+        .collect();
+      
+      if (shareholders.length > 0) {
+        throw new Error("Cannot delete a public company with shareholders. Buy back all shares first.");
+      }
+
+      // Delete the stock if it exists
+      const stock = await ctx.db
+        .query("stocks")
+        .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+        .unique();
+      
+      if (stock) {
+        await ctx.db.delete(stock._id);
+      }
+    }
+
+    // Transfer company balance to owner
+    const owner = await ctx.db.get(args.ownerId);
+    if (!owner) {
+      throw new Error("Owner not found");
+    }
+
+    const transferAmount = company.balance;
+    if (transferAmount > 0) {
+      await ctx.db.patch(args.ownerId, {
+        balance: owner.balance + transferAmount,
+        updatedAt: Date.now(),
+      });
+
+      // Create transaction record
+      await ctx.db.insert("transactions", {
+        fromAccountId: args.companyId,
+        fromAccountType: "company" as const,
+        toAccountId: args.ownerId,
+        toAccountType: "player" as const,
+        amount: transferAmount,
+        assetType: "cash" as const,
+        description: `Company ${company.name} deleted - balance transferred to owner`,
+        createdAt: Date.now(),
+      });
+    }
+
+    // Archive all products
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .collect();
+    
+    for (const product of products) {
+      await ctx.db.patch(product._id, {
+        isActive: false,
+        isArchived: true,
+        updatedAt: Date.now(),
+      });
+    }
+
+    // Actually delete the company
+    await ctx.db.delete(args.companyId);
+
+    return {
+      companyId: args.companyId,
+      transferredAmount: transferAmount,
+      message: `Company deleted successfully. $${(transferAmount / 100).toFixed(2)} transferred to owner.`,
+    };
+  },
+});

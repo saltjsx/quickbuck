@@ -19,7 +19,7 @@ export const buyStock = mutation({
 
     const totalCost = stock.price * args.shares;
 
-    // Check balance based on account type
+    // Check balance based on account type and deduct
     if (args.accountType === "player") {
       const playerId = args.accountId as Id<"players">;
       const player = await ctx.db.get(playerId);
@@ -40,6 +40,15 @@ export const buyStock = mutation({
       // Deduct from company balance
       await ctx.db.patch(companyId, {
         balance: company.balance - totalCost,
+        updatedAt: Date.now(),
+      });
+    }
+
+    // Add money to the stock's company (money flows to company when shares purchased)
+    const stockCompany = await ctx.db.get(stock.companyId);
+    if (stockCompany) {
+      await ctx.db.patch(stock.companyId, {
+        balance: stockCompany.balance + totalCost,
         updatedAt: Date.now(),
       });
     }
@@ -98,6 +107,27 @@ export const buyStock = mutation({
       timestamp: Date.now(),
     });
 
+    // Apply upward price pressure when shares are bought
+    // Buying increases price based on volume relative to total shares
+    const buyPressure = args.shares / stock.totalShares;
+    const priceImpact = Math.min(buyPressure * 0.05, 0.1); // Max 10% impact per trade
+    const newPrice = Math.floor(stock.price * (1 + priceImpact));
+    
+    if (newPrice !== stock.price) {
+      const newMarketCap = newPrice * stock.totalShares;
+      await ctx.db.patch(args.stockId, {
+        previousPrice: stock.price,
+        price: newPrice,
+        marketCap: newMarketCap,
+        updatedAt: Date.now(),
+      });
+      
+      await ctx.db.patch(stock.companyId, {
+        marketCap: newMarketCap,
+        updatedAt: Date.now(),
+      });
+    }
+
     // Update stock record to trigger query refresh
     await ctx.db.patch(args.stockId, {
       updatedAt: Date.now(),
@@ -135,6 +165,24 @@ export const sellStock = mutation({
     }
 
     const totalValue = stock.price * args.shares;
+
+    // Check if the company has enough balance to buy back the shares
+    const stockCompany = await ctx.db.get(stock.companyId);
+    if (!stockCompany) {
+      throw new Error("Company not found");
+    }
+    
+    if (stockCompany.balance < totalValue) {
+      throw new Error(
+        `Company has insufficient balance to buy back shares. Company has $${(stockCompany.balance / 100).toFixed(2)} but needs $${(totalValue / 100).toFixed(2)}`
+      );
+    }
+
+    // Deduct money from the company
+    await ctx.db.patch(stock.companyId, {
+      balance: stockCompany.balance - totalValue,
+      updatedAt: Date.now(),
+    });
 
     // Update or remove holding
     if (holding.shares === args.shares) {
@@ -187,6 +235,28 @@ export const sellStock = mutation({
       tradeType: "sell",
       timestamp: Date.now(),
     });
+
+    // Apply downward price pressure when shares are sold
+    // Selling reduces price based on volume relative to total shares
+    const sellPressure = args.shares / stock.totalShares;
+    const priceImpact = Math.min(sellPressure * 0.05, 0.1); // Max 10% impact per trade
+    const newPrice = Math.floor(stock.price * (1 - priceImpact));
+    const finalPrice = Math.max(100, newPrice); // Min $1.00
+    
+    if (finalPrice !== stock.price) {
+      const newMarketCap = finalPrice * stock.totalShares;
+      await ctx.db.patch(args.stockId, {
+        previousPrice: stock.price,
+        price: finalPrice,
+        marketCap: newMarketCap,
+        updatedAt: Date.now(),
+      });
+      
+      await ctx.db.patch(stock.companyId, {
+        marketCap: newMarketCap,
+        updatedAt: Date.now(),
+      });
+    }
 
     // Update stock record to trigger query refresh
     await ctx.db.patch(args.stockId, {

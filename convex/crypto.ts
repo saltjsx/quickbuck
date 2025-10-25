@@ -172,6 +172,23 @@ export const buyCryptocurrency = mutation({
       timestamp: Date.now(),
     });
 
+    // Apply upward price pressure when crypto is bought
+    // Buying increases price based on volume relative to circulating supply
+    const circulatingSupply = Math.max(crypto.circulatingSupply + args.amount, 1);
+    const buyPressure = args.amount / circulatingSupply;
+    const priceImpact = Math.min(buyPressure * 0.08, 0.15); // Max 15% impact per trade
+    const newPrice = Math.floor(crypto.price * (1 + priceImpact));
+    
+    if (newPrice !== crypto.price) {
+      const newMarketCap = Math.floor(newPrice * crypto.circulatingSupply);
+      await ctx.db.patch(args.cryptoId, {
+        previousPrice: crypto.price,
+        price: newPrice,
+        marketCap: newMarketCap,
+        updatedAt: Date.now(),
+      });
+    }
+
     return existingHolding?._id;
   },
 });
@@ -260,6 +277,24 @@ export const sellCryptocurrency = mutation({
       tradeType: "sell",
       timestamp: Date.now(),
     });
+
+    // Apply downward price pressure when crypto is sold
+    // Selling reduces price based on volume relative to circulating supply
+    const circulatingSupply = Math.max(crypto.circulatingSupply, 1);
+    const sellPressure = args.amount / circulatingSupply;
+    const priceImpact = Math.min(sellPressure * 0.08, 0.15); // Max 15% impact per trade (higher than stocks)
+    const newPrice = Math.floor(crypto.price * (1 - priceImpact));
+    const finalPrice = Math.max(1, newPrice); // Min $0.01
+    
+    if (finalPrice !== crypto.price) {
+      const newMarketCap = Math.floor(finalPrice * crypto.circulatingSupply);
+      await ctx.db.patch(args.cryptoId, {
+        previousPrice: crypto.price,
+        price: finalPrice,
+        marketCap: newMarketCap,
+        updatedAt: Date.now(),
+      });
+    }
 
     return totalValue;
   },

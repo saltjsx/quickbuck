@@ -157,6 +157,42 @@ export const updateProduct = mutation({
   },
 });
 
+// Mutation: Delete product
+export const deleteProduct = mutation({
+  args: {
+    productId: v.id("products"),
+    ownerId: v.id("players"), // For validation
+  },
+  handler: async (ctx, args) => {
+    const product = await ctx.db.get(args.productId);
+    if (!product) {
+      throw new Error("Product not found");
+    }
+
+    // Verify ownership
+    const company = await ctx.db.get(product.companyId);
+    if (!company) {
+      throw new Error("Company not found");
+    }
+
+    if (company.ownerId !== args.ownerId) {
+      throw new Error("Only the company owner can delete products");
+    }
+
+    // Archive the product instead of hard delete to preserve historical data
+    await ctx.db.patch(args.productId, {
+      isActive: false,
+      isArchived: true,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      productId: args.productId,
+      message: "Product archived successfully",
+    };
+  },
+});
+
 // Mutation: Update product stock
 export const updateProductStock = mutation({
   args: {
