@@ -1,12 +1,19 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Button } from "~/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import {
   Table,
   TableBody,
@@ -26,6 +33,7 @@ import {
   ArrowDownUp,
   CheckCircle2,
   AlertCircle,
+  Plus,
 } from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
 import { cn } from "~/lib/utils";
@@ -51,6 +59,12 @@ export default function TransfersPage() {
     player?._id ? { playerId: player._id, limit: 10 } : "skip"
   );
 
+  // Get player's companies
+  const playerCompanies = useQuery(
+    api.companies.getPlayerCompanies,
+    player?._id ? { playerId: player._id } : "skip"
+  );
+
   // Get all players
   const allPlayersResult = useQuery(api.leaderboard.getAllPlayersSorted, {
     sortBy: "netWorth",
@@ -67,6 +81,12 @@ export default function TransfersPage() {
   const transferCash = useMutation(api.transactions.transferCash);
 
   // Form state
+  const [senderAccount, setSenderAccount] = useState<{
+    type: "player" | "company";
+    id: string;
+    name: string;
+    balance: number;
+  } | null>(null);
   const [recipientType, setRecipientType] = useState<RecipientType>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRecipient, setSelectedRecipient] = useState<{
@@ -79,6 +99,18 @@ export default function TransfersPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+
+  // Initialize sender account to player's account on load
+  useEffect(() => {
+    if (player && !senderAccount) {
+      setSenderAccount({
+        type: "player",
+        id: player._id,
+        name: "Personal Account",
+        balance: player.balance,
+      });
+    }
+  }, [player, senderAccount]);
 
   // Filter players and companies based on search
   const filteredPlayers = useMemo(() => {
@@ -128,6 +160,10 @@ export default function TransfersPage() {
     setSuccess("");
 
     // Validation
+    if (!senderAccount) {
+      setError("Please select a sender account");
+      return;
+    }
     if (!selectedRecipient) {
       setError("Please select a recipient");
       return;
@@ -144,7 +180,7 @@ export default function TransfersPage() {
     const amountInCents = Math.round(parseFloat(amount) * 100);
 
     // Check balance
-    if (player && amountInCents > player.balance) {
+    if (amountInCents > senderAccount.balance) {
       setError("Insufficient balance");
       return;
     }
@@ -153,8 +189,8 @@ export default function TransfersPage() {
 
     try {
       await transferCash({
-        fromAccountId: player!._id,
-        fromAccountType: "player",
+        fromAccountId: senderAccount.id as Id<"players"> | Id<"companies">,
+        fromAccountType: senderAccount.type,
         toAccountId: selectedRecipient.id as Id<"players"> | Id<"companies">,
         toAccountType: selectedRecipient.type,
         amount: amountInCents,
@@ -192,16 +228,19 @@ export default function TransfersPage() {
           </div>
 
           {/* Current Balance */}
-          {player && (
+          {senderAccount && (
             <Card>
               <CardContent className="pt-6">
                 <div className="flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">
-                      Available Balance
+                      Sending From:{" "}
+                      {senderAccount.type === "player"
+                        ? "Personal Account"
+                        : senderAccount.name}
                     </p>
                     <p className="text-2xl font-bold">
-                      {formatCurrency(player.balance)}
+                      {formatCurrency(senderAccount.balance)}
                     </p>
                   </div>
                   <ArrowDownUp className="h-8 w-8 text-muted-foreground" />
@@ -220,9 +259,78 @@ export default function TransfersPage() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Step 0: Select Sender Account */}
+                <div className="space-y-3">
+                  <Label>Send From</Label>
+                  <Select
+                    value={
+                      senderAccount
+                        ? `${senderAccount.type}:${senderAccount.id}`
+                        : ""
+                    }
+                    onValueChange={(value) => {
+                      const [type, id] = value.split(":");
+                      if (type === "player" && player) {
+                        setSenderAccount({
+                          type: "player",
+                          id: player._id,
+                          name: "Personal Account",
+                          balance: player.balance,
+                        });
+                      } else if (type === "company") {
+                        const company = playerCompanies?.find(
+                          (c) => c._id === id
+                        );
+                        if (company) {
+                          setSenderAccount({
+                            type: "company",
+                            id: company._id,
+                            name: company.name,
+                            balance: company.balance,
+                          });
+                        }
+                      }
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {player && (
+                        <SelectItem value={`player:${player._id}`}>
+                          <div className="flex items-center gap-2">
+                            <User className="h-4 w-4" />
+                            <span>
+                              Personal ({formatCurrency(player.balance)})
+                            </span>
+                          </div>
+                        </SelectItem>
+                      )}
+                      {playerCompanies && playerCompanies.length > 0 && (
+                        <>
+                          {playerCompanies.map((company) => (
+                            <SelectItem
+                              key={company._id}
+                              value={`company:${company._id}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4" />
+                                <span>
+                                  {company.name} (
+                                  {formatCurrency(company.balance)})
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                </div>
+
                 {/* Step 1: Select Recipient Type */}
                 <div className="space-y-3">
-                  <Label>Select Recipient Type</Label>
+                  <Label>Send To</Label>
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       type="button"
