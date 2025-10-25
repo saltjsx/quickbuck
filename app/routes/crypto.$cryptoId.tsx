@@ -110,6 +110,17 @@ export default function CryptoDetailPage() {
 
   // Mutations
   const buyCrypto = useMutation(api.crypto.buyCryptocurrency);
+  const sellCrypto = useMutation(api.crypto.sellCryptocurrency);
+
+  // Get player's holdings for this crypto
+  const playerHoldings = useQuery(
+    api.crypto.getPlayerCryptoHoldings,
+    player?._id ? { playerId: player._id } : "skip"
+  );
+  const currentHolding = playerHoldings?.find((h) => h.cryptoId === cryptoId);
+
+  // Transaction mode state
+  const [transactionMode, setTransactionMode] = useState<"buy" | "sell">("buy");
 
   // Purchase state
   const [purchaseType, setPurchaseType] = useState<"tokens" | "dollars">(
@@ -188,6 +199,58 @@ export default function CryptoDetailPage() {
     }
   };
 
+  // Handle sell crypto
+  const handleSellCrypto = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!player || !crypto || !selectedAccount || !currentHolding) {
+      setError("Missing required information or no tokens to sell");
+      return;
+    }
+
+    const tokens =
+      purchaseType === "tokens" ? parseFloat(purchaseAmount) : estimatedTokens;
+
+    if (tokens <= 0) {
+      setError("Invalid number of tokens");
+      return;
+    }
+
+    if (tokens > currentHolding.amount) {
+      setError(
+        `You only have ${currentHolding.amount.toLocaleString()} tokens to sell`
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await sellCrypto({
+        userId: player._id,
+        cryptoId: crypto._id,
+        amount: tokens,
+        accountType: selectedAccount.type,
+        accountId: selectedAccount.id,
+      });
+
+      setSuccess(
+        `Successfully sold ${tokens.toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 8,
+        })} ${crypto.ticker} for ${formatCurrency(
+          Math.round(tokens * crypto.price)
+        )}`
+      );
+      setPurchaseAmount("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sell crypto");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Calculate ownership percentages
   const calculateOwnershipPercentage = (amount: number) => {
     if (!crypto || !crypto.circulatingSupply) return 0;
@@ -251,14 +314,67 @@ export default function CryptoDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <DollarSign className="h-5 w-5" />
-                    Buy Tokens
+                    Trade Tokens
                   </CardTitle>
+                  {/* Buy/Sell Toggle */}
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      type="button"
+                      variant={
+                        transactionMode === "buy" ? "default" : "outline"
+                      }
+                      onClick={() => setTransactionMode("buy")}
+                      className="flex-1"
+                    >
+                      Buy
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={
+                        transactionMode === "sell" ? "default" : "outline"
+                      }
+                      onClick={() => setTransactionMode("sell")}
+                      className="flex-1"
+                      disabled={!currentHolding || currentHolding.amount === 0}
+                    >
+                      Sell
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleBuyCrypto} className="space-y-4">
+                  <form
+                    onSubmit={
+                      transactionMode === "buy"
+                        ? handleBuyCrypto
+                        : handleSellCrypto
+                    }
+                    className="space-y-4"
+                  >
+                    {/* Show holdings if selling */}
+                    {transactionMode === "sell" && currentHolding && (
+                      <div className="rounded-md bg-muted p-3">
+                        <p className="text-sm text-muted-foreground">
+                          Your Holdings
+                        </p>
+                        <p className="text-lg font-bold">
+                          {currentHolding.amount.toLocaleString()} tokens
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Worth{" "}
+                          {formatCurrency(
+                            Math.floor(currentHolding.amount * crypto.price)
+                          )}
+                        </p>
+                      </div>
+                    )}
+
                     {/* Account Selector */}
                     <div className="space-y-2">
-                      <Label>Payment Account</Label>
+                      <Label>
+                        {transactionMode === "buy"
+                          ? "Payment Account"
+                          : "Receive To"}
+                      </Label>
                       <Select
                         value={
                           selectedAccount
@@ -296,7 +412,9 @@ export default function CryptoDetailPage() {
 
                     {/* Purchase Type */}
                     <div className="space-y-2">
-                      <Label>Purchase By</Label>
+                      <Label>
+                        {transactionMode === "buy" ? "Purchase By" : "Sell By"}
+                      </Label>
                       <div className="flex gap-2">
                         <Button
                           type="button"
@@ -333,6 +451,13 @@ export default function CryptoDetailPage() {
                         type="number"
                         step="any"
                         min="0.00000001"
+                        max={
+                          transactionMode === "sell" &&
+                          currentHolding &&
+                          purchaseType === "tokens"
+                            ? currentHolding.amount
+                            : undefined
+                        }
                         placeholder={
                           purchaseType === "tokens" ? "0.5" : "100.00"
                         }
@@ -355,7 +480,9 @@ export default function CryptoDetailPage() {
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">
-                            Total Cost:
+                            {transactionMode === "buy"
+                              ? "Total Cost:"
+                              : "Total Receive:"}
                           </span>
                           <span className="font-medium">
                             {formatCurrency(estimatedCost)}
@@ -385,10 +512,22 @@ export default function CryptoDetailPage() {
 
                     <Button
                       type="submit"
-                      disabled={isSubmitting || !selectedAccount}
+                      disabled={
+                        isSubmitting ||
+                        !selectedAccount ||
+                        (transactionMode === "sell" &&
+                          (!currentHolding || currentHolding.amount === 0))
+                      }
                       className="w-full"
+                      variant={
+                        transactionMode === "sell" ? "destructive" : "default"
+                      }
                     >
-                      {isSubmitting ? "Processing..." : "Buy Tokens"}
+                      {isSubmitting
+                        ? "Processing..."
+                        : transactionMode === "buy"
+                        ? "Buy Tokens"
+                        : "Sell Tokens"}
                     </Button>
                   </form>
                 </CardContent>

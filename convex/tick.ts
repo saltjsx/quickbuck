@@ -255,80 +255,102 @@ async function updateStockPrices(ctx: any) {
     const company = await ctx.db.get(stock.companyId);
     if (!company || !company.isPublic) continue;
     
-    // Calculate fundamental price based on company metrics
-    const revenueAnnual = company.revenueAnnual || company.balance * 4; // Estimate if not set
-    const baseMultiple = company.fundamentalMultiple || 6.67;
-    const growthFactor = (company.growthRate || 0) * 0.5 / 100;
-    const sentimentFactor = (company.sentiment || 0) * 0.2;
-    
-    const multiple = baseMultiple * (1 + growthFactor + sentimentFactor);
-    const fundamentalMarketCap = Math.floor(revenueAnnual * multiple);
-    const fundamentalPrice = Math.floor(fundamentalMarketCap / stock.totalShares);
-    
+    // Validate stock data
     const currentPrice = stock.price;
-    const volatility = company.volatilityEst || 0.6;
-    const tickVolatility = volatility / Math.sqrt(105120); // 5-min ticks, 24/7
+    if (!Number.isFinite(currentPrice) || currentPrice <= 0 || stock.totalShares <= 0) {
+      console.warn(`Skipping stock ${stock._id}: invalid price or totalShares`);
+      continue;
+    }
     
-    // Generate more realistic price movements with ups and downs
-    // Use a combination of random walk and Perlin-like noise for smoother transitions
-    const random1 = Math.random() * 2 - 1; // -1 to 1
-    const random2 = Math.random() * 2 - 1; // -1 to 1
-    
-    // Combine multiple noise sources for more natural movement
-    const shortTermNoise = random1 * tickVolatility;
-    const mediumTermNoise = random2 * tickVolatility * 0.5;
-    const combinedNoise = shortTermNoise + mediumTermNoise;
-    
-    // Add trend bias that can shift over time
-    const trendSeed = (Date.now() / 3600000 + stock._id.slice(-4)) % 100; // Changes hourly
-    const trendBias = Math.sin(trendSeed * 0.1) * tickVolatility * 0.3;
-    
-    // Random walk component (can go up or down)
-    const randomFactor = 1 + combinedNoise + trendBias;
-    
-    // Mean reversion toward fundamental (weaker than before for more volatility)
-    const alpha = 0.03; // Reduced mean reversion for more natural movement
-    const targetPrice = currentPrice * randomFactor;
-    const newPrice = Math.floor(
-      targetPrice * (1 - alpha) + fundamentalPrice * alpha
-    );
-    
-    // Allow wider price swings per tick (up to 30% instead of 20%)
-    const maxChange = currentPrice * 0.3;
-    const clampedPrice = Math.max(
-      Math.floor(currentPrice * 0.7),
-      Math.min(Math.floor(currentPrice * 1.3), newPrice)
-    );
-    
-    const finalPrice = Math.max(100, clampedPrice); // Min $1.00
-    
-    if (finalPrice !== currentPrice) {
-      const newMarketCap = finalPrice * stock.totalShares;
+    try {
+      // Calculate fundamental price based on company metrics
+      const revenueAnnual = Math.max(0, company.revenueAnnual || company.balance * 4); // Estimate if not set
+      const baseMultiple = Math.max(0.1, company.fundamentalMultiple || 6.67);
+      const growthFactor = Math.max(-0.5, Math.min(0.5, (company.growthRate || 0) * 0.5 / 100)); // Clamp to -50% to 50%
+      const sentimentFactor = Math.max(-0.5, Math.min(0.5, (company.sentiment || 0) * 0.2)); // Clamp to -50% to 50%
       
-      await ctx.db.patch(stock._id, {
-        previousPrice: currentPrice,
-        price: finalPrice,
-        marketCap: newMarketCap,
-        updatedAt: Date.now(),
-      });
+      const multiple = baseMultiple * (1 + growthFactor + sentimentFactor);
+      const fundamentalMarketCap = Math.floor(revenueAnnual * multiple);
+      const fundamentalPrice = Math.max(100, Math.floor(fundamentalMarketCap / stock.totalShares)); // Min $1.00
       
-      await ctx.db.patch(stock.companyId, {
-        marketCap: newMarketCap,
-        updatedAt: Date.now(),
-      });
+      const volatility = Math.max(0, company.volatilityEst || 0.6);
+      const tickVolatility = volatility / Math.sqrt(105120); // 5-min ticks, 24/7
       
-      // Record price history for charting
-      await ctx.db.insert("stockPriceHistory", {
-        stockId: stock._id,
-        price: finalPrice,
-        timestamp: Date.now(),
-      });
+      // Generate more realistic price movements with ups and downs
+      // Use a combination of random walk and Perlin-like noise for smoother transitions
+      const random1 = Math.random() * 2 - 1; // -1 to 1
+      const random2 = Math.random() * 2 - 1; // -1 to 1
       
-      updates.push({
-        stockId: stock._id,
-        oldPrice: currentPrice,
-        newPrice: finalPrice,
-      });
+      // Combine multiple noise sources for more natural movement
+      const shortTermNoise = random1 * tickVolatility;
+      const mediumTermNoise = random2 * tickVolatility * 0.5;
+      const combinedNoise = shortTermNoise + mediumTermNoise;
+      
+      // Add trend bias that can shift over time
+      const trendSeed = (Date.now() / 3600000 + stock._id.slice(-4)) % 100; // Changes hourly
+      const trendBias = Math.sin(trendSeed * 0.1) * tickVolatility * 0.3;
+      
+      // Random walk component (can go up or down)
+      const randomFactor = 1 + combinedNoise + trendBias;
+      
+      // Mean reversion toward fundamental (weaker than before for more volatility)
+      const alpha = 0.03; // Reduced mean reversion for more natural movement
+      const targetPrice = currentPrice * randomFactor;
+      const newPrice = Math.floor(
+        targetPrice * (1 - alpha) + fundamentalPrice * alpha
+      );
+      
+      // Validate newPrice before clamping
+      if (!Number.isFinite(newPrice)) {
+        console.warn(`Skipping stock ${stock._id}: calculated price is NaN`);
+        continue;
+      }
+      
+      // Allow wider price swings per tick (up to 30% instead of 20%)
+      const clampedPrice = Math.max(
+        Math.floor(currentPrice * 0.7),
+        Math.min(Math.floor(currentPrice * 1.3), newPrice)
+      );
+      
+      const finalPrice = Math.max(100, clampedPrice); // Min $1.00
+      
+      // Final validation
+      if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
+        console.warn(`Skipping stock ${stock._id}: final price is invalid: ${finalPrice}`);
+        continue;
+      }
+      
+      if (finalPrice !== currentPrice) {
+        const newMarketCap = finalPrice * stock.totalShares;
+        
+        await ctx.db.patch(stock._id, {
+          previousPrice: currentPrice,
+          price: finalPrice,
+          marketCap: newMarketCap,
+          updatedAt: Date.now(),
+        });
+        
+        await ctx.db.patch(stock.companyId, {
+          marketCap: newMarketCap,
+          updatedAt: Date.now(),
+        });
+        
+        // Record price history for charting
+        await ctx.db.insert("stockPriceHistory", {
+          stockId: stock._id,
+          price: finalPrice,
+          timestamp: Date.now(),
+        });
+        
+        updates.push({
+          stockId: stock._id,
+          oldPrice: currentPrice,
+          newPrice: finalPrice,
+        });
+      }
+    } catch (error) {
+      console.error(`Error updating stock price for ${stock._id}:`, error);
+      continue; // Skip this stock and move to the next one
     }
   }
   
@@ -346,46 +368,76 @@ async function updateCryptoPrices(ctx: any) {
   }> = [];
   
   for (const crypto of cryptos) {
-    // Simplified crypto price movement (higher volatility than stocks)
-    const currentPrice = crypto.price;
-    const volatility = crypto.volatilityEst || 1.2; // Higher default
-    const tickVolatility = volatility / Math.sqrt(105120);
-    
-    // Random walk with no mean reversion (crypto is more speculative)
-    const randomFactor = 1 + tickVolatility * (Math.random() * 2 - 1) * 2; // 2x multiplier
-    
-    let newPrice = Math.floor(currentPrice * randomFactor);
-    
-    // Clamp to reasonable range (max 30% change per tick)
-    newPrice = Math.max(
-      Math.floor(currentPrice * 0.7),
-      Math.min(Math.floor(currentPrice * 1.3), newPrice)
-    );
-    
-    newPrice = Math.max(1, newPrice); // Min $0.01
-    
-    if (newPrice !== currentPrice) {
-      const newMarketCap = Math.floor(newPrice * crypto.circulatingSupply);
+    try {
+      // Validate crypto data
+      const currentPrice = crypto.price;
+      if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
+        console.warn(`Skipping crypto ${crypto._id}: invalid price`);
+        continue;
+      }
       
-      await ctx.db.patch(crypto._id, {
-        previousPrice: currentPrice,
-        price: newPrice,
-        marketCap: newMarketCap,
-        updatedAt: Date.now(),
-      });
+      // Simplified crypto price movement (higher volatility than stocks)
+      const volatility = Math.max(0, crypto.volatilityEst || 1.2); // Higher default
+      const tickVolatility = volatility / Math.sqrt(105120);
       
-      // Record price history for charting
-      await ctx.db.insert("cryptoPriceHistory", {
-        cryptoId: crypto._id,
-        price: newPrice,
-        timestamp: Date.now(),
-      });
+      // Random walk with no mean reversion (crypto is more speculative)
+      const randomFactor = 1 + tickVolatility * (Math.random() * 2 - 1) * 2; // 2x multiplier
       
-      updates.push({
-        cryptoId: crypto._id,
-        oldPrice: currentPrice,
-        newPrice: newPrice,
-      });
+      let newPrice = Math.floor(currentPrice * randomFactor);
+      
+      // Validate newPrice before clamping
+      if (!Number.isFinite(newPrice)) {
+        console.warn(`Skipping crypto ${crypto._id}: calculated price is NaN`);
+        continue;
+      }
+      
+      // Clamp to reasonable range (max 30% change per tick)
+      newPrice = Math.max(
+        Math.floor(currentPrice * 0.7),
+        Math.min(Math.floor(currentPrice * 1.3), newPrice)
+      );
+      
+      newPrice = Math.max(1, newPrice); // Min $0.01
+      
+      // Final validation
+      if (!Number.isFinite(newPrice) || newPrice <= 0) {
+        console.warn(`Skipping crypto ${crypto._id}: final price is invalid: ${newPrice}`);
+        continue;
+      }
+      
+      if (newPrice !== currentPrice) {
+        // Guard against division by zero
+        const circulatingSupply = Math.max(1, crypto.circulatingSupply);
+        const newMarketCap = Math.floor(newPrice * circulatingSupply);
+        
+        if (!Number.isFinite(newMarketCap) || newMarketCap < 0) {
+          console.warn(`Skipping crypto ${crypto._id}: invalid marketCap: ${newMarketCap}`);
+          continue;
+        }
+        
+        await ctx.db.patch(crypto._id, {
+          previousPrice: currentPrice,
+          price: newPrice,
+          marketCap: newMarketCap,
+          updatedAt: Date.now(),
+        });
+        
+        // Record price history for charting
+        await ctx.db.insert("cryptoPriceHistory", {
+          cryptoId: crypto._id,
+          price: newPrice,
+          timestamp: Date.now(),
+        });
+        
+        updates.push({
+          cryptoId: crypto._id,
+          oldPrice: currentPrice,
+          newPrice: newPrice,
+        });
+      }
+    } catch (error) {
+      console.error(`Error updating crypto price for ${crypto._id}:`, error);
+      continue; // Skip this crypto and move to the next one
     }
   }
   

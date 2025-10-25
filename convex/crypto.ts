@@ -179,14 +179,17 @@ export const buyCryptocurrency = mutation({
     const priceImpact = Math.min(buyPressure * 0.08, 0.15); // Max 15% impact per trade
     const newPrice = Math.floor(crypto.price * (1 + priceImpact));
     
-    if (newPrice !== crypto.price) {
+    // Validate new price before updating
+    if (Number.isFinite(newPrice) && newPrice > 0 && newPrice !== crypto.price) {
       const newMarketCap = Math.floor(newPrice * crypto.circulatingSupply);
-      await ctx.db.patch(args.cryptoId, {
-        previousPrice: crypto.price,
-        price: newPrice,
-        marketCap: newMarketCap,
-        updatedAt: Date.now(),
-      });
+      if (Number.isFinite(newMarketCap) && newMarketCap >= 0) {
+        await ctx.db.patch(args.cryptoId, {
+          previousPrice: crypto.price,
+          price: newPrice,
+          marketCap: newMarketCap,
+          updatedAt: Date.now(),
+        });
+      }
     }
 
     return existingHolding?._id;
@@ -286,14 +289,17 @@ export const sellCryptocurrency = mutation({
     const newPrice = Math.floor(crypto.price * (1 - priceImpact));
     const finalPrice = Math.max(1, newPrice); // Min $0.01
     
-    if (finalPrice !== crypto.price) {
+    // Validate final price before updating
+    if (Number.isFinite(finalPrice) && finalPrice > 0 && finalPrice !== crypto.price) {
       const newMarketCap = Math.floor(finalPrice * crypto.circulatingSupply);
-      await ctx.db.patch(args.cryptoId, {
-        previousPrice: crypto.price,
-        price: finalPrice,
-        marketCap: newMarketCap,
-        updatedAt: Date.now(),
-      });
+      if (Number.isFinite(newMarketCap) && newMarketCap >= 0) {
+        await ctx.db.patch(args.cryptoId, {
+          previousPrice: crypto.price,
+          price: finalPrice,
+          marketCap: newMarketCap,
+          updatedAt: Date.now(),
+        });
+      }
     }
 
     return totalValue;

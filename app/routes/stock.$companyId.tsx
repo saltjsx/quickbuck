@@ -112,6 +112,16 @@ export default function StockDetailPage() {
   const buyStock = useMutation(api.stocks.buyStock);
   const sellStock = useMutation(api.stocks.sellStock);
 
+  // Get player's holdings for this stock
+  const playerHoldings = useQuery(
+    api.stocks.getPlayerStockHoldings,
+    player?._id ? { playerId: player._id } : "skip"
+  );
+  const currentHolding = playerHoldings?.find((h) => h.companyId === companyId);
+
+  // Transaction mode state
+  const [transactionMode, setTransactionMode] = useState<"buy" | "sell">("buy");
+
   // Purchase state
   const [purchaseType, setPurchaseType] = useState<"shares" | "dollars">(
     "shares"
@@ -185,6 +195,56 @@ export default function StockDetailPage() {
     }
   };
 
+  // Handle sell stock
+  const handleSellStock = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    if (!player || !stock || !selectedAccount || !currentHolding) {
+      setError("Missing required information or no shares to sell");
+      return;
+    }
+
+    const shares =
+      purchaseType === "shares" ? parseFloat(purchaseAmount) : estimatedShares;
+
+    if (shares <= 0) {
+      setError("Invalid number of shares");
+      return;
+    }
+
+    if (shares > currentHolding.shares) {
+      setError(
+        `You only have ${currentHolding.shares.toLocaleString()} shares to sell`
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await sellStock({
+        userId: player._id,
+        stockId: stock._id,
+        shares,
+        accountType: selectedAccount.type,
+        accountId: selectedAccount.id,
+      });
+
+      setSuccess(
+        `Successfully sold ${shares.toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 8,
+        })} shares for ${formatCurrency(Math.round(shares * stock.price))}`
+      );
+      setPurchaseAmount("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to sell stock");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Calculate ownership percentages
   const calculateOwnershipPercentage = (shares: number) => {
     if (!stock || !stock.totalShares) return 0;
@@ -247,14 +307,65 @@ export default function StockDetailPage() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <DollarSign className="h-5 w-5" />
-                    Buy Shares
+                    Trade Shares
                   </CardTitle>
+                  {/* Buy/Sell Toggle */}
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      type="button"
+                      variant={
+                        transactionMode === "buy" ? "default" : "outline"
+                      }
+                      onClick={() => setTransactionMode("buy")}
+                      className="flex-1"
+                    >
+                      Buy
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={
+                        transactionMode === "sell" ? "default" : "outline"
+                      }
+                      onClick={() => setTransactionMode("sell")}
+                      className="flex-1"
+                      disabled={!currentHolding || currentHolding.shares === 0}
+                    >
+                      Sell
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <form onSubmit={handleBuyStock} className="space-y-4">
+                  <form
+                    onSubmit={
+                      transactionMode === "buy"
+                        ? handleBuyStock
+                        : handleSellStock
+                    }
+                    className="space-y-4"
+                  >
+                    {/* Show holdings if selling */}
+                    {transactionMode === "sell" && currentHolding && (
+                      <div className="rounded-md bg-muted p-3">
+                        <p className="text-sm text-muted-foreground">
+                          Your Holdings
+                        </p>
+                        <p className="text-lg font-bold">
+                          {currentHolding.shares.toLocaleString()} shares
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Worth{" "}
+                          {formatCurrency(currentHolding.shares * stock.price)}
+                        </p>
+                      </div>
+                    )}
+
                     {/* Account Selector */}
                     <div className="space-y-2">
-                      <Label>Payment Account</Label>
+                      <Label>
+                        {transactionMode === "buy"
+                          ? "Payment Account"
+                          : "Receive To"}
+                      </Label>
                       <Select
                         value={
                           selectedAccount
@@ -292,7 +403,9 @@ export default function StockDetailPage() {
 
                     {/* Purchase Type */}
                     <div className="space-y-2">
-                      <Label>Purchase By</Label>
+                      <Label>
+                        {transactionMode === "buy" ? "Purchase By" : "Sell By"}
+                      </Label>
                       <div className="flex gap-2">
                         <Button
                           type="button"
@@ -329,6 +442,13 @@ export default function StockDetailPage() {
                         type="number"
                         step="any"
                         min="0.00000001"
+                        max={
+                          transactionMode === "sell" &&
+                          currentHolding &&
+                          purchaseType === "shares"
+                            ? currentHolding.shares
+                            : undefined
+                        }
                         placeholder={
                           purchaseType === "shares" ? "0.5" : "1000.00"
                         }
@@ -351,7 +471,9 @@ export default function StockDetailPage() {
                         </div>
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">
-                            Total Cost:
+                            {transactionMode === "buy"
+                              ? "Total Cost:"
+                              : "Total Receive:"}
                           </span>
                           <span className="font-medium">
                             {formatCurrency(estimatedCost)}
@@ -381,10 +503,22 @@ export default function StockDetailPage() {
 
                     <Button
                       type="submit"
-                      disabled={isSubmitting || !selectedAccount}
+                      disabled={
+                        isSubmitting ||
+                        !selectedAccount ||
+                        (transactionMode === "sell" &&
+                          (!currentHolding || currentHolding.shares === 0))
+                      }
                       className="w-full"
+                      variant={
+                        transactionMode === "sell" ? "destructive" : "default"
+                      }
                     >
-                      {isSubmitting ? "Processing..." : "Buy Shares"}
+                      {isSubmitting
+                        ? "Processing..."
+                        : transactionMode === "buy"
+                        ? "Buy Shares"
+                        : "Sell Shares"}
                     </Button>
                   </form>
                 </CardContent>

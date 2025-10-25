@@ -113,19 +113,22 @@ export const buyStock = mutation({
     const priceImpact = Math.min(buyPressure * 0.05, 0.1); // Max 10% impact per trade
     const newPrice = Math.floor(stock.price * (1 + priceImpact));
     
-    if (newPrice !== stock.price) {
+    // Validate new price before updating
+    if (Number.isFinite(newPrice) && newPrice > 0 && newPrice !== stock.price) {
       const newMarketCap = newPrice * stock.totalShares;
-      await ctx.db.patch(args.stockId, {
-        previousPrice: stock.price,
-        price: newPrice,
-        marketCap: newMarketCap,
-        updatedAt: Date.now(),
-      });
-      
-      await ctx.db.patch(stock.companyId, {
-        marketCap: newMarketCap,
-        updatedAt: Date.now(),
-      });
+      if (Number.isFinite(newMarketCap) && newMarketCap >= 0) {
+        await ctx.db.patch(args.stockId, {
+          previousPrice: stock.price,
+          price: newPrice,
+          marketCap: newMarketCap,
+          updatedAt: Date.now(),
+        });
+        
+        await ctx.db.patch(stock.companyId, {
+          marketCap: newMarketCap,
+          updatedAt: Date.now(),
+        });
+      }
     }
 
     // Update stock record to trigger query refresh
@@ -243,19 +246,22 @@ export const sellStock = mutation({
     const newPrice = Math.floor(stock.price * (1 - priceImpact));
     const finalPrice = Math.max(100, newPrice); // Min $1.00
     
-    if (finalPrice !== stock.price) {
+    // Validate final price before updating
+    if (Number.isFinite(finalPrice) && finalPrice > 0 && finalPrice !== stock.price) {
       const newMarketCap = finalPrice * stock.totalShares;
-      await ctx.db.patch(args.stockId, {
-        previousPrice: stock.price,
-        price: finalPrice,
-        marketCap: newMarketCap,
-        updatedAt: Date.now(),
-      });
-      
-      await ctx.db.patch(stock.companyId, {
-        marketCap: newMarketCap,
-        updatedAt: Date.now(),
-      });
+      if (Number.isFinite(newMarketCap) && newMarketCap >= 0) {
+        await ctx.db.patch(args.stockId, {
+          previousPrice: stock.price,
+          price: finalPrice,
+          marketCap: newMarketCap,
+          updatedAt: Date.now(),
+        });
+        
+        await ctx.db.patch(stock.companyId, {
+          marketCap: newMarketCap,
+          updatedAt: Date.now(),
+        });
+      }
     }
 
     // Update stock record to trigger query refresh
@@ -476,5 +482,97 @@ export const recordStockPriceHistory = mutation({
       close: args.close,
       volume: args.volume,
     });
+  },
+});
+
+// Admin Mutation: Fix a stock that has gone into NaN or invalid state
+export const fixBrokenStock = mutation({
+  args: {
+    stockId: v.id("stocks"),
+  },
+  handler: async (ctx, args) => {
+    const stock = await ctx.db.get(args.stockId);
+    if (!stock) {
+      throw new Error("Stock not found");
+    }
+
+    const company = await ctx.db.get(stock.companyId);
+    if (!company) {
+      throw new Error("Company not found");
+    }
+
+    // Calculate a fair recovery price based on company balance
+    // Use fundamental pricing: market_cap = revenue * multiple
+    const revenueAnnual = Math.max(100, company.revenueAnnual || company.balance * 4);
+    const baseMultiple = Math.max(0.1, company.fundamentalMultiple || 6.67);
+    const fundamentalMarketCap = Math.floor(revenueAnnual * baseMultiple);
+    
+    // Ensure totalShares is valid
+    const totalShares = Math.max(1, stock.totalShares);
+    
+    // Calculate recovery price (minimum $1.00)
+    const recoveryPrice = Math.max(100, Math.floor(fundamentalMarketCap / totalShares));
+    
+    // Ensure the recovery price is finite
+    if (!Number.isFinite(recoveryPrice) || recoveryPrice <= 0) {
+      throw new Error("Cannot calculate valid recovery price");
+    }
+
+    // Update stock with recovered price
+    const newMarketCap = recoveryPrice * totalShares;
+    
+    await ctx.db.patch(args.stockId, {
+      previousPrice: stock.price, // Keep the broken price as previousPrice
+      price: recoveryPrice,
+      marketCap: newMarketCap,
+      updatedAt: Date.now(),
+    });
+
+    // Update company market cap
+    await ctx.db.patch(stock.companyId, {
+      marketCap: newMarketCap,
+      updatedAt: Date.now(),
+    });
+
+    // Record the recovery in price history
+    await ctx.db.insert("stockPriceHistory", {
+      stockId: args.stockId,
+      price: recoveryPrice,
+      timestamp: Date.now(),
+    });
+
+    return {
+      message: `Stock ${stock.ticker} recovered`,
+      oldPrice: stock.price,
+      newPrice: recoveryPrice,
+      recoveryMethod: "fundamental_pricing",
+    };
+  },
+});
+
+// Query: Find broken stocks (with NaN or invalid prices)
+export const getBrokenStocks = query({
+  handler: async (ctx) => {
+    const allStocks = await ctx.db.query("stocks").collect();
+    return allStocks.filter(
+      (stock: any) =>
+        stock.price === null ||
+        !Number.isFinite(stock.price) ||
+        stock.price < 100
+    );
+  },
+});
+
+// Query: Find stock by ticker for admin
+export const getStockIdByTicker = query({
+  args: {
+    ticker: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const stock = await ctx.db
+      .query("stocks")
+      .withIndex("by_ticker", (q) => q.eq("ticker", args.ticker.toUpperCase()))
+      .unique();
+    return stock;
   },
 });
