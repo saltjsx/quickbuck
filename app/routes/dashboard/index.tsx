@@ -10,9 +10,16 @@ import { usePlayerData } from "~/hooks/use-player-data";
 
 export default function DashboardPage() {
   const { userId } = useAuth();
-  const { player, balance, netWorth, transactions, isLoading } = usePlayerData(
-    userId || null
-  );
+  const {
+    player,
+    balance,
+    netWorth,
+    stocksValue,
+    cryptoValue,
+    companyEquity,
+    transactions,
+    isLoading,
+  } = usePlayerData(userId || null);
 
   // For now, assume tick just happened (will implement tick history later)
   const lastTickTime = Date.now();
@@ -45,9 +52,9 @@ export default function DashboardPage() {
           {/* Net Worth Breakdown */}
           <NetWorthBreakdown
             cash={balance}
-            stocksValue={0} // TODO: Calculate from holdings
-            cryptoValue={0} // TODO: Calculate from holdings
-            companyEquity={0} // TODO: Calculate from company ownership
+            stocksValue={stocksValue}
+            cryptoValue={cryptoValue}
+            companyEquity={companyEquity}
             isLoading={isLoading}
           />
 
