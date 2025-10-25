@@ -113,7 +113,14 @@ export const getPlayer = query({
     playerId: v.id("players"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.playerId);
+    const player = await ctx.db.get(args.playerId);
+    if (!player) return null;
+
+    // Calculate current net worth on the fly
+    const netWorth = await calculateNetWorth(ctx, args.playerId);
+    
+    // Return player with calculated net worth
+    return { ...player, netWorth };
   },
 });
 

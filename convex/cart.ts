@@ -278,6 +278,32 @@ export const checkout = mutation({
         updatedAt: now,
       });
 
+      // Add item to player inventory
+      const existingInventory = await ctx.db
+        .query("playerInventory")
+        .withIndex("by_playerId_productId", (q) =>
+          q.eq("playerId", args.userId).eq("productId", item.productId)
+        )
+        .unique();
+
+      if (existingInventory) {
+        // Update existing inventory
+        await ctx.db.patch(existingInventory._id, {
+          quantity: existingInventory.quantity + item.quantity,
+          totalPrice: existingInventory.totalPrice + product.price * item.quantity,
+          purchasedAt: now,
+        });
+      } else {
+        // Create new inventory entry
+        await ctx.db.insert("playerInventory", {
+          playerId: args.userId,
+          productId: item.productId,
+          quantity: item.quantity,
+          purchasedAt: now,
+          totalPrice: product.price * item.quantity,
+        });
+      }
+
       // Credit company
       const company = await ctx.db.get(product.companyId);
       if (company) {

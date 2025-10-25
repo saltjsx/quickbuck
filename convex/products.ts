@@ -337,3 +337,30 @@ export const getTopProductsBySales = query({
       .slice(0, args.limit);
   },
 });
+
+// Query: Get player inventory
+export const getPlayerInventory = query({
+  args: {
+    playerId: v.id("players"),
+  },
+  handler: async (ctx, args) => {
+    const inventory = await ctx.db
+      .query("playerInventory")
+      .withIndex("by_playerId", (q) => q.eq("playerId", args.playerId))
+      .collect();
+
+    // Enrich with product data
+    const enriched = await Promise.all(
+      inventory.map(async (item) => {
+        const product = await ctx.db.get(item.productId);
+        return {
+          ...item,
+          product,
+        };
+      })
+    );
+
+    return enriched;
+  },
+});
+

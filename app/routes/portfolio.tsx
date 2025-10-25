@@ -89,38 +89,45 @@ export default function PortfolioPage() {
     order: "desc",
   });
 
-  // Get stock details with current prices
-  const stocksWithDetails = stockHoldings
-    ?.map((holding) => {
-      const stock = useQuery(api.stocks.getStock, { stockId: holding.stockId });
-      const company = useQuery(
-        api.companies.getCompany,
-        stock ? { companyId: stock.companyId } : "skip"
-      );
-      return { holding, stock, company };
-    })
-    .filter((item) => item.stock && item.company);
+  // Get all stocks at once to avoid hooks issues
+  const allStocks = useQuery(api.stocks.getAllStocks, {});
 
-  // Get crypto details with current prices
-  const cryptoWithDetails = cryptoHoldings
-    ?.map((holding) => {
-      const crypto = useQuery(api.crypto.getCryptocurrency, {
-        cryptoId: holding.cryptoId,
-      });
-      return { holding, crypto };
-    })
-    .filter((item) => item.crypto);
+  // Get all cryptos at once to avoid hooks issues
+  const allCryptos = useQuery(api.crypto.getAllCryptocurrencies, {});
+
+  // Build stock details by matching holdings with stock data
+  const stocksWithDetails =
+    stockHoldings && allStocks
+      ? stockHoldings
+          .map((holding) => {
+            const stock = allStocks.find((s) => s._id === holding.stockId);
+            // Fetch company via stock companyId
+            return { holding, stock };
+          })
+          .filter((item) => item.stock)
+      : [];
+
+  // Build crypto details by matching holdings with crypto data
+  const cryptoWithDetails =
+    cryptoHoldings && allCryptos
+      ? cryptoHoldings
+          .map((holding) => {
+            const crypto = allCryptos.find((c) => c._id === holding.cryptoId);
+            return { holding, crypto };
+          })
+          .filter((item) => item.crypto)
+      : [];
 
   // Calculate totals
   const totalStocksValue =
-    stocksWithDetails?.reduce(
+    stocksWithDetails.reduce(
       (sum, item) =>
         sum + (item.stock ? item.holding.shares * item.stock.price : 0),
       0
     ) || 0;
 
   const totalCryptoValue =
-    cryptoWithDetails?.reduce(
+    cryptoWithDetails.reduce(
       (sum, item) =>
         sum +
         (item.crypto ? Math.floor(item.holding.amount * item.crypto.price) : 0),
@@ -144,8 +151,8 @@ export default function PortfolioPage() {
           comparison = a.holding.shares - b.holding.shares;
           break;
         case "name":
-          comparison = (a.company?.name || "").localeCompare(
-            b.company?.name || ""
+          comparison = (a.stock?.ticker || "").localeCompare(
+            b.stock?.ticker || ""
           );
           break;
       }
@@ -271,12 +278,12 @@ export default function PortfolioPage() {
                           key={item.holding._id}
                           className="cursor-pointer hover:bg-muted/50"
                           onClick={() =>
-                            item.company &&
-                            navigate(`/stock/${item.company._id}`)
+                            item.stock &&
+                            navigate(`/stock/${item.stock.companyId}`)
                           }
                         >
                           <TableCell className="font-medium">
-                            {item.company?.name}
+                            {item.stock?.ticker}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className="font-mono">

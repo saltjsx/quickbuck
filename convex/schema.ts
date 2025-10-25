@@ -380,6 +380,18 @@ export default defineSchema({
   })
     .index("by_key", ["key"]),
 
+  // Player marketplace inventory
+  playerInventory: defineTable({
+    playerId: v.id("players"),
+    productId: v.id("products"),
+    quantity: v.number(),
+    purchasedAt: v.number(),
+    totalPrice: v.number(), // total price paid for these items in cents
+  })
+    .index("by_playerId", ["playerId"])
+    .index("by_productId", ["productId"])
+    .index("by_playerId_productId", ["playerId", "productId"]),
+
   subscriptions: defineTable({
     userId: v.optional(v.string()),
     polarId: v.optional(v.string()),

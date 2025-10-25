@@ -98,6 +98,11 @@ export const buyStock = mutation({
       timestamp: Date.now(),
     });
 
+    // Update stock record to trigger query refresh
+    await ctx.db.patch(args.stockId, {
+      updatedAt: Date.now(),
+    });
+
     return existingHolding?._id;
   },
 });
@@ -181,6 +186,11 @@ export const sellStock = mutation({
       totalValue: totalValue,
       tradeType: "sell",
       timestamp: Date.now(),
+    });
+
+    // Update stock record to trigger query refresh
+    await ctx.db.patch(args.stockId, {
+      updatedAt: Date.now(),
     });
 
     return totalValue;
