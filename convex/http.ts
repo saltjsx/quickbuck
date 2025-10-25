@@ -1,5 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { openai } from "@ai-sdk/openai";
 import { streamText } from "ai";
 
@@ -92,6 +93,38 @@ http.route({
 });
 
 // Payments/webhook route removed — payments are disabled for now.
+
+// Tick endpoint - can be called by external scheduler
+http.route({
+  path: "/api/tick",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      // Call the internal tick mutation
+      const result = await ctx.runMutation(internal.tick.executeTick);
+      
+      return new Response(JSON.stringify({
+        success: true,
+        data: result,
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      }), {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    }
+  }),
+});
 
 // Log that routes are configured
 console.log("HTTP routes configured");

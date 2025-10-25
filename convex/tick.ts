@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, internalMutation } from "./_generated/server";
+import { mutation, internalMutation, query } from "./_generated/server";
 
 // Shared tick execution logic
 async function executeTickLogic(ctx: any) {
@@ -60,7 +60,15 @@ async function executeTickLogic(ctx: any) {
 // Main tick mutation - runs every 5 minutes via cron
 export const executeTick = internalMutation({
   handler: async (ctx) => {
-    return await executeTickLogic(ctx);
+    console.log("[TICK] Executing tick...");
+    try {
+      const result = await executeTickLogic(ctx);
+      console.log("[TICK] ✅ Tick completed successfully", result);
+      return result;
+    } catch (error) {
+      console.error("[TICK] ❌ Tick failed", error);
+      throw error;
+    }
   },
 });
 
@@ -216,18 +224,8 @@ async function executeBotPurchases(ctx: any, totalBudget: number) {
       createdAt: Date.now(),
     });
     
-    // Log transaction for bot purchase
-    await ctx.db.insert("transactions", {
-      fromAccountId: "bot" as any,
-      fromAccountType: "bot" as any,
-      toAccountId: product.companyId,
-      toAccountType: "company" as const,
-      amount: actualPrice,
-      assetType: "product" as const,
-      assetId: product._id as any,
-      description: `Bot purchased ${quantity}x ${product.name} at $${product.price / 100}`,
-      createdAt: Date.now(),
-    });
+    // Note: We don't create a transaction for bot purchases since "bot" is not a valid account ID
+    // Bot purchases are system events, not player-to-company transfers
     
     purchases.push({
       productId: product._id,
@@ -425,3 +423,14 @@ async function applyLoanInterest(ctx: any) {
     }
   }
 }
+
+// Query: Get tick history
+export const getTickHistory = query({
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("tickHistory")
+      .withIndex("by_tickNumber")
+      .order("desc")
+      .take(100);
+  },
+});
