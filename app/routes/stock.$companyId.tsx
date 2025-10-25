@@ -134,7 +134,7 @@ export default function StockDetailPage() {
   // Calculate estimated values
   const estimatedShares =
     purchaseType === "dollars" && stock
-      ? Math.floor((parseFloat(purchaseAmount) * 100) / stock.price)
+      ? (parseFloat(purchaseAmount) * 100) / stock.price
       : parseFloat(purchaseAmount) || 0;
 
   const estimatedCost =
@@ -154,9 +154,7 @@ export default function StockDetailPage() {
     }
 
     const shares =
-      purchaseType === "shares"
-        ? Math.floor(parseFloat(purchaseAmount))
-        : estimatedShares;
+      purchaseType === "shares" ? parseFloat(purchaseAmount) : estimatedShares;
 
     if (shares <= 0) {
       setError("Invalid number of shares");
@@ -174,9 +172,10 @@ export default function StockDetailPage() {
       });
 
       setSuccess(
-        `Successfully purchased ${shares} shares for ${formatCurrency(
-          shares * stock.price
-        )}`
+        `Successfully purchased ${shares.toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 8,
+        })} shares for ${formatCurrency(Math.round(shares * stock.price))}`
       );
       setPurchaseAmount("");
     } catch (err) {
@@ -328,10 +327,10 @@ export default function StockDetailPage() {
                       <Input
                         id="amount"
                         type="number"
-                        step={purchaseType === "shares" ? "1" : "0.01"}
-                        min="0.01"
+                        step="any"
+                        min="0.00000001"
                         placeholder={
-                          purchaseType === "shares" ? "100" : "1000.00"
+                          purchaseType === "shares" ? "0.5" : "1000.00"
                         }
                         value={purchaseAmount}
                         onChange={(e) => setPurchaseAmount(e.target.value)}

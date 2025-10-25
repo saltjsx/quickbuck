@@ -133,7 +133,7 @@ export default function CryptoDetailPage() {
   // Calculate estimated values
   const estimatedTokens =
     purchaseType === "dollars" && crypto
-      ? Math.floor((parseFloat(purchaseAmount) * 100) / crypto.price)
+      ? (parseFloat(purchaseAmount) * 100) / crypto.price
       : parseFloat(purchaseAmount) || 0;
 
   const estimatedCost =
@@ -153,9 +153,7 @@ export default function CryptoDetailPage() {
     }
 
     const tokens =
-      purchaseType === "tokens"
-        ? Math.floor(parseFloat(purchaseAmount))
-        : estimatedTokens;
+      purchaseType === "tokens" ? parseFloat(purchaseAmount) : estimatedTokens;
 
     if (tokens <= 0) {
       setError("Invalid number of tokens");
@@ -173,9 +171,12 @@ export default function CryptoDetailPage() {
       });
 
       setSuccess(
-        `Successfully purchased ${tokens.toLocaleString()} ${
-          crypto.ticker
-        } for ${formatCurrency(Math.floor(tokens * crypto.price))}`
+        `Successfully purchased ${tokens.toLocaleString(undefined, {
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 8,
+        })} ${crypto.ticker} for ${formatCurrency(
+          Math.round(tokens * crypto.price)
+        )}`
       );
       setPurchaseAmount("");
     } catch (err) {
@@ -330,10 +331,10 @@ export default function CryptoDetailPage() {
                       <Input
                         id="amount"
                         type="number"
-                        step={purchaseType === "tokens" ? "1" : "0.01"}
-                        min="0.01"
+                        step="any"
+                        min="0.00000001"
                         placeholder={
-                          purchaseType === "tokens" ? "1000" : "100.00"
+                          purchaseType === "tokens" ? "0.5" : "100.00"
                         }
                         value={purchaseAmount}
                         onChange={(e) => setPurchaseAmount(e.target.value)}
