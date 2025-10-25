@@ -60,6 +60,7 @@ export default function ManageCompaniesPage() {
   // Mutations
   const createCompany = useMutation(api.companies.createCompany);
   const makeCompanyPublic = useMutation(api.companies.makeCompanyPublic);
+  const deleteCompany = useMutation(api.companies.deleteCompany);
 
   // State for create modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -86,6 +87,13 @@ export default function ManageCompaniesPage() {
   const [editName, setEditName] = useState("");
   const [editTicker, setEditTicker] = useState("");
   const [editDescription, setEditDescription] = useState("");
+
+  // State for delete confirmation
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteCompanyId, setDeleteCompanyId] =
+    useState<Id<"companies"> | null>(null);
+  const [deleteCompanyName, setDeleteCompanyName] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Handle create company
   const handleCreateCompany = async (e: React.FormEvent) => {
@@ -178,6 +186,38 @@ export default function ManageCompaniesPage() {
     setSelectedCompanyId(companyId);
     setStockTicker(name.substring(0, 4).toUpperCase());
     setPublicModalOpen(true);
+  };
+
+  // Handle delete company
+  const handleDeleteCompany = async () => {
+    if (!deleteCompanyId || !player) {
+      setError("Company or player not found");
+      return;
+    }
+
+    setIsDeleting(true);
+    setError("");
+
+    try {
+      await deleteCompany({
+        companyId: deleteCompanyId,
+        ownerId: player._id,
+      });
+      setDeleteModalOpen(false);
+      setDeleteCompanyId(null);
+      setDeleteCompanyName("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete company");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Open delete confirmation modal
+  const openDeleteModal = (companyId: Id<"companies">, name: string) => {
+    setDeleteCompanyId(companyId);
+    setDeleteCompanyName(name);
+    setDeleteModalOpen(true);
   };
 
   return (
@@ -385,7 +425,13 @@ export default function ManageCompaniesPage() {
                         <Building2 className="mr-2 h-3 w-3" />
                         Dashboard
                       </Button>
-                      <Button variant="outline" size="sm" disabled>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() =>
+                          openDeleteModal(company._id, company.name)
+                        }
+                      >
                         <Trash2 className="mr-2 h-3 w-3" />
                         Delete
                       </Button>
@@ -487,6 +533,59 @@ export default function ManageCompaniesPage() {
                   </Button>
                 </DialogFooter>
               </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Delete Confirmation Modal */}
+          <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="text-destructive">
+                  Delete Company?
+                </DialogTitle>
+                <DialogDescription>
+                  This action cannot be undone. Are you sure you want to delete{" "}
+                  <strong>{deleteCompanyName}</strong>?
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4">
+                <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                  <p className="font-semibold mb-1">What will happen:</p>
+                  <ul className="space-y-1 text-xs list-disc list-inside">
+                    <li>Company will be archived (not recoverable)</li>
+                    <li>Company balance will be transferred to you</li>
+                    <li>
+                      All products will be archived (not deleted from records)
+                    </li>
+                    <li>Company holdings/stocks cannot be deleted if public</li>
+                  </ul>
+                </div>
+
+                {error && (
+                  <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+              </div>
+
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDeleteModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  onClick={handleDeleteCompany}
+                  disabled={isDeleting}
+                >
+                  {isDeleting ? "Deleting..." : "Delete Company"}
+                </Button>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>

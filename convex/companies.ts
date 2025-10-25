@@ -280,19 +280,8 @@ export const deleteCompany = mutation({
       throw new Error("Only the company owner can delete the company");
     }
 
-    // Check if company is public - cannot delete public companies with shareholders
+    // Delete the stock if it exists (regardless of public status or shareholders)
     if (company.isPublic) {
-      // Check for any shareholders
-      const shareholders = await ctx.db
-        .query("userStockHoldings")
-        .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
-        .collect();
-      
-      if (shareholders.length > 0) {
-        throw new Error("Cannot delete a public company with shareholders. Buy back all shares first.");
-      }
-
-      // Delete the stock if it exists
       const stock = await ctx.db
         .query("stocks")
         .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
