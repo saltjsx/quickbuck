@@ -6,6 +6,7 @@ export default defineSchema({
     name: v.optional(v.string()),
     email: v.optional(v.string()),
     image: v.optional(v.string()),
+    clerkUsername: v.optional(v.string()), // Clerk username identifier
     tokenIdentifier: v.string(),
   }).index("by_token", ["tokenIdentifier"]),
   

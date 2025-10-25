@@ -43,11 +43,13 @@ export const upsertUser = mutation({
       // Update if needed
       if (
         existingUser.name !== identity.name ||
-        existingUser.email !== identity.email
+        existingUser.email !== identity.email ||
+        existingUser.clerkUsername !== (identity.username as string)
       ) {
         await ctx.db.patch(existingUser._id, {
           name: identity.name,
           email: identity.email,
+          clerkUsername: (identity.username as string) ?? undefined,
         });
       }
       return existingUser;
@@ -57,6 +59,7 @@ export const upsertUser = mutation({
     const userId = await ctx.db.insert("users", {
       name: identity.name,
       email: identity.email,
+      clerkUsername: (identity.username as string) ?? undefined,
       tokenIdentifier: identity.subject,
     });
 

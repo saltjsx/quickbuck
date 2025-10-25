@@ -116,12 +116,11 @@ export default function TransfersPage() {
   const filteredPlayers = useMemo(() => {
     if (!allPlayersResult?.players || recipientType !== "player") return [];
 
-    return allPlayersResult.players
-      .filter((p) => p._id !== player?._id) // Exclude current player
-      .filter((p) =>
-        p.userName.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-  }, [allPlayersResult, player, recipientType, searchQuery]);
+    return allPlayersResult.players.filter((p) => {
+      const displayName = p.userName || "Anonymous";
+      return displayName.toLowerCase().includes(searchQuery.toLowerCase());
+    });
+  }, [allPlayersResult, recipientType, searchQuery]);
 
   const filteredCompanies = useMemo(() => {
     if (!allCompaniesResult?.companies || recipientType !== "company")
@@ -427,7 +426,7 @@ export default function TransfersPage() {
                                     handleRecipientSelect(
                                       p._id,
                                       "player",
-                                      p.userName
+                                      p.userName || "Anonymous"
                                     )
                                   }
                                   className="flex w-full items-center justify-between rounded-md p-3 text-left transition-colors hover:bg-accent"
@@ -436,7 +435,7 @@ export default function TransfersPage() {
                                     <User className="h-4 w-4 text-muted-foreground" />
                                     <div>
                                       <p className="font-medium">
-                                        {p.userName}
+                                        {p.userName || "Anonymous"}
                                       </p>
                                       <p className="text-xs text-muted-foreground">
                                         Net Worth: {formatCurrency(p.netWorth)}
