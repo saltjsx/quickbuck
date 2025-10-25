@@ -128,7 +128,6 @@ export default function CryptoMarketPage() {
         ticker: upperTicker,
         description: createForm.description,
         image: createForm.image.trim() || undefined,
-        initialSupply: 100000000, // 100 million tokens
       });
 
       setIsCreateModalOpen(false);
@@ -208,8 +207,9 @@ export default function CryptoMarketPage() {
                 <DialogHeader>
                   <DialogTitle>Create Cryptocurrency</DialogTitle>
                   <DialogDescription>
-                    Create your own cryptocurrency for $10,000. You'll receive
-                    100 million tokens initially.
+                    Create your own cryptocurrency for $10,000 with a starting
+                    market cap of $10,000 and 1,000,000 total coins. You must
+                    purchase coins yourself to have any holdings.
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleCreateCrypto} className="space-y-4">

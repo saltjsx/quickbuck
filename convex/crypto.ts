@@ -10,7 +10,6 @@ export const createCryptocurrency = mutation({
     ticker: v.string(),
     description: v.optional(v.string()),
     image: v.optional(v.string()),
-    initialSupply: v.number(),
   },
   handler: async (ctx, args) => {
     // Check if ticker is already taken
@@ -36,7 +35,9 @@ export const createCryptocurrency = mutation({
     });
 
     const now = Date.now();
-    const initialPrice = 100; // 100 cents = $1.00
+    const totalSupply = 1000000; // 1,000,000 coins max
+    const initialMarketCap = 1000000; // $10,000 in cents
+    const initialPrice = Math.floor(initialMarketCap / totalSupply); // Price per coin
 
     const cryptoId = await ctx.db.insert("cryptocurrencies", {
       creatorId: args.creatorId,
@@ -45,22 +46,16 @@ export const createCryptocurrency = mutation({
       description: args.description,
       image: args.image,
       price: initialPrice,
-      marketCap: initialPrice * args.initialSupply,
+      marketCap: initialMarketCap,
       volume: 0,
-      totalSupply: args.initialSupply,
-      circulatingSupply: args.initialSupply,
+      totalSupply: totalSupply,
+      circulatingSupply: 0, // No coins in circulation initially
       createdAt: now,
       updatedAt: now,
     });
 
-    // Give creator initial supply
-    await ctx.db.insert("userCryptoHoldings", {
-      userId: args.creatorId,
-      cryptoId,
-      amount: args.initialSupply,
-      averagePurchasePrice: 0, // Created, not purchased
-      boughtAt: now,
-    });
+    // Creator does NOT get initial supply - they must purchase coins themselves
+    // The coins are available for purchase by any player
 
     return cryptoId;
   },
@@ -79,6 +74,20 @@ export const buyCryptocurrency = mutation({
     const crypto = await ctx.db.get(args.cryptoId);
     if (!crypto) {
       throw new Error("Cryptocurrency not found");
+    }
+
+    // Check that purchase doesn't exceed total supply
+    if (args.amount > crypto.totalSupply) {
+      throw new Error(`Cannot purchase more than ${crypto.totalSupply} coins`);
+    }
+
+    // Check that total purchase won't exceed total supply
+    if (crypto.circulatingSupply + args.amount > crypto.totalSupply) {
+      throw new Error(
+        `Cannot purchase that many coins. Only ${
+          crypto.totalSupply - crypto.circulatingSupply
+        } coins remaining`
+      );
     }
 
     const totalCost = Math.floor(crypto.price * args.amount);
@@ -133,6 +142,12 @@ export const buyCryptocurrency = mutation({
         boughtAt: Date.now(),
       });
     }
+
+    // Update circulating supply
+    await ctx.db.patch(args.cryptoId, {
+      circulatingSupply: crypto.circulatingSupply + args.amount,
+      updatedAt: Date.now(),
+    });
 
     // Create transaction
     await ctx.db.insert("transactions", {
@@ -197,6 +212,12 @@ export const sellCryptocurrency = mutation({
         amount: holding.amount - args.amount,
       });
     }
+
+    // Update circulating supply
+    await ctx.db.patch(args.cryptoId, {
+      circulatingSupply: Math.max(0, crypto.circulatingSupply - args.amount),
+      updatedAt: Date.now(),
+    });
 
     // Credit account
     if (args.accountType === "player") {
