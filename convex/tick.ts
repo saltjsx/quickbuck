@@ -287,7 +287,9 @@ async function updateStockPrices(ctx: any) {
       const combinedNoise = shortTermNoise + mediumTermNoise;
       
       // Add trend bias that can shift over time
-      const trendSeed = (Date.now() / 3600000 + stock._id.slice(-4)) % 100; // Changes hourly
+      // Convert last 4 chars of ID to a number for consistent seeding
+      const idSeed = parseInt(stock._id.slice(-4), 36) || 0;
+      const trendSeed = (Date.now() / 3600000 + idSeed) % 100; // Changes hourly
       const trendBias = Math.sin(trendSeed * 0.1) * tickVolatility * 0.3;
       
       // Random walk component (can go up or down)
