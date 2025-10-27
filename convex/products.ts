@@ -14,13 +14,31 @@ export const createProduct = mutation({
     maxPerOrder: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Validate price is positive and safe integer
+    if (args.price <= 0) {
+      throw new Error("Price must be greater than 0");
+    }
+
+    if (!Number.isSafeInteger(args.price)) {
+      throw new Error("Price is not a safe integer");
+    }
+
+    // EXPLOIT FIX: Set reasonable price limits
+    const MAX_PRICE = 100000000; // $1M max price
+    if (args.price > MAX_PRICE) {
+      throw new Error(`Price cannot exceed $${MAX_PRICE / 100}`);
+    }
+
+    // EXPLOIT FIX: Validate maxPerOrder if provided
+    if (args.maxPerOrder !== undefined) {
+      if (args.maxPerOrder <= 0 || !Number.isSafeInteger(args.maxPerOrder)) {
+        throw new Error("Invalid maxPerOrder value");
+      }
+    }
+
     const company = await ctx.db.get(args.companyId);
     if (!company) {
       throw new Error("Company not found");
-    }
-
-    if (args.price <= 0) {
-      throw new Error("Price must be greater than 0");
     }
 
     const now = Date.now();
@@ -59,8 +77,19 @@ export const orderProductBatch = mutation({
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Validate quantity is positive and safe integer
     if (args.quantity <= 0) {
       throw new Error("Quantity must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.quantity)) {
+      throw new Error("Quantity is not a safe integer");
+    }
+
+    // EXPLOIT FIX: Set max batch size
+    const MAX_BATCH_SIZE = 1000000; // 1 million units max per batch
+    if (args.quantity > MAX_BATCH_SIZE) {
+      throw new Error(`Batch size cannot exceed ${MAX_BATCH_SIZE} units`);
     }
 
     const product = await ctx.db.get(args.productId);
@@ -75,6 +104,11 @@ export const orderProductBatch = mutation({
 
     // Calculate total production cost for this batch
     const totalCost = product.productionCost * args.quantity;
+
+    // EXPLOIT FIX: Validate total cost is safe
+    if (!Number.isSafeInteger(totalCost)) {
+      throw new Error("Total cost calculation overflow");
+    }
 
     // Check if company has sufficient balance
     if (company.balance < totalCost) {

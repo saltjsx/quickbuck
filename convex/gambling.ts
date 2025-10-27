@@ -57,8 +57,18 @@ export const playSlots = mutation({
   handler: async (ctx, args) => {
     const player = await findPlayerByToken(ctx);
 
+    // EXPLOIT FIX: Validate bet amount is positive and safe integer
     if (args.betAmount <= 0) {
       throw new Error("Bet amount must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.betAmount)) {
+      throw new Error("Bet amount is not a safe integer");
+    }
+
+    // EXPLOIT FIX: Add maximum bet limit
+    if (args.betAmount > 100000000) { // Max $1M bet
+      throw new Error("Bet amount exceeds maximum of $1,000,000");
     }
 
     if (player.balance < args.betAmount) {
@@ -131,8 +141,17 @@ export const startBlackjack = mutation({
   handler: async (ctx, args) => {
     const player = await findPlayerByToken(ctx);
 
+    // EXPLOIT FIX: Validate bet amount
     if (args.betAmount <= 0) {
       throw new Error("Bet amount must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.betAmount)) {
+      throw new Error("Bet amount is not a safe integer");
+    }
+
+    if (args.betAmount > 100000000) { // Max $1M bet
+      throw new Error("Bet amount exceeds maximum of $1,000,000");
     }
 
     if (player.balance < args.betAmount) {
@@ -313,8 +332,17 @@ export const playDice = mutation({
   handler: async (ctx, args) => {
     const player = await findPlayerByToken(ctx);
 
+    // EXPLOIT FIX: Validate bet amount
     if (args.betAmount <= 0) {
       throw new Error("Bet amount must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.betAmount)) {
+      throw new Error("Bet amount is not a safe integer");
+    }
+
+    if (args.betAmount > 100000000) { // Max $1M bet
+      throw new Error("Bet amount exceeds maximum of $1,000,000");
     }
 
     if (player.balance < args.betAmount) {
@@ -404,8 +432,17 @@ export const playRoulette = mutation({
   handler: async (ctx, args) => {
     const player = await findPlayerByToken(ctx);
 
+    // EXPLOIT FIX: Validate bet amount
     if (args.betAmount <= 0) {
       throw new Error("Bet amount must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.betAmount)) {
+      throw new Error("Bet amount is not a safe integer");
+    }
+
+    if (args.betAmount > 100000000) { // Max $1M bet
+      throw new Error("Bet amount exceeds maximum of $1,000,000");
     }
 
     if (player.balance < args.betAmount) {

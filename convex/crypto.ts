@@ -71,9 +71,23 @@ export const buyCryptocurrency = mutation({
     accountId: v.union(v.id("players"), v.id("companies")),
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Validate amount is positive and safe integer
+    if (args.amount <= 0) {
+      throw new Error("Amount must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.amount)) {
+      throw new Error("Amount is not a safe integer");
+    }
+
     const crypto = await ctx.db.get(args.cryptoId);
     if (!crypto) {
       throw new Error("Cryptocurrency not found");
+    }
+
+    // EXPLOIT FIX: Check that circulating supply + amount doesn't exceed total supply
+    if (crypto.circulatingSupply + args.amount > crypto.totalSupply) {
+      throw new Error(`Cannot purchase ${args.amount} coins. Only ${crypto.totalSupply - crypto.circulatingSupply} coins available.`);
     }
 
     // Check that purchase doesn't exceed total supply
@@ -91,6 +105,11 @@ export const buyCryptocurrency = mutation({
     }
 
     const totalCost = Math.floor(crypto.price * args.amount);
+
+    // EXPLOIT FIX: Validate total cost is safe
+    if (!Number.isSafeInteger(totalCost)) {
+      throw new Error("Total cost calculation overflow");
+    }
 
     // Check balance and deduct
     if (args.accountType === "player") {
@@ -206,6 +225,15 @@ export const sellCryptocurrency = mutation({
     accountId: v.union(v.id("players"), v.id("companies")),
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Validate amount is positive and safe integer
+    if (args.amount <= 0) {
+      throw new Error("Amount must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.amount)) {
+      throw new Error("Amount is not a safe integer");
+    }
+
     const crypto = await ctx.db.get(args.cryptoId);
     if (!crypto) {
       throw new Error("Cryptocurrency not found");
@@ -223,6 +251,11 @@ export const sellCryptocurrency = mutation({
     }
 
     const totalValue = Math.floor(crypto.price * args.amount);
+
+    // EXPLOIT FIX: Validate total value is safe
+    if (!Number.isSafeInteger(totalValue)) {
+      throw new Error("Total value calculation overflow");
+    }
 
     // Update or remove holding
     if (holding.amount === args.amount) {

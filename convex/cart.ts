@@ -10,8 +10,19 @@ export const addToCart = mutation({
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Validate quantity is positive and safe integer
     if (args.quantity <= 0) {
       throw new Error("Quantity must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.quantity)) {
+      throw new Error("Quantity is not a safe integer");
+    }
+
+    // EXPLOIT FIX: Set max cart quantity per item
+    const MAX_CART_QUANTITY = 100000; // 100k units max per item
+    if (args.quantity > MAX_CART_QUANTITY) {
+      throw new Error(`Cannot add more than ${MAX_CART_QUANTITY} units to cart`);
     }
 
     const product = await ctx.db.get(args.productId);
@@ -142,8 +153,19 @@ export const updateCartItemQuantity = mutation({
     quantity: v.number(),
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Validate quantity is positive and safe integer
     if (args.quantity <= 0) {
       throw new Error("Quantity must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.quantity)) {
+      throw new Error("Quantity is not a safe integer");
+    }
+
+    // EXPLOIT FIX: Set max cart quantity per item
+    const MAX_CART_QUANTITY = 100000;
+    if (args.quantity > MAX_CART_QUANTITY) {
+      throw new Error(`Cannot add more than ${MAX_CART_QUANTITY} units to cart`);
     }
 
     const cart = await ctx.db
@@ -230,7 +252,20 @@ export const checkout = mutation({
       if (product.stock !== undefined && product.stock !== null && product.stock < item.quantity) {
         throw new Error(`Insufficient stock for ${product.name}`);
       }
-      total += product.price * item.quantity; // Use current price
+      
+      const itemTotal = product.price * item.quantity;
+      
+      // EXPLOIT FIX: Validate item total is safe
+      if (!Number.isSafeInteger(itemTotal)) {
+        throw new Error(`Price calculation overflow for ${product.name}`);
+      }
+      
+      total += itemTotal; // Use current price
+      
+      // EXPLOIT FIX: Validate running total is safe
+      if (!Number.isSafeInteger(total)) {
+        throw new Error("Total cost calculation overflow");
+      }
     }
 
     // Check balance

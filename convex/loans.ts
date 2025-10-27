@@ -12,9 +12,27 @@ export const createLoan = mutation({
       throw new Error("Loan amount must be between $0 and $5,000,000");
     }
 
+    // EXPLOIT FIX: Check if amount would cause overflow
+    if (!Number.isSafeInteger(args.amount)) {
+      throw new Error("Loan amount is not a safe integer");
+    }
+
     const player = await ctx.db.get(args.playerId);
     if (!player) {
       throw new Error("Player not found");
+    }
+
+    // EXPLOIT FIX: Check total outstanding debt to prevent excessive loans
+    const activeLoans = await ctx.db
+      .query("loans")
+      .withIndex("by_playerId", (q) => q.eq("playerId", args.playerId))
+      .filter((q) => q.eq(q.field("status"), "active"))
+      .collect();
+    
+    const totalOutstandingDebt = activeLoans.reduce((sum, loan) => sum + loan.remainingBalance, 0);
+    
+    if (totalOutstandingDebt + args.amount > 500000000) {
+      throw new Error("Total outstanding debt would exceed maximum loan limit of $5,000,000");
     }
 
     const now = Date.now();
@@ -61,6 +79,11 @@ export const repayLoan = mutation({
     amount: v.number(), // in cents
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Prevent negative repayment amounts
+    if (args.amount <= 0) {
+      throw new Error("Repayment amount must be positive");
+    }
+
     const loan = await ctx.db.get(args.loanId);
     if (!loan) {
       throw new Error("Loan not found");
@@ -131,12 +154,21 @@ export const applyLoanInterest = mutation({
       const daysSinceLastInterest = (now - loan.lastInterestApplied) / oneDayMs;
 
       if (daysSinceLastInterest >= 1) {
+        // EXPLOIT FIX: Cap days to prevent interest overflow (max 365 days)
+        const cappedDays = Math.min(Math.floor(daysSinceLastInterest), 365);
+        
         const interestAmount = Math.floor(
-          loan.remainingBalance * (loan.interestRate / 100) * Math.floor(daysSinceLastInterest)
+          loan.remainingBalance * (loan.interestRate / 100) * cappedDays
         );
 
         const newBalance = loan.remainingBalance + interestAmount;
         const newAccruedInterest = loan.accruedInterest + interestAmount;
+
+        // EXPLOIT FIX: Validate calculations don't overflow
+        if (!Number.isSafeInteger(newBalance) || !Number.isSafeInteger(newAccruedInterest)) {
+          console.error(`Interest calculation overflow for loan ${loan._id}`);
+          continue; // Skip this loan to prevent corruption
+        }
 
         await ctx.db.patch(loan._id, {
           remainingBalance: newBalance,

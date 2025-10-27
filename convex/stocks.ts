@@ -12,12 +12,38 @@ export const buyStock = mutation({
     accountId: v.union(v.id("players"), v.id("companies")),
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Validate shares is positive and safe integer
+    if (args.shares <= 0) {
+      throw new Error("Number of shares must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.shares)) {
+      throw new Error("Number of shares is not a safe integer");
+    }
+
     const stock = await ctx.db.get(args.stockId);
     if (!stock) {
       throw new Error("Stock not found");
     }
 
+    // EXPLOIT FIX: Prevent buying more shares than total outstanding
+    const existingHoldings = await ctx.db
+      .query("userStockHoldings")
+      .withIndex("by_companyId", (q) => q.eq("companyId", stock.companyId))
+      .collect();
+    
+    const totalSharesHeld = existingHoldings.reduce((sum, h) => sum + h.shares, 0);
+    
+    if (totalSharesHeld + args.shares > stock.totalShares) {
+      throw new Error(`Cannot purchase ${args.shares} shares. Only ${stock.totalShares - totalSharesHeld} shares available.`);
+    }
+
     const totalCost = stock.price * args.shares;
+
+    // EXPLOIT FIX: Validate total cost is safe
+    if (!Number.isSafeInteger(totalCost)) {
+      throw new Error("Total cost calculation overflow");
+    }
 
     // Check balance based on account type and deduct
     if (args.accountType === "player") {
@@ -113,10 +139,11 @@ export const buyStock = mutation({
     const priceImpact = Math.min(buyPressure * 0.05, 0.1); // Max 10% impact per trade
     const newPrice = Math.floor(stock.price * (1 + priceImpact));
     
-    // Validate new price before updating
-    if (Number.isFinite(newPrice) && newPrice > 0 && newPrice !== stock.price) {
+    // EXPLOIT FIX: Validate new price is safe integer and reasonable
+    if (Number.isFinite(newPrice) && newPrice > 0 && Number.isSafeInteger(newPrice) && newPrice !== stock.price) {
       const newMarketCap = newPrice * stock.totalShares;
-      if (Number.isFinite(newMarketCap) && newMarketCap >= 0) {
+      // EXPLOIT FIX: Also validate market cap is safe integer
+      if (Number.isFinite(newMarketCap) && Number.isSafeInteger(newMarketCap) && newMarketCap >= 0) {
         await ctx.db.patch(args.stockId, {
           previousPrice: stock.price,
           price: newPrice,
@@ -150,6 +177,15 @@ export const sellStock = mutation({
     accountId: v.union(v.id("players"), v.id("companies")),
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Validate shares is positive and safe integer
+    if (args.shares <= 0) {
+      throw new Error("Number of shares must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.shares)) {
+      throw new Error("Number of shares is not a safe integer");
+    }
+
     const stock = await ctx.db.get(args.stockId);
     if (!stock) {
       throw new Error("Stock not found");
@@ -168,6 +204,11 @@ export const sellStock = mutation({
     }
 
     const totalValue = stock.price * args.shares;
+
+    // EXPLOIT FIX: Validate total value is safe
+    if (!Number.isSafeInteger(totalValue)) {
+      throw new Error("Total value calculation overflow");
+    }
 
     // Check if the company has enough balance to buy back the shares
     const stockCompany = await ctx.db.get(stock.companyId);

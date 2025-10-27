@@ -71,12 +71,26 @@ export const updateCompanyBalance = mutation({
     amount: v.number(), // in cents, can be negative
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Validate amount is safe integer
+    if (!Number.isSafeInteger(args.amount)) {
+      throw new Error("Amount is not a safe integer");
+    }
+
     const company = await ctx.db.get(args.companyId);
     if (!company) {
       throw new Error("Company not found");
     }
 
     const newBalance = company.balance + args.amount;
+
+    // EXPLOIT FIX: Validate new balance is safe and non-negative
+    if (!Number.isSafeInteger(newBalance)) {
+      throw new Error("Balance calculation overflow");
+    }
+
+    if (newBalance < 0) {
+      throw new Error("Insufficient company balance");
+    }
 
     await ctx.db.patch(args.companyId, {
       balance: newBalance,
@@ -95,6 +109,21 @@ export const makeCompanyPublic = mutation({
     totalShares: v.number(), // Only players set the number of shares
   },
   handler: async (ctx, args) => {
+    // EXPLOIT FIX: Validate total shares is positive and safe integer
+    if (args.totalShares <= 0) {
+      throw new Error("Total shares must be positive");
+    }
+
+    if (!Number.isSafeInteger(args.totalShares)) {
+      throw new Error("Total shares is not a safe integer");
+    }
+
+    // EXPLOIT FIX: Set reasonable max shares limit (prevent overflow in calculations)
+    const MAX_SHARES = 1000000000; // 1 billion shares max
+    if (args.totalShares > MAX_SHARES) {
+      throw new Error(`Total shares cannot exceed ${MAX_SHARES}`);
+    }
+
     const company = await ctx.db.get(args.companyId);
     if (!company) {
       throw new Error("Company not found");
@@ -106,10 +135,6 @@ export const makeCompanyPublic = mutation({
 
     if (company.isPublic) {
       throw new Error("Company is already public");
-    }
-
-    if (args.totalShares <= 0) {
-      throw new Error("Total shares must be positive");
     }
 
     // Check if ticker is already taken
@@ -124,8 +149,19 @@ export const makeCompanyPublic = mutation({
 
     // Market cap is always 5x the company balance
     const marketCap = company.balance * 5;
+
+    // EXPLOIT FIX: Validate market cap is safe
+    if (!Number.isSafeInteger(marketCap)) {
+      throw new Error("Market cap calculation overflow");
+    }
+
     // Share price is calculated from market cap and total shares
     const initialSharePrice = Math.floor(marketCap / args.totalShares);
+
+    // EXPLOIT FIX: Validate share price is positive
+    if (initialSharePrice <= 0) {
+      throw new Error("Invalid share price calculation - too many shares for market cap");
+    }
     const now = Date.now();
 
     // Update company
