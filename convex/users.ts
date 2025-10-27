@@ -33,6 +33,12 @@ export const upsertUser = mutation({
       return null;
     }
 
+    // Extract image from Clerk identity - it can come from picture_url or profileImageUrl
+    const clerkImage = 
+      (identity.picture_url as string) || 
+      (identity as any)?.profileImageUrl ||
+      undefined;
+
     // Check if user exists
     const existingUser = await ctx.db
       .query("users")
@@ -40,21 +46,27 @@ export const upsertUser = mutation({
       .unique();
 
     if (existingUser) {
-      // Update if needed
-      if (
-        existingUser.name !== identity.name ||
-        existingUser.email !== identity.email ||
-        existingUser.clerkUsername !== (identity.username as string) ||
-        existingUser.image !== (identity.picture_url as string)
-      ) {
-        await ctx.db.patch(existingUser._id, {
-          name: identity.name,
-          email: identity.email,
-          clerkUsername: (identity.username as string) ?? undefined,
-          image: (identity.picture_url as string) ?? undefined,
-        });
+      // Update if needed - always update image to ensure it's current
+      const updatedFields: Parameters<typeof ctx.db.patch>[1] = {
+        name: identity.name,
+        email: identity.email,
+        clerkUsername: (identity.username as string) ?? undefined,
+        image: clerkImage ?? undefined,
+      };
+
+      // Only patch if something has changed
+      const hasChanges = 
+        existingUser.name !== updatedFields.name ||
+        existingUser.email !== updatedFields.email ||
+        existingUser.clerkUsername !== updatedFields.clerkUsername ||
+        existingUser.image !== updatedFields.image;
+
+      if (hasChanges) {
+        await ctx.db.patch(existingUser._id, updatedFields);
       }
-      return existingUser;
+      
+      // Return updated user data
+      return await ctx.db.get(existingUser._id);
     }
 
     // Create new user
@@ -62,7 +74,7 @@ export const upsertUser = mutation({
       name: identity.name,
       email: identity.email,
       clerkUsername: (identity.username as string) ?? undefined,
-      image: (identity.picture_url as string) ?? undefined,
+      image: clerkImage ?? undefined,
       tokenIdentifier: identity.subject,
     });
 

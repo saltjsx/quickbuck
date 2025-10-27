@@ -1,3 +1,4 @@
+import { useState, useRef, useEffect } from "react";
 import { Avatar, AvatarImage, AvatarFallback } from "./avatar";
 import { cn } from "~/lib/utils";
 
@@ -24,6 +25,16 @@ export function UserAvatar({
   className,
   size = "sm",
 }: UserAvatarProps) {
+  const [imageError, setImageError] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const imgRef = useRef<HTMLImageElement>(null);
+
+  // Reset error state when src changes
+  useEffect(() => {
+    setImageError(false);
+    setIsLoading(true);
+  }, [src]);
+
   // Extract initials from alt text if fallback not provided
   const fallbackText =
     fallback ||
@@ -34,9 +45,30 @@ export function UserAvatar({
       .toUpperCase()
       .slice(0, 2);
 
+  // Only show image if src is valid and no error occurred
+  const shouldShowImage = src && !imageError;
+
+  const handleImageLoad = () => {
+    setIsLoading(false);
+  };
+
+  const handleImageError = () => {
+    console.warn(`Failed to load image for user: ${alt} (${src})`);
+    setImageError(true);
+    setIsLoading(false);
+  };
+
   return (
     <Avatar className={cn(sizeClasses[size], className)}>
-      {src && <AvatarImage src={src} alt={alt} />}
+      {shouldShowImage && (
+        <AvatarImage
+          ref={imgRef}
+          src={src}
+          alt={alt}
+          onLoad={handleImageLoad}
+          onError={handleImageError}
+        />
+      )}
       <AvatarFallback>{fallbackText}</AvatarFallback>
     </Avatar>
   );
