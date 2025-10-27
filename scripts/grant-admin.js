@@ -1,6 +1,7 @@
 import { ConvexHttpClient } from "convex/browser";
 
-const CONVEX_URL = process.env.VITE_CONVEX_URL || "https://exuberant-donkey-345.convex.cloud";
+const CONVEX_URL =
+  process.env.VITE_CONVEX_URL || "https://exuberant-donkey-345.convex.cloud";
 const clerkId = process.argv[2];
 
 if (!clerkId) {

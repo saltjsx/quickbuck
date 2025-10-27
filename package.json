@@ -11,8 +11,7 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
-    "scheduler": "node scripts/local-scheduler.js"
-    ,
+    "scheduler": "node scripts/local-scheduler.js",
     "reset:db": "node scripts/reset-all.js"
   },
   "dependencies": {
