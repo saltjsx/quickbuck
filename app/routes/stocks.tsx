@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { CompanyLogo } from "~/components/ui/company-logo";
 import { formatCurrency } from "~/lib/game-utils";
 import { useNavigate } from "react-router";
 import { TrendingUp, TrendingDown, Search, Building2 } from "lucide-react";
@@ -47,10 +48,13 @@ export default function StockMarketPage() {
     "price-asc" | "price-desc" | "marketcap-asc" | "marketcap-desc" | "newest"
   >("marketcap-desc");
 
-  // Get company name
-  const getCompanyName = (companyId: Id<"companies">) => {
+  // Get company details
+  const getCompanyDetails = (companyId: Id<"companies">) => {
     const company = allCompanies?.find((c) => c._id === companyId);
-    return company?.name || "Unknown Company";
+    return {
+      name: company?.name || "Unknown Company",
+      logo: company?.logo,
+    };
   };
 
   // Calculate price change percentage
@@ -178,6 +182,7 @@ export default function StockMarketPage() {
               {filteredStocks.map((stock) => {
                 const priceChange = calculatePriceChange(stock);
                 const isPositive = priceChange >= 0;
+                const company = getCompanyDetails(stock.companyId);
 
                 return (
                   <Card
@@ -187,7 +192,7 @@ export default function StockMarketPage() {
                   >
                     <CardHeader className="pb-3">
                       <div className="flex items-start justify-between">
-                        <div className="space-y-1">
+                        <div className="space-y-1 flex-1">
                           <div className="flex items-center gap-2">
                             <Badge
                               variant="outline"
@@ -197,10 +202,14 @@ export default function StockMarketPage() {
                             </Badge>
                           </div>
                           <p className="text-sm text-muted-foreground">
-                            {getCompanyName(stock.companyId)}
+                            {company.name}
                           </p>
                         </div>
-                        <Building2 className="h-8 w-8 text-muted-foreground" />
+                        <CompanyLogo
+                          src={company.logo}
+                          alt={company.name}
+                          size="md"
+                        />
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">

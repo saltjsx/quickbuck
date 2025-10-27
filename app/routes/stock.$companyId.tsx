@@ -26,6 +26,7 @@ import {
 } from "~/components/ui/table";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
+import { CompanyLogo } from "~/components/ui/company-logo";
 import {
   Building2,
   TrendingUp,
@@ -274,21 +275,25 @@ export default function StockDetailPage() {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div className="flex items-center gap-3">
-                <Building2 className="h-12 w-12 text-muted-foreground" />
+                <CompanyLogo
+                  src={company?.logo}
+                  alt={company?.name || "Company"}
+                  size="lg"
+                />
                 <div>
                   <div className="flex items-center gap-2">
                     <Badge
                       variant="outline"
                       className="font-mono text-lg font-bold"
                     >
-                      {stock.ticker}
+                      {stock?.ticker}
                     </Badge>
-                    {company.isPublic && (
+                    {company?.isPublic && (
                       <Badge variant="default">Public</Badge>
                     )}
                   </div>
                   <h1 className="text-3xl font-bold tracking-tight">
-                    {company.name}
+                    {company?.name}
                   </h1>
                 </div>
               </div>

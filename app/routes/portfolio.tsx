@@ -14,6 +14,8 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { CompanyLogo } from "~/components/ui/company-logo";
+import { UserAvatar } from "~/components/ui/user-avatar";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
 import {
@@ -107,7 +109,6 @@ export default function PortfolioPage() {
       ? stockHoldings
           .map((holding) => {
             const stock = allStocks.find((s) => s._id === holding.stockId);
-            // Fetch company via stock companyId
             return { holding, stock };
           })
           .filter((item) => item.stock)
@@ -142,7 +143,6 @@ export default function PortfolioPage() {
 
   const totalNetWorth = playerData?.netWorth || 0;
 
-  // Sort functions
   const sortStocks = (data: typeof stocksWithDetails) => {
     if (!data) return [];
     return [...data].sort((a, b) => {
@@ -289,7 +289,14 @@ export default function PortfolioPage() {
                           }
                         >
                           <TableCell className="font-medium">
-                            {item.stock?.ticker}
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className="font-mono">
+                                {item.stock?.ticker}
+                              </Badge>
+                              <div className="flex flex-col">
+                                <span className="text-sm">Stock</span>
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className="font-mono">
@@ -394,7 +401,16 @@ export default function PortfolioPage() {
                           }
                         >
                           <TableCell className="font-medium">
-                            {item.crypto?.name}
+                            <div className="flex items-center gap-2">
+                              {item.crypto?.image && (
+                                <img
+                                  src={item.crypto.image}
+                                  alt={item.crypto.name}
+                                  className="h-8 w-8 rounded"
+                                />
+                              )}
+                              {item.crypto?.name}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline" className="font-mono">
@@ -461,7 +477,11 @@ export default function PortfolioPage() {
                         <TableCell className="font-medium">
                           {item.productName}
                         </TableCell>
-                        <TableCell>{item.companyName}</TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            {item.companyName}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-right">
                           {item.quantity}
                         </TableCell>

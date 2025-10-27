@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { CompanyLogo } from "~/components/ui/company-logo";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
 import {
@@ -269,7 +270,14 @@ export default function CompanySalesPage() {
                     {companiesWithDetails.map((item) => (
                       <TableRow key={item.sale._id}>
                         <TableCell className="font-medium">
-                          {item.company?.name}
+                          <div className="flex items-center gap-2">
+                            <CompanyLogo
+                              src={item.company?.logo}
+                              alt={item.company?.name || "Company"}
+                              size="xs"
+                            />
+                            {item.company?.name}
+                          </div>
                         </TableCell>
                         <TableCell>
                           {item.company?.ticker ? (
@@ -337,7 +345,14 @@ export default function CompanySalesPage() {
                     {offersWithDetails.map((item) => (
                       <TableRow key={item.offer._id}>
                         <TableCell className="font-medium">
-                          {item.company?.name}
+                          <div className="flex items-center gap-2">
+                            <CompanyLogo
+                              src={item.company?.logo}
+                              alt={item.company?.name || "Company"}
+                              size="xs"
+                            />
+                            {item.company?.name}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <Badge

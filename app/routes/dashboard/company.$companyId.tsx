@@ -27,6 +27,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { Badge } from "~/components/ui/badge";
+import { CompanyLogo } from "~/components/ui/company-logo";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
 import {
@@ -347,7 +348,7 @@ export default function CompanyDashboardPage() {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div className="flex items-center gap-3">
-                <Building2 className="h-12 w-12 text-muted-foreground" />
+                <CompanyLogo src={company.logo} alt={company.name} size="lg" />
                 <div>
                   <h1 className="text-3xl font-bold tracking-tight">
                     {company.name}

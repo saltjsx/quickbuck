@@ -13,12 +13,24 @@
       "routes/home": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/sign-in": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/sign-up": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/pricing": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/success": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/subscription-required": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard/index": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/dashboard/chat": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/dashboard/settings": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0"
+      "routes/leaderboard": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/marketplace": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/stocks": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/stock.$companyId": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/crypto": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/crypto.$cryptoId": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/portfolio": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/company-sales": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/gamble": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/upgrades": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard/accounts": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard/transfers": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard/transactions": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard/loans": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard/companies": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard/company.$companyId": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0"
     },
     "routes": {
       "root": {
@@ -54,29 +66,11 @@
           "runtime": "nodejs"
         }
       },
-      "routes/pricing": {
-        "id": "routes/pricing",
-        "parentId": "root",
-        "file": "app/routes/pricing.tsx",
-        "path": "pricing",
-        "config": {
-          "runtime": "nodejs"
-        }
-      },
       "routes/success": {
         "id": "routes/success",
         "parentId": "root",
         "file": "app/routes/success.tsx",
         "path": "success",
-        "config": {
-          "runtime": "nodejs"
-        }
-      },
-      "routes/subscription-required": {
-        "id": "routes/subscription-required",
-        "parentId": "root",
-        "file": "app/routes/subscription-required.tsx",
-        "path": "subscription-required",
         "config": {
           "runtime": "nodejs"
         }
@@ -96,20 +90,146 @@
           "runtime": "nodejs"
         }
       },
-      "routes/dashboard/chat": {
-        "id": "routes/dashboard/chat",
+      "routes/leaderboard": {
+        "id": "routes/leaderboard",
         "parentId": "routes/dashboard/layout",
-        "file": "app/routes/dashboard/chat.tsx",
-        "path": "dashboard/chat",
+        "file": "app/routes/leaderboard.tsx",
+        "path": "leaderboard",
         "config": {
           "runtime": "nodejs"
         }
       },
-      "routes/dashboard/settings": {
-        "id": "routes/dashboard/settings",
+      "routes/marketplace": {
+        "id": "routes/marketplace",
         "parentId": "routes/dashboard/layout",
-        "file": "app/routes/dashboard/settings.tsx",
-        "path": "dashboard/settings",
+        "file": "app/routes/marketplace.tsx",
+        "path": "marketplace",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/stocks": {
+        "id": "routes/stocks",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/stocks.tsx",
+        "path": "stocks",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/stock.$companyId": {
+        "id": "routes/stock.$companyId",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/stock.$companyId.tsx",
+        "path": "stock/:companyId",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/crypto": {
+        "id": "routes/crypto",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/crypto.tsx",
+        "path": "crypto",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/crypto.$cryptoId": {
+        "id": "routes/crypto.$cryptoId",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/crypto.$cryptoId.tsx",
+        "path": "crypto/:cryptoId",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/portfolio": {
+        "id": "routes/portfolio",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/portfolio.tsx",
+        "path": "portfolio",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/company-sales": {
+        "id": "routes/company-sales",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/company-sales.tsx",
+        "path": "company-sales",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/gamble": {
+        "id": "routes/gamble",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/gamble.tsx",
+        "path": "gamble",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/upgrades": {
+        "id": "routes/upgrades",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/upgrades.tsx",
+        "path": "upgrades",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard/accounts": {
+        "id": "routes/dashboard/accounts",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/dashboard/accounts.tsx",
+        "path": "accounts",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard/transfers": {
+        "id": "routes/dashboard/transfers",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/dashboard/transfers.tsx",
+        "path": "transfers",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard/transactions": {
+        "id": "routes/dashboard/transactions",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/dashboard/transactions.tsx",
+        "path": "transactions",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard/loans": {
+        "id": "routes/dashboard/loans",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/dashboard/loans.tsx",
+        "path": "loans",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard/companies": {
+        "id": "routes/dashboard/companies",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/dashboard/companies.tsx",
+        "path": "companies",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/dashboard/company.$companyId": {
+        "id": "routes/dashboard/company.$companyId",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/dashboard/company.$companyId.tsx",
+        "path": "company/:companyId",
         "config": {
           "runtime": "nodejs"
         }
@@ -117,9 +237,9 @@
     }
   },
   "reactRouterConfig": {
-    "appDirectory": "/Users/michaelshimeles/Desktop/rsk/app",
+    "appDirectory": "/Users/abdul/Documents/quickbuck-v1b/app",
     "basename": "/",
-    "buildDirectory": "/Users/michaelshimeles/Desktop/rsk/build",
+    "buildDirectory": "/Users/abdul/Documents/quickbuck-v1b/build",
     "future": {
       "unstable_middleware": false,
       "unstable_optimizeDeps": false,
@@ -151,23 +271,11 @@
         "file": "routes/sign-up.tsx",
         "path": "sign-up/*"
       },
-      "routes/pricing": {
-        "id": "routes/pricing",
-        "parentId": "root",
-        "file": "routes/pricing.tsx",
-        "path": "pricing"
-      },
       "routes/success": {
         "id": "routes/success",
         "parentId": "root",
         "file": "routes/success.tsx",
         "path": "success"
-      },
-      "routes/subscription-required": {
-        "id": "routes/subscription-required",
-        "parentId": "root",
-        "file": "routes/subscription-required.tsx",
-        "path": "subscription-required"
       },
       "routes/dashboard/layout": {
         "id": "routes/dashboard/layout",
@@ -180,17 +288,101 @@
         "file": "routes/dashboard/index.tsx",
         "path": "dashboard"
       },
-      "routes/dashboard/chat": {
-        "id": "routes/dashboard/chat",
+      "routes/leaderboard": {
+        "id": "routes/leaderboard",
         "parentId": "routes/dashboard/layout",
-        "file": "routes/dashboard/chat.tsx",
-        "path": "dashboard/chat"
+        "file": "routes/leaderboard.tsx",
+        "path": "leaderboard"
       },
-      "routes/dashboard/settings": {
-        "id": "routes/dashboard/settings",
+      "routes/marketplace": {
+        "id": "routes/marketplace",
         "parentId": "routes/dashboard/layout",
-        "file": "routes/dashboard/settings.tsx",
-        "path": "dashboard/settings"
+        "file": "routes/marketplace.tsx",
+        "path": "marketplace"
+      },
+      "routes/stocks": {
+        "id": "routes/stocks",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/stocks.tsx",
+        "path": "stocks"
+      },
+      "routes/stock.$companyId": {
+        "id": "routes/stock.$companyId",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/stock.$companyId.tsx",
+        "path": "stock/:companyId"
+      },
+      "routes/crypto": {
+        "id": "routes/crypto",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/crypto.tsx",
+        "path": "crypto"
+      },
+      "routes/crypto.$cryptoId": {
+        "id": "routes/crypto.$cryptoId",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/crypto.$cryptoId.tsx",
+        "path": "crypto/:cryptoId"
+      },
+      "routes/portfolio": {
+        "id": "routes/portfolio",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/portfolio.tsx",
+        "path": "portfolio"
+      },
+      "routes/company-sales": {
+        "id": "routes/company-sales",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/company-sales.tsx",
+        "path": "company-sales"
+      },
+      "routes/gamble": {
+        "id": "routes/gamble",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/gamble.tsx",
+        "path": "gamble"
+      },
+      "routes/upgrades": {
+        "id": "routes/upgrades",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/upgrades.tsx",
+        "path": "upgrades"
+      },
+      "routes/dashboard/accounts": {
+        "id": "routes/dashboard/accounts",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/dashboard/accounts.tsx",
+        "path": "accounts"
+      },
+      "routes/dashboard/transfers": {
+        "id": "routes/dashboard/transfers",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/dashboard/transfers.tsx",
+        "path": "transfers"
+      },
+      "routes/dashboard/transactions": {
+        "id": "routes/dashboard/transactions",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/dashboard/transactions.tsx",
+        "path": "transactions"
+      },
+      "routes/dashboard/loans": {
+        "id": "routes/dashboard/loans",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/dashboard/loans.tsx",
+        "path": "loans"
+      },
+      "routes/dashboard/companies": {
+        "id": "routes/dashboard/companies",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/dashboard/companies.tsx",
+        "path": "companies"
+      },
+      "routes/dashboard/company.$companyId": {
+        "id": "routes/dashboard/company.$companyId",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/dashboard/company.$companyId.tsx",
+        "path": "company/:companyId"
       }
     },
     "routeDiscovery": {

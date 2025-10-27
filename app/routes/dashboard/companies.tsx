@@ -24,6 +24,7 @@ import {
   DialogTrigger,
 } from "~/components/ui/dialog";
 import { Badge } from "~/components/ui/badge";
+import { CompanyLogo } from "~/components/ui/company-logo";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
 import { useNavigate } from "react-router";
@@ -363,7 +364,7 @@ export default function ManageCompaniesPage() {
                 <Card key={company._id} className="overflow-hidden">
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between">
-                      <div className="space-y-1">
+                      <div className="space-y-1 flex-1">
                         <CardTitle className="text-lg">
                           {company.name}
                         </CardTitle>
@@ -383,7 +384,11 @@ export default function ManageCompaniesPage() {
                           </div>
                         )}
                       </div>
-                      <Building2 className="h-8 w-8 text-muted-foreground" />
+                      <CompanyLogo
+                        src={company.logo}
+                        alt={company.name}
+                        size="md"
+                      />
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">

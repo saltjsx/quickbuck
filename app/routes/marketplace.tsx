@@ -31,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "~/components/ui/dialog";
+import { CompanyLogo } from "~/components/ui/company-logo";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
 import { ShoppingCart, Package, Search, Trash2 } from "lucide-react";
@@ -151,10 +152,13 @@ export default function MarketplacePage() {
     return filtered;
   }, [allProducts, searchQuery, selectedCompany, minPrice, maxPrice, sortBy]);
 
-  // Get company name
-  const getCompanyName = (companyId: Id<"companies">) => {
+  // Get company details
+  const getCompanyDetails = (companyId: Id<"companies">) => {
     const company = allCompanies?.find((c) => c._id === companyId);
-    return company?.name || "Unknown";
+    return {
+      name: company?.name || "Unknown",
+      logo: company?.logo,
+    };
   };
 
   // Handle add to cart
@@ -303,7 +307,14 @@ export default function MarketplacePage() {
                       <SelectItem value="all">All companies</SelectItem>
                       {allCompanies?.map((company) => (
                         <SelectItem key={company._id} value={company._id}>
-                          {company.name}
+                          <div className="flex items-center gap-2">
+                            <CompanyLogo
+                              src={company.logo}
+                              alt={company.name}
+                              size="xs"
+                            />
+                            {company.name}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -379,15 +390,19 @@ export default function MarketplacePage() {
                 <Card key={product._id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
-                      <div className="space-y-1">
+                      <div className="space-y-1 flex-1">
                         <CardTitle className="text-lg">
                           {product.name}
                         </CardTitle>
                         <p className="text-sm text-muted-foreground">
-                          {getCompanyName(product.companyId)}
+                          {getCompanyDetails(product.companyId).name}
                         </p>
                       </div>
-                      <Package className="h-8 w-8 text-muted-foreground" />
+                      <CompanyLogo
+                        src={getCompanyDetails(product.companyId).logo}
+                        alt={getCompanyDetails(product.companyId).name}
+                        size="md"
+                      />
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">

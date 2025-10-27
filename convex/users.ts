@@ -44,12 +44,14 @@ export const upsertUser = mutation({
       if (
         existingUser.name !== identity.name ||
         existingUser.email !== identity.email ||
-        existingUser.clerkUsername !== (identity.username as string)
+        existingUser.clerkUsername !== (identity.username as string) ||
+        existingUser.image !== (identity.picture_url as string)
       ) {
         await ctx.db.patch(existingUser._id, {
           name: identity.name,
           email: identity.email,
           clerkUsername: (identity.username as string) ?? undefined,
+          image: (identity.picture_url as string) ?? undefined,
         });
       }
       return existingUser;
@@ -60,6 +62,7 @@ export const upsertUser = mutation({
       name: identity.name,
       email: identity.email,
       clerkUsername: (identity.username as string) ?? undefined,
+      image: (identity.picture_url as string) ?? undefined,
       tokenIdentifier: identity.subject,
     });
 

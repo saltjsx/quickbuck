@@ -25,6 +25,7 @@ export const getTopPlayersByBalance = query({
           ...player,
           userName: user?.name || "Anonymous",
           userEmail: user?.email,
+          userImage: user?.image,
         };
       })
     );
@@ -53,6 +54,7 @@ export const getTopPlayersByNetWorth = query({
           ...player,
           userName: user?.name || "Anonymous",
           userEmail: user?.email,
+          userImage: user?.image,
         };
       })
     );
@@ -82,6 +84,7 @@ export const getTopCompaniesByMarketCap = query({
         return {
           ...company,
           ownerName: ownerUser?.name || "Anonymous",
+          ownerImage: ownerUser?.image,
         };
       })
     );
@@ -110,6 +113,7 @@ export const getTopCompaniesByBalance = query({
         return {
           ...company,
           ownerName: ownerUser?.name || "Anonymous",
+          ownerImage: ownerUser?.image,
         };
       })
     );
@@ -146,6 +150,7 @@ export const getAllPlayersSorted = query({
           ...player,
           userName: user?.name || "Anonymous",
           userEmail: user?.email,
+          userImage: user?.image,
           rank: offset + index + 1,
         };
       })
@@ -190,6 +195,7 @@ export const getAllCompaniesSorted = query({
         return {
           ...company,
           ownerName: ownerUser?.name || "Anonymous",
+          ownerImage: ownerUser?.image,
           rank: offset + index + 1,
         };
       })
@@ -226,6 +232,7 @@ export const getAllProductsSorted = query({
         return {
           ...product,
           companyName: company?.name || "Unknown",
+          companyLogo: company?.logo,
           ticker: company?.ticker || "N/A",
           rank: offset + index + 1,
         };
@@ -297,6 +304,7 @@ export const searchCompanies = query({
         return {
           ...company,
           ownerName: ownerUser?.name || "Anonymous",
+          ownerImage: ownerUser?.image,
         };
       })
     );
@@ -323,6 +331,7 @@ export const searchProducts = query({
         return {
           ...product,
           companyName: company?.name || "Unknown",
+          companyLogo: company?.logo,
           ticker: company?.ticker || "N/A",
         };
       })
