@@ -2,6 +2,58 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
+// Helper function to calculate net worth (includes company equity)
+// Exported so it can be reused in other modules like leaderboard.ts
+export async function calculateNetWorth(ctx: any, playerId: Id<"players">) {
+  const player = await ctx.db.get(playerId);
+  if (!player) return 0;
+
+  let netWorth = player.balance;
+
+  // Add stock holdings value
+  const stockHoldings = await ctx.db
+    .query("userStockHoldings")
+    .withIndex("by_userId", (q: any) => q.eq("userId", playerId))
+    .collect();
+
+  for (const holding of stockHoldings) {
+    const stock = await ctx.db.get(holding.stockId);
+    if (stock) {
+      netWorth += holding.shares * stock.price;
+    }
+  }
+
+  // Add crypto holdings value
+  const cryptoHoldings = await ctx.db
+    .query("userCryptoHoldings")
+    .withIndex("by_userId", (q: any) => q.eq("userId", playerId))
+    .collect();
+
+  for (const holding of cryptoHoldings) {
+    const crypto = await ctx.db.get(holding.cryptoId);
+    if (crypto) {
+      netWorth += holding.amount * crypto.price;
+    }
+  }
+
+  // Add company equity (owned companies)
+  const companies = await ctx.db
+    .query("companies")
+    .withIndex("by_ownerId", (q: any) => q.eq("ownerId", playerId))
+    .collect();
+
+  for (const company of companies) {
+    // Add company balance (cash)
+    netWorth += company.balance;
+    // Add company market cap for public companies
+    if (company.isPublic && company.marketCap) {
+      netWorth += company.marketCap;
+    }
+  }
+
+  return netWorth;
+}
+
 // Mutation: Create a new player
 export const createPlayer = mutation({
   args: {
@@ -116,7 +168,7 @@ export const getPlayer = query({
     const player = await ctx.db.get(args.playerId);
     if (!player) return null;
 
-    // Calculate current net worth on the fly
+    // Calculate current net worth on the fly (including company equity)
     const netWorth = await calculateNetWorth(ctx, args.playerId);
     
     // Return player with calculated net worth
@@ -147,55 +199,6 @@ export const getPlayerBalance = query({
     return player?.balance ?? 0;
   },
 });
-
-// Helper function to calculate net worth
-async function calculateNetWorth(ctx: any, playerId: Id<"players">) {
-  const player = await ctx.db.get(playerId);
-  if (!player) return 0;
-
-  let netWorth = player.balance;
-
-  // Add stock holdings value
-  const stockHoldings = await ctx.db
-    .query("userStockHoldings")
-    .withIndex("by_userId", (q: any) => q.eq("userId", playerId))
-    .collect();
-
-  for (const holding of stockHoldings) {
-    const stock = await ctx.db.get(holding.stockId);
-    if (stock) {
-      netWorth += holding.shares * stock.price;
-    }
-  }
-
-  // Add crypto holdings value
-  const cryptoHoldings = await ctx.db
-    .query("userCryptoHoldings")
-    .withIndex("by_userId", (q: any) => q.eq("userId", playerId))
-    .collect();
-
-  for (const holding of cryptoHoldings) {
-    const crypto = await ctx.db.get(holding.cryptoId);
-    if (crypto) {
-      netWorth += holding.amount * crypto.price;
-    }
-  }
-
-  // Add company ownership value
-  const companies = await ctx.db
-    .query("companies")
-    .withIndex("by_ownerId", (q: any) => q.eq("ownerId", playerId))
-    .collect();
-
-  for (const company of companies) {
-    netWorth += company.balance;
-    if (company.isPublic && company.marketCap) {
-      netWorth += company.marketCap;
-    }
-  }
-
-  return netWorth;
-}
 
 // Query: Get player net worth (calculated from all assets)
 export const getPlayerNetWorth = query({

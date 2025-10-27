@@ -18,16 +18,22 @@ export default function AccountsPage() {
     clerkUserId ? { tokenIdentifier: clerkUserId } : "skip"
   );
 
-  // Fetch player data
-  const player = useQuery(
+  // Fetch player data (gets static ID)
+  const playerBasic = useQuery(
     api.players.getPlayerByUserId,
     user ? { userId: user._id as Id<"users"> } : "skip"
+  );
+
+  // Fetch player with calculated net worth (includes company equity)
+  const player = useQuery(
+    api.players.getPlayer,
+    playerBasic?._id ? { playerId: playerBasic._id } : "skip"
   );
 
   // Fetch companies owned by player
   const companies = useQuery(
     api.companies.getPlayerCompanies,
-    player?._id ? { playerId: player._id } : "skip"
+    playerBasic?._id ? { playerId: playerBasic._id } : "skip"
   );
 
   // Calculate total company assets

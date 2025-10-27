@@ -1,9 +1,18 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
+import { calculateNetWorth } from "./players";
 
 /**
  * Leaderboard query functions for top players and companies
+ * 
+ * Net worth calculation includes:
+ * - Player cash balance
+ * - Stock holdings value
+ * - Crypto holdings value
+ * - Company equity (balance + market cap for public companies)
  */
+
+
 
 // Top 5 players by balance
 export const getTopPlayersByBalance = query({
@@ -41,8 +50,16 @@ export const getTopPlayersByNetWorth = query({
     const { limit = 5 } = args;
     const players = await ctx.db.query("players").collect();
     
+    // Calculate net worth for all players (including company equity)
+    const playersWithNetWorth = await Promise.all(
+      players.map(async (player) => {
+        const netWorth = await calculateNetWorth(ctx, player._id);
+        return { ...player, netWorth };
+      })
+    );
+
     // Sort by net worth descending and take top N
-    const sorted = players
+    const sorted = playersWithNetWorth
       .sort((a, b) => b.netWorth - a.netWorth)
       .slice(0, limit);
 
@@ -133,11 +150,20 @@ export const getAllPlayersSorted = query({
     const { sortBy = "netWorth", limit = 50, offset = 0 } = args;
     const players = await ctx.db.query("players").collect();
 
-    // Sort players
-    const sorted = players.sort((a, b) => {
-      const field = sortBy as keyof typeof a;
-      return (b[field] as number) - (a[field] as number);
-    });
+    let sorted;
+
+    if (sortBy === "balance") {
+      sorted = players.sort((a, b) => b.balance - a.balance);
+    } else {
+      // For netWorth, calculate it for each player (including company equity)
+      const playersWithNetWorth = await Promise.all(
+        players.map(async (player) => {
+          const netWorth = await calculateNetWorth(ctx, player._id);
+          return { ...player, netWorth };
+        })
+      );
+      sorted = playersWithNetWorth.sort((a, b) => b.netWorth - a.netWorth);
+    }
 
     // Apply pagination
     const paginated = sorted.slice(offset, offset + limit);
@@ -264,12 +290,16 @@ export const searchPlayers = query({
         const players = await ctx.db.query("players").collect();
         const player = players.find((p) => p.userId === user._id);
 
-        return player
-          ? {
-              ...player,
-              userName: user.name || "Anonymous",
-            }
-          : null;
+        if (!player) return null;
+
+        // Calculate net worth including company equity
+        const netWorth = await calculateNetWorth(ctx, player._id);
+
+        return {
+          ...player,
+          netWorth,
+          userName: user.name || "Anonymous",
+        };
       })
     );
 
