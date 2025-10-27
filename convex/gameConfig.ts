@@ -83,3 +83,77 @@ export const getAllConfig = query({
     return await ctx.db.query("gameConfig").collect();
   },
 });
+
+// Admins management (simple list of Clerk user IDs)
+export const addAdmin = mutation({
+  args: {
+    clerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("gameConfig")
+      .withIndex("by_key", (q) => q.eq("key", "admins"))
+      .unique();
+
+    if (existing) {
+      const admins = Array.isArray(existing.value) ? existing.value : [];
+      if (!admins.includes(args.clerkId)) {
+        admins.push(args.clerkId);
+        await ctx.db.patch(existing._id, {
+          value: admins,
+          updatedAt: Date.now(),
+        });
+      }
+    } else {
+      await ctx.db.insert("gameConfig", {
+        key: "admins",
+        value: [args.clerkId],
+        updatedAt: Date.now(),
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+export const removeAdmin = mutation({
+  args: {
+    clerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("gameConfig")
+      .withIndex("by_key", (q) => q.eq("key", "admins"))
+      .unique();
+
+    if (!existing) return { success: false };
+
+    const admins = Array.isArray(existing.value) ? existing.value : [];
+    const idx = admins.indexOf(args.clerkId);
+    if (idx !== -1) {
+      admins.splice(idx, 1);
+      await ctx.db.patch(existing._id, {
+        value: admins,
+        updatedAt: Date.now(),
+      });
+    }
+
+    return { success: true };
+  },
+});
+
+export const isAdmin = query({
+  args: {
+    clerkId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("gameConfig")
+      .withIndex("by_key", (q) => q.eq("key", "admins"))
+      .unique();
+
+    if (!existing) return false;
+    const admins = Array.isArray(existing.value) ? existing.value : [];
+    return admins.includes(args.clerkId);
+  },
+});
