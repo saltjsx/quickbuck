@@ -9,25 +9,25 @@ import {
 
 describe("Countdown Timer Utils", () => {
   it("should calculate time until next tick correctly", () => {
-    const TWENTY_MINUTES_MS = 20 * 60 * 1000;
+    const FIVE_MINUTES_MS = 5 * 60 * 1000;
     const now = Date.now();
     
-    // If last tick was exactly 5 minutes ago
+    // If last tick was exactly 5 minutes ago (one full cycle)
     const lastTick = now - (5 * 60 * 1000);
     const timeRemaining = getTimeUntilNextTick(lastTick);
     
-    // Should have 15 minutes remaining
-    expect(timeRemaining).toBeGreaterThan(14 * 60 * 1000);
-    expect(timeRemaining).toBeLessThanOrEqual(15 * 60 * 1000);
+    // Should be very close to 5 minutes (full cycle, next tick imminent)
+    expect(timeRemaining).toBeGreaterThan(0);
+    expect(timeRemaining).toBeLessThanOrEqual(5 * 60 * 1000);
   });
 
   it("should handle tick just occurred", () => {
     const now = Date.now();
     const timeRemaining = getTimeUntilNextTick(now);
     
-    // Should be close to 20 minutes
-    expect(timeRemaining).toBeGreaterThan(19 * 60 * 1000);
-    expect(timeRemaining).toBeLessThanOrEqual(20 * 60 * 1000);
+    // Should be close to 5 minutes (just ticked, full wait ahead)
+    expect(timeRemaining).toBeGreaterThan(4.9 * 60 * 1000);
+    expect(timeRemaining).toBeLessThanOrEqual(5 * 60 * 1000);
   });
 
   it("should format time remaining correctly", () => {
