@@ -378,28 +378,44 @@ async function updateCryptoPrices(ctx: any) {
         continue;
       }
       
-      // Simplified crypto price movement (higher volatility than stocks)
-      const volatility = Math.max(0, crypto.volatilityEst || 1.2); // Higher default
-      const tickVolatility = volatility / Math.sqrt(105120);
+      // HIGHLY VOLATILE crypto price movement (much more than stocks)
+      // Cryptos should swing wildly every tick
+      const baseVolatility = crypto.volatilityEst || 2.5; // Much higher default than stocks
       
-      // Random walk with no mean reversion (crypto is more speculative)
-      const randomFactor = 1 + tickVolatility * (Math.random() * 2 - 1) * 2; // 2x multiplier
+      // Add sentiment and random factors
+      const sentiment = crypto.sentiment || 0; // -1 to 1
+      const newsScore = crypto.newsScore || 0; // -0.2 to 0.2
       
-      let newPrice = Math.floor(currentPrice * randomFactor);
+      // Random walk with high variance
+      const randomFactor = (Math.random() - 0.5) * 2; // -1 to 1
       
-      // Validate newPrice before clamping
+      // Combine factors for very volatile movement
+      // Can swing ±15% per tick on average, up to ±40% in extreme cases
+      const sentimentBias = sentiment * 0.05; // ±5% from sentiment
+      const newsBias = newsScore; // ±20% from news
+      const volatilityFactor = baseVolatility * 0.08; // 20% of volatility as base movement
+      
+      const totalChange = sentimentBias + newsBias + (randomFactor * volatilityFactor);
+      
+      // Apply change with wide bounds
+      const changePercent = Math.max(-0.4, Math.min(0.4, totalChange)); // -40% to +40%
+      let newPrice = Math.floor(currentPrice * (1 + changePercent));
+      
+      // Validate newPrice
       if (!Number.isFinite(newPrice)) {
         console.warn(`Skipping crypto ${crypto._id}: calculated price is NaN`);
         continue;
       }
       
-      // Clamp to reasonable range (max 30% change per tick)
-      newPrice = Math.max(
-        Math.floor(currentPrice * 0.7),
-        Math.min(Math.floor(currentPrice * 1.3), newPrice)
-      );
-      
+      // Ensure minimum price
       newPrice = Math.max(1, newPrice); // Min $0.01
+      
+      // Add occasional "pump or dump" events (5% chance of extreme move)
+      if (Math.random() < 0.05) {
+        const pumpOrDump = Math.random() < 0.5 ? 1.5 : 0.6; // +50% or -40%
+        newPrice = Math.floor(newPrice * pumpOrDump);
+        newPrice = Math.max(1, newPrice);
+      }
       
       // Final validation
       if (!Number.isFinite(newPrice) || newPrice <= 0) {
@@ -417,10 +433,16 @@ async function updateCryptoPrices(ctx: any) {
           continue;
         }
         
+        // Update sentiment and news randomly for next tick
+        const newSentiment = Math.max(-1, Math.min(1, sentiment + (Math.random() - 0.5) * 0.3));
+        const newNewsScore = (Math.random() - 0.5) * 0.4; // New random news each tick
+        
         await ctx.db.patch(crypto._id, {
           previousPrice: currentPrice,
           price: newPrice,
           marketCap: newMarketCap,
+          sentiment: newSentiment,
+          newsScore: newNewsScore,
           updatedAt: Date.now(),
         });
         
