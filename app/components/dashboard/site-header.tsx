@@ -1,6 +1,8 @@
 import { Button } from "~/components/ui/button";
 import { Separator } from "~/components/ui/separator";
 import { SidebarTrigger } from "~/components/ui/sidebar";
+import { Github } from "lucide-react";
+import DiscordIcon from "~/components/icons/discord-icon";
 
 export function SiteHeader() {
   return (
@@ -12,14 +14,37 @@ export function SiteHeader() {
           className="mx-2 data-[orientation=vertical]:h-4"
         />
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="ghost" asChild size="sm" className="hidden sm:flex">
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            title="GitHub"
+            aria-label="GitHub"
+          >
             <a
-              href="https://github.com/michaelshimeles/react-starter-kit"
+              href="https://github.com/saltjsx/quickbuck-v1b"
               rel="noopener noreferrer"
               target="_blank"
-              className="dark:text-foreground"
+              className="flex items-center"
             >
-              GitHub
+              <Github className="h-5 w-5" />
+            </a>
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            asChild
+            title="Discord"
+            aria-label="Discord"
+          >
+            <a
+              href="https://discord.gg/hVcv6upDW"
+              rel="noopener noreferrer"
+              target="_blank"
+              className="flex items-center"
+            >
+              <DiscordIcon className="h-5 w-5" />
             </a>
           </Button>
         </div>

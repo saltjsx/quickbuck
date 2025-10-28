@@ -1,19 +1,19 @@
 import {
-  IconDashboard,
-  IconTrophy,
-  IconWallet,
-  IconArrowsLeftRight,
-  IconReceipt,
-  IconCreditCard,
-  IconBuilding,
-  IconShoppingCart,
-  IconTrendingUp,
-  IconCurrencyBitcoin,
-  IconBriefcase,
-  IconBuildingStore,
-  IconDice,
-  IconBolt,
-} from "@tabler/icons-react";
+  LayoutDashboard,
+  Trophy,
+  Wallet,
+  ArrowLeftRight,
+  Receipt,
+  CreditCard,
+  Building2,
+  ShoppingCart,
+  TrendingUp,
+  Bitcoin,
+  Briefcase,
+  Store,
+  Dice5,
+  Bolt,
+} from "lucide-react";
 import { Link } from "react-router";
 import { NavMain } from "./nav-main";
 import {
@@ -25,78 +25,79 @@ import {
   SidebarMenuItem,
 } from "~/components/ui/sidebar";
 import { UserButton } from "@clerk/react-router";
+import { ThemeToggle } from "~/components/ui/theme-toggle";
 
 const data = {
   navMain: [
     {
       title: "Dashboard",
       url: "/dashboard",
-      icon: IconDashboard,
-    },
-    {
-      title: "Leaderboard",
-      url: "/leaderboard",
-      icon: IconTrophy,
-    },
-    {
-      title: "Accounts",
-      url: "/accounts",
-      icon: IconWallet,
-    },
-    {
-      title: "Transfers",
-      url: "/transfers",
-      icon: IconArrowsLeftRight,
-    },
-    {
-      title: "Transactions",
-      url: "/transactions",
-      icon: IconReceipt,
-    },
-    {
-      title: "Loans",
-      url: "/loans",
-      icon: IconCreditCard,
-    },
-    {
-      title: "Manage Companies",
-      url: "/companies",
-      icon: IconBuilding,
-    },
-    {
-      title: "Marketplace",
-      url: "/marketplace",
-      icon: IconShoppingCart,
-    },
-    {
-      title: "Stocks",
-      url: "/stocks",
-      icon: IconTrendingUp,
-    },
-    {
-      title: "Crypto",
-      url: "/crypto",
-      icon: IconCurrencyBitcoin,
+      icon: LayoutDashboard,
     },
     {
       title: "Portfolio",
       url: "/portfolio",
-      icon: IconBriefcase,
+      icon: Briefcase,
+    },
+    {
+      title: "Stocks",
+      url: "/stocks",
+      icon: TrendingUp,
+    },
+    {
+      title: "Crypto",
+      url: "/crypto",
+      icon: Bitcoin,
+    },
+    {
+      title: "Marketplace",
+      url: "/marketplace",
+      icon: ShoppingCart,
+    },
+    {
+      title: "Leaderboard",
+      url: "/leaderboard",
+      icon: Trophy,
+    },
+    {
+      title: "Accounts",
+      url: "/accounts",
+      icon: Wallet,
+    },
+    {
+      title: "Transfers",
+      url: "/transfers",
+      icon: ArrowLeftRight,
+    },
+    {
+      title: "Transactions",
+      url: "/transactions",
+      icon: Receipt,
+    },
+    {
+      title: "Loans",
+      url: "/loans",
+      icon: CreditCard,
+    },
+    {
+      title: "Companies",
+      url: "/companies",
+      icon: Building2,
     },
     {
       title: "Company Sales",
       url: "/company-sales",
-      icon: IconBuildingStore,
+      icon: Store,
     },
     {
       title: "Casino",
       url: "/gamble",
-      icon: IconDice,
+      icon: Dice5,
     },
     {
       title: "Upgrades",
       url: "/upgrades",
-      icon: IconBolt,
+      icon: Bolt,
     },
   ],
 };
@@ -114,7 +115,29 @@ export function AppSidebar({
         <SidebarMenu>
           <SidebarMenuItem>
             <Link to="/" prefetch="viewport">
-              <span className="text-base font-semibold">Quickbuck</span>
+              <div className="flex items-center gap-2 py-1">
+                {/* Optimized light/dark logos */}
+                <img
+                  src="/betav1-light.png"
+                  alt="Quickbuck"
+                  width="120"
+                  height="28"
+                  className="dark:hidden block"
+                  loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
+                />
+                <img
+                  src="/betav1-dark.png"
+                  alt="Quickbuck"
+                  width="120"
+                  height="28"
+                  className="hidden dark:block"
+                  loading="eager"
+                  decoding="async"
+                  fetchPriority="high"
+                />
+              </div>
             </Link>
           </SidebarMenuItem>
         </SidebarMenu>
@@ -123,7 +146,8 @@ export function AppSidebar({
         <NavMain items={data.navMain} />
       </SidebarContent>
       <SidebarFooter>
-        <div className="flex justify-center">
+        <div className="flex items-center justify-between gap-2 px-2">
+          <ThemeToggle />
           <UserButton />
         </div>
       </SidebarFooter>

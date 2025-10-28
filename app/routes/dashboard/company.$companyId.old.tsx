@@ -142,6 +142,7 @@ export default function CompanyDashboardPage() {
         name: productName.trim(),
         description: productDescription.trim(),
         price: priceCents,
+        // @ts-expect-error: legacy route; backend accepts this field though not reflected in generated types
         productionCost,
         stock: productQuantity ? parseInt(productQuantity) : undefined,
       });

@@ -54,12 +54,34 @@ export const links: Route.LinksFunction = () => [
     as: "image",
     type: "image/png",
   },
+  // Preload brand logos for light/dark to avoid layout shift
+  {
+    rel: "preload",
+    href: "/betav1-light.png",
+    as: "image",
+    type: "image/png",
+  },
+  {
+    rel: "preload",
+    href: "/betav1-dark.png",
+    as: "image",
+    type: "image/png",
+  },
 
   // Icon
   {
     rel: "icon",
     type: "image/png",
     href: "/favicon.png",
+  },
+];
+
+export const meta: Route.MetaFunction = () => [
+  { title: "Quickbuck — Play the markets" },
+  {
+    name: "description",
+    content:
+      "Compete on leaderboards, trade stocks and crypto, and grow your portfolio in Quickbuck.",
   },
 ];
 
@@ -71,6 +93,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
+        {/* Set initial theme before paint to prevent FOUC */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(){try{var t=localStorage.getItem('theme');var m=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;var d=(t==='dark'||(!t&&m));var c=document.documentElement.classList;c.toggle('dark',d);}catch(e){}})();",
+          }}
+        />
         <script
           src="//unpkg.com/react-grab/dist/index.global.js"
           crossOrigin="anonymous"
