@@ -1,23 +1,37 @@
 import { AlertCircle, Ban } from "lucide-react";
+import { useState } from "react";
 
 interface LimitedAccountAlertProps {
   reason: string;
 }
 
 export function LimitedAccountAlert({ reason }: LimitedAccountAlertProps) {
+  const [dismissed, setDismissed] = useState(false);
+
+  if (dismissed) return null;
+
   return (
     <>
-      <div className="limited-account-alert">
-        <div className="alert-content">
-          <AlertCircle className="alert-icon" size={32} />
-          <div className="alert-text">
-            <h3>⚠️ Your Account is Limited</h3>
-            <p className="reason">Reason: {reason}</p>
+      <div className="limited-account-modal-overlay">
+        <div className="limited-account-modal">
+          <div className="modal-header">
+            <AlertCircle className="modal-icon" size={32} />
+            <h2>⚠️ Your Account is Limited</h2>
+          </div>
+          <div className="modal-body">
+            <p className="reason">
+              <strong>Reason:</strong> {reason}
+            </p>
             <p className="info">
               Your account has been restricted. You cannot create new companies,
               products, or cryptocurrencies. If you believe this is an error,
               please contact support.
             </p>
+          </div>
+          <div className="modal-footer">
+            <button className="modal-button" onClick={() => setDismissed(true)}>
+              I Understand
+            </button>
           </div>
         </div>
       </div>
@@ -25,31 +39,43 @@ export function LimitedAccountAlert({ reason }: LimitedAccountAlertProps) {
       <style
         dangerouslySetInnerHTML={{
           __html: `
-        .limited-account-alert {
+        .limited-account-modal-overlay {
           position: fixed;
-          top: 20px;
-          left: 50%;
-          transform: translateX(-50%);
-          z-index: 9999;
-          max-width: 600px;
-          width: 90%;
-        }
-
-        .limited-account-alert .alert-content {
-          background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%);
-          border: 3px solid #f59e0b;
-          border-radius: 8px;
-          padding: 20px;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
           display: flex;
-          gap: 15px;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
-          animation: slideDown 0.3s ease-out;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+          animation: fadeIn 0.3s ease-out;
         }
 
-        @keyframes slideDown {
+        @keyframes fadeIn {
           from {
             opacity: 0;
-            transform: translateY(-20px);
+          }
+          to {
+            opacity: 1;
+          }
+        }
+
+        .limited-account-modal {
+          background: linear-gradient(135deg, #fef3c7 0%, #fcd34d 100%);
+          border: 4px solid #f59e0b;
+          border-radius: 8px;
+          max-width: 500px;
+          width: 90%;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+          animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
           }
           to {
             opacity: 1;
@@ -57,34 +83,237 @@ export function LimitedAccountAlert({ reason }: LimitedAccountAlertProps) {
           }
         }
 
-        .limited-account-alert .alert-icon {
+        .limited-account-modal .modal-header {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          padding: 20px;
+          border-bottom: 2px solid #f59e0b;
+        }
+
+        .limited-account-modal .modal-icon {
           color: #f59e0b;
           flex-shrink: 0;
         }
 
-        .limited-account-alert .alert-text {
-          flex: 1;
-        }
-
-        .limited-account-alert .alert-text h3 {
-          margin: 0 0 10px 0;
-          font-size: 18px;
+        .limited-account-modal .modal-header h2 {
+          margin: 0;
+          font-size: 20px;
           font-weight: bold;
           color: #92400e;
         }
 
-        .limited-account-alert .reason {
-          margin: 5px 0;
+        .limited-account-modal .modal-body {
+          padding: 20px;
+        }
+
+        .limited-account-modal .reason {
+          margin: 0 0 15px 0;
           font-weight: 600;
           color: #b45309;
           font-size: 14px;
         }
 
-        .limited-account-alert .info {
-          margin: 10px 0 0 0;
+        .limited-account-modal .info {
+          margin: 0;
           font-size: 13px;
           color: #78350f;
-          line-height: 1.4;
+          line-height: 1.5;
+        }
+
+        .limited-account-modal .modal-footer {
+          padding: 20px;
+          border-top: 2px solid #f59e0b;
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        .limited-account-modal .modal-button {
+          padding: 10px 20px;
+          background: #f59e0b;
+          color: #ffffff;
+          border: 2px solid #d97706;
+          border-radius: 4px;
+          font-weight: bold;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .limited-account-modal .modal-button:hover {
+          background: #d97706;
+        }
+      `,
+        }}
+      />
+    </>
+  );
+}
+
+interface WarningModalProps {
+  warnings: Array<{ reason: string; createdAt: number }>;
+  onDismiss: () => void;
+}
+
+export function WarningModal({ warnings, onDismiss }: WarningModalProps) {
+  return (
+    <>
+      <div className="warning-modal-overlay">
+        <div className="warning-modal">
+          <div className="modal-header">
+            <AlertCircle className="modal-icon warning-icon" size={32} />
+            <h2>⚠️ Account Warning</h2>
+          </div>
+          <div className="modal-body">
+            <p className="warning-text">
+              You have received{" "}
+              <strong>
+                {warnings.length} warning{warnings.length !== 1 ? "s" : ""}
+              </strong>
+              :
+            </p>
+            <div className="warnings-list">
+              {warnings.map((warning, index) => (
+                <div key={index} className="warning-item">
+                  <p className="warning-reason">{warning.reason}</p>
+                  <p className="warning-date">
+                    {new Date(warning.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+            <p className="warning-info">
+              Please review our community guidelines. Multiple warnings may
+              result in account limitation or suspension.
+            </p>
+          </div>
+          <div className="modal-footer">
+            <button className="modal-button" onClick={onDismiss}>
+              I Understand
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        .warning-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+          animation: fadeIn 0.3s ease-out;
+        }
+
+        .warning-modal {
+          background: linear-gradient(135deg, #fed7aa 0%, #fdba74 100%);
+          border: 4px solid #f97316;
+          border-radius: 8px;
+          max-width: 500px;
+          width: 90%;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+          animation: slideUp 0.3s ease-out;
+        }
+
+        .warning-modal .modal-header {
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          padding: 20px;
+          border-bottom: 2px solid #f97316;
+        }
+
+        .warning-modal .modal-icon {
+          color: #f97316;
+          flex-shrink: 0;
+        }
+
+        .warning-modal .modal-header h2 {
+          margin: 0;
+          font-size: 20px;
+          font-weight: bold;
+          color: #92400e;
+        }
+
+        .warning-modal .modal-body {
+          padding: 20px;
+        }
+
+        .warning-modal .warning-text {
+          margin: 0 0 15px 0;
+          font-weight: 600;
+          color: #92400e;
+          font-size: 14px;
+        }
+
+        .warning-modal .warnings-list {
+          background: rgba(255, 255, 255, 0.7);
+          border-left: 4px solid #f97316;
+          border-radius: 4px;
+          padding: 15px;
+          margin: 15px 0;
+          max-height: 200px;
+          overflow-y: auto;
+        }
+
+        .warning-modal .warning-item {
+          margin-bottom: 12px;
+          padding-bottom: 12px;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+        }
+
+        .warning-modal .warning-item:last-child {
+          margin-bottom: 0;
+          padding-bottom: 0;
+          border-bottom: none;
+        }
+
+        .warning-modal .warning-reason {
+          margin: 0 0 5px 0;
+          font-size: 13px;
+          color: #92400e;
+          font-weight: 500;
+        }
+
+        .warning-modal .warning-date {
+          margin: 0;
+          font-size: 11px;
+          color: #b45309;
+        }
+
+        .warning-modal .warning-info {
+          margin: 15px 0 0 0;
+          font-size: 12px;
+          color: #7c2d12;
+          line-height: 1.5;
+        }
+
+        .warning-modal .modal-footer {
+          padding: 20px;
+          border-top: 2px solid #f97316;
+          display: flex;
+          justify-content: flex-end;
+        }
+
+        .warning-modal .modal-button {
+          padding: 10px 20px;
+          background: #f97316;
+          color: #ffffff;
+          border: 2px solid #ea580c;
+          border-radius: 4px;
+          font-weight: bold;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+
+        .warning-modal .modal-button:hover {
+          background: #ea580c;
         }
       `,
         }}

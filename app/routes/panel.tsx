@@ -52,6 +52,11 @@ export default function Panel() {
     "players" | "companies" | "products" | "crypto"
   >("players");
   const [actionMessage, setActionMessage] = useState<string>("");
+  const [warningModal, setWarningModal] = useState<{
+    playerId: Id<"players">;
+    playerName: string;
+  } | null>(null);
+  const [warningReason, setWarningReason] = useState<string>("");
 
   const showMessage = (message: string) => {
     setActionMessage(message);
@@ -162,12 +167,24 @@ export default function Panel() {
     }
   };
 
-  const handleWarnPlayer = async (playerId: Id<"players">) => {
-    const reason = prompt("Enter reason for warning this player:");
-    if (!reason) return;
+  const handleWarnPlayer = (playerId: Id<"players">, playerName: string) => {
+    setWarningModal({ playerId, playerName });
+    setWarningReason("");
+  };
+
+  const submitWarning = async () => {
+    if (!warningModal || !warningReason.trim()) {
+      showMessage("✗ Please enter a reason");
+      return;
+    }
     try {
-      await warnPlayer({ targetPlayerId: playerId, reason });
-      showMessage("✓ Player warned");
+      await warnPlayer({
+        targetPlayerId: warningModal.playerId,
+        reason: warningReason,
+      });
+      showMessage(`✓ ${warningModal.playerName} has been warned`);
+      setWarningModal(null);
+      setWarningReason("");
     } catch (e: any) {
       showMessage("✗ Error: " + e.message);
     }
@@ -353,14 +370,19 @@ export default function Panel() {
                       <td>{player.userName}</td>
                       <td>{player.userEmail}</td>
                       <td>
-                        <span className={`role-tag role-${player.role || "normal"}`}>
+                        <span
+                          className={`role-tag role-${player.role || "normal"}`}
+                        >
                           {(player.role || "normal").toUpperCase()}
                         </span>
                       </td>
                       <td>${(player.balance / 100).toFixed(2)}</td>
                       <td>
                         {player.warningCount ? (
-                          <span className="warning-count" title="Click to see warnings">
+                          <span
+                            className="warning-count"
+                            title="Click to see warnings"
+                          >
                             ⚠️ {player.warningCount}
                           </span>
                         ) : (
@@ -388,7 +410,9 @@ export default function Panel() {
                           {(player.role === "normal" || !player.role) && (
                             <>
                               <button
-                                onClick={() => handleWarnPlayer(player._id)}
+                                onClick={() =>
+                                  handleWarnPlayer(player._id, player.userName)
+                                }
                                 className="btn-small btn-warn"
                                 title="Issue a warning"
                               >
@@ -416,7 +440,9 @@ export default function Panel() {
                               )}
                               {isAdmin && (
                                 <button
-                                  onClick={() => handleSetPlayerBalance(player._id)}
+                                  onClick={() =>
+                                    handleSetPlayerBalance(player._id)
+                                  }
                                   className="btn-small btn-info"
                                 >
                                   Set $
@@ -427,7 +453,9 @@ export default function Panel() {
                           {player.role === "limited" && (
                             <>
                               <button
-                                onClick={() => handleWarnPlayer(player._id)}
+                                onClick={() =>
+                                  handleWarnPlayer(player._id, player.userName)
+                                }
                                 className="btn-small btn-warn"
                                 title="Issue a warning"
                               >
@@ -447,7 +475,9 @@ export default function Panel() {
                               </button>
                               {isAdmin && (
                                 <button
-                                  onClick={() => handleSetPlayerBalance(player._id)}
+                                  onClick={() =>
+                                    handleSetPlayerBalance(player._id)
+                                  }
                                   className="btn-small btn-info"
                                 >
                                   Set $
@@ -465,7 +495,9 @@ export default function Panel() {
                               </button>
                               {isAdmin && (
                                 <button
-                                  onClick={() => handleSetPlayerBalance(player._id)}
+                                  onClick={() =>
+                                    handleSetPlayerBalance(player._id)
+                                  }
                                   className="btn-small btn-info"
                                 >
                                   Set $
@@ -484,7 +516,9 @@ export default function Panel() {
                                     Demote
                                   </button>
                                   <button
-                                    onClick={() => handleSetPlayerBalance(player._id)}
+                                    onClick={() =>
+                                      handleSetPlayerBalance(player._id)
+                                    }
                                     className="btn-small btn-info"
                                   >
                                     Set $
@@ -494,7 +528,12 @@ export default function Panel() {
                             </>
                           )}
                           {player.role === "admin" && (
-                            <span className="role-tag role-admin" style={{fontSize: '10px'}}>ADMIN</span>
+                            <span
+                              className="role-tag role-admin"
+                              style={{ fontSize: "10px" }}
+                            >
+                              ADMIN
+                            </span>
                           )}
                         </div>
                       </td>
@@ -656,6 +695,37 @@ export default function Panel() {
             )}
           </div>
         )}
+      </div>
+
+      {/* Warning Modal */}
+      <div className="warning-modal-overlay">
+        <div className="warning-modal-box">
+          <h3>⚠️ Warn Player</h3>
+          <label>
+            Player: <strong>{warningModal?.playerName}</strong>
+          </label>
+          <label htmlFor="warning-reason">Reason for Warning:</label>
+          <textarea
+            id="warning-reason"
+            value={warningReason}
+            onChange={(e) => setWarningReason(e.target.value)}
+            placeholder="Enter the reason for warning this player..."
+          />
+          <div className="warning-modal-buttons">
+            <button
+              className="btn-cancel"
+              onClick={() => {
+                setWarningModal(null);
+                setWarningReason("");
+              }}
+            >
+              Cancel
+            </button>
+            <button className="btn-submit" onClick={submitWarning}>
+              Submit Warning
+            </button>
+          </div>
+        </div>
       </div>
 
       <style>{`
@@ -880,6 +950,92 @@ export default function Panel() {
           padding: 40px;
           color: #808080;
           font-style: italic;
+        }
+
+        .warning-modal-overlay {
+          display: ${warningModal ? "flex" : "none"};
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+        }
+
+        .warning-modal-box {
+          background: #c0c0c0;
+          border: 3px solid #000000;
+          padding: 20px;
+          max-width: 400px;
+          width: 90%;
+          box-shadow: 5px 5px 0 #808080;
+        }
+
+        .warning-modal-box h3 {
+          margin-top: 0;
+          color: #000080;
+          font-size: 16px;
+        }
+
+        .warning-modal-box label {
+          display: block;
+          margin: 15px 0 5px 0;
+          font-weight: bold;
+          color: #000000;
+        }
+
+        .warning-modal-box input[type="text"],
+        .warning-modal-box textarea {
+          width: 100%;
+          padding: 5px;
+          font-family: "MS Sans Serif", "Tahoma", sans-serif;
+          border: 2px inset #dfdfdf;
+          background: #ffffff;
+          color: #000000;
+          box-sizing: border-box;
+        }
+
+        .warning-modal-box textarea {
+          resize: vertical;
+          min-height: 80px;
+        }
+
+        .warning-modal-buttons {
+          display: flex;
+          gap: 10px;
+          justify-content: flex-end;
+          margin-top: 20px;
+        }
+
+        .warning-modal-buttons button {
+          padding: 6px 16px;
+          background: #c0c0c0;
+          border: 2px outset #dfdfdf;
+          cursor: pointer;
+          font-weight: bold;
+          font-family: "MS Sans Serif", "Tahoma", sans-serif;
+        }
+
+        .warning-modal-buttons button:hover {
+          filter: brightness(1.1);
+        }
+
+        .warning-modal-buttons button:active {
+          border-style: inset;
+        }
+
+        .warning-modal-buttons .btn-submit {
+          background: #00ff00;
+          border-color: #008000;
+        }
+
+        .warning-modal-buttons .btn-cancel {
+          background: #ff0000;
+          border-color: #800000;
+          color: #ffffff;
         }
       `}</style>
     </div>

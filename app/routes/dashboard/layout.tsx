@@ -12,7 +12,9 @@ import { useQuery } from "convex/react";
 import {
   BannedAccountScreen,
   LimitedAccountAlert,
+  WarningModal,
 } from "~/components/account-status";
+import { useState } from "react";
 
 export async function loader(args: Route.LoaderArgs) {
   const { userId } = await getAuth(args);
@@ -34,6 +36,7 @@ export default function DashboardLayout() {
   const { user } = useLoaderData();
   // @ts-ignore - moderation API will be available after Convex regenerates types
   const currentPlayer = useQuery(api.moderation?.getCurrentPlayer);
+  const [dismissedWarnings, setDismissedWarnings] = useState(false);
 
   // Show banned screen if player is banned
   if (currentPlayer?.role === "banned") {
@@ -44,6 +47,10 @@ export default function DashboardLayout() {
     );
   }
 
+  // Show warnings modal if player has warnings and hasn't dismissed them
+  const hasWarnings =
+    currentPlayer?.warnings && currentPlayer.warnings.length > 0;
+
   return (
     <SidebarProvider
       style={
@@ -53,7 +60,15 @@ export default function DashboardLayout() {
         } as React.CSSProperties
       }
     >
-      {/* Show limited account alert if player is limited */}
+      {/* Show warning modal if player has warnings */}
+      {hasWarnings && !dismissedWarnings && currentPlayer.warnings && (
+        <WarningModal
+          warnings={currentPlayer.warnings}
+          onDismiss={() => setDismissedWarnings(true)}
+        />
+      )}
+
+      {/* Show limited account modal if player is limited */}
       {currentPlayer?.role === "limited" && currentPlayer.limitReason && (
         <LimitedAccountAlert reason={currentPlayer.limitReason} />
       )}

@@ -12,12 +12,14 @@ export const buyStock = mutation({
     accountId: v.union(v.id("players"), v.id("companies")),
   },
   handler: async (ctx, args) => {
-    // EXPLOIT FIX: Validate shares is positive and safe integer
-    if (args.shares <= 0) {
+    // EXPLOIT FIX: Convert shares to integer and validate
+    const shares = Math.floor(args.shares);
+    
+    if (shares <= 0) {
       throw new Error("Number of shares must be positive");
     }
 
-    if (!Number.isSafeInteger(args.shares)) {
+    if (!Number.isSafeInteger(shares)) {
       throw new Error("Number of shares is not a safe integer");
     }
 
@@ -34,11 +36,11 @@ export const buyStock = mutation({
     
     const totalSharesHeld = existingHoldings.reduce((sum, h) => sum + h.shares, 0);
     
-    if (totalSharesHeld + args.shares > stock.totalShares) {
-      throw new Error(`Cannot purchase ${args.shares} shares. Only ${stock.totalShares - totalSharesHeld} shares available.`);
+    if (totalSharesHeld + shares > stock.totalShares) {
+      throw new Error(`Cannot purchase ${shares} shares. Only ${stock.totalShares - totalSharesHeld} shares available.`);
     }
 
-    const totalCost = stock.price * args.shares;
+    const totalCost = stock.price * shares;
 
     // EXPLOIT FIX: Validate total cost is safe
     if (!Number.isSafeInteger(totalCost)) {
@@ -103,7 +105,7 @@ export const buyStock = mutation({
         userId: args.userId,
         companyId: stock.companyId,
         stockId: args.stockId,
-        shares: args.shares,
+        shares: shares,
         averagePurchasePrice: stock.price,
         boughtAt: Date.now(),
       });
@@ -118,7 +120,7 @@ export const buyStock = mutation({
       amount: totalCost,
       assetType: "stock" as const,
       assetId: args.stockId,
-      description: `Purchased ${args.shares} shares of ${stock.ticker}`,
+      description: `Purchased ${shares} shares of ${stock.ticker}`,
       createdAt: Date.now(),
     });
 
@@ -126,7 +128,7 @@ export const buyStock = mutation({
     await ctx.db.insert("stockTrades", {
       stockId: args.stockId,
       companyId: stock.companyId,
-      shares: args.shares,
+      shares: shares,
       pricePerShare: stock.price,
       totalValue: totalCost,
       tradeType: "buy",
@@ -135,7 +137,7 @@ export const buyStock = mutation({
 
     // Apply upward price pressure when shares are bought
     // Buying increases price based on volume relative to total shares
-    const buyPressure = args.shares / stock.totalShares;
+    const buyPressure = shares / stock.totalShares;
     const priceImpact = Math.min(buyPressure * 0.05, 0.1); // Max 10% impact per trade
     const newPrice = Math.floor(stock.price * (1 + priceImpact));
     
@@ -177,12 +179,14 @@ export const sellStock = mutation({
     accountId: v.union(v.id("players"), v.id("companies")),
   },
   handler: async (ctx, args) => {
-    // EXPLOIT FIX: Validate shares is positive and safe integer
-    if (args.shares <= 0) {
+    // EXPLOIT FIX: Convert shares to integer and validate
+    const shares = Math.floor(args.shares);
+    
+    if (shares <= 0) {
       throw new Error("Number of shares must be positive");
     }
 
-    if (!Number.isSafeInteger(args.shares)) {
+    if (!Number.isSafeInteger(shares)) {
       throw new Error("Number of shares is not a safe integer");
     }
 
@@ -199,11 +203,11 @@ export const sellStock = mutation({
       )
       .unique();
 
-    if (!holding || holding.shares < args.shares) {
+    if (!holding || holding.shares < shares) {
       throw new Error("Insufficient shares to sell");
     }
 
-    const totalValue = stock.price * args.shares;
+    const totalValue = stock.price * shares;
 
     // EXPLOIT FIX: Validate total value is safe
     if (!Number.isSafeInteger(totalValue)) {
@@ -229,11 +233,11 @@ export const sellStock = mutation({
     });
 
     // Update or remove holding
-    if (holding.shares === args.shares) {
+    if (holding.shares === shares) {
       await ctx.db.delete(holding._id);
     } else {
       await ctx.db.patch(holding._id, {
-        shares: holding.shares - args.shares,
+        shares: holding.shares - shares,
       });
     }
 
@@ -265,7 +269,7 @@ export const sellStock = mutation({
       amount: totalValue,
       assetType: "stock" as const,
       assetId: args.stockId,
-      description: `Sold ${args.shares} shares of ${stock.ticker}`,
+      description: `Sold ${shares} shares of ${stock.ticker}`,
       createdAt: Date.now(),
     });
 
@@ -273,7 +277,7 @@ export const sellStock = mutation({
     await ctx.db.insert("stockTrades", {
       stockId: args.stockId,
       companyId: stock.companyId,
-      shares: args.shares,
+      shares: shares,
       pricePerShare: stock.price,
       totalValue: totalValue,
       tradeType: "sell",
@@ -282,7 +286,7 @@ export const sellStock = mutation({
 
     // Apply downward price pressure when shares are sold
     // Selling reduces price based on volume relative to total shares
-    const sellPressure = args.shares / stock.totalShares;
+    const sellPressure = shares / stock.totalShares;
     const priceImpact = Math.min(sellPressure * 0.05, 0.1); // Max 10% impact per trade
     const newPrice = Math.floor(stock.price * (1 - priceImpact));
     const finalPrice = Math.max(100, newPrice); // Min $1.00
