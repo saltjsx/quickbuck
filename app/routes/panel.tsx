@@ -862,7 +862,7 @@ export default function Panel() {
       </div>
 
       {/* Warning Modal */}
-      <div className="warning-modal-overlay">
+      <div className={`warning-modal-overlay ${warningModal ? "visible" : ""}`}>
         <div className="warning-modal-box">
           <h3>⚠️ Warn Player</h3>
           <label>
@@ -1268,7 +1268,7 @@ export default function Panel() {
         }
 
         .warning-modal-overlay {
-          display: ${warningModal ? "flex" : "none"};
+          display: none;
           position: fixed;
           top: 0;
           left: 0;
