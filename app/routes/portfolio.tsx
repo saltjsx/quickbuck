@@ -462,47 +462,51 @@ export default function PortfolioPage() {
                   No marketplace items owned yet
                 </p>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Item</TableHead>
-                      <TableHead>Company</TableHead>
-                      <TableHead className="text-right">Quantity</TableHead>
-                      <TableHead className="text-right">Total Paid</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {playerInventory.map((item) => (
-                      <TableRow key={item._id}>
-                        <TableCell className="font-medium">
-                          {item.productName}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {item.companyName}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {item.quantity}
-                        </TableCell>
-                        <TableCell className="text-right">
+                <div className="space-y-3">
+                  {playerInventory.map((item) => (
+                    <div
+                      key={item._id}
+                      className="flex gap-4 p-4 border rounded-lg items-center"
+                    >
+                      {/* Product Image */}
+                      {item.productImage ? (
+                        <div className="relative w-16 h-16 bg-muted rounded flex-shrink-0">
+                          <img
+                            src={item.productImage}
+                            alt={item.productName}
+                            className="w-full h-full object-cover rounded"
+                          />
+                        </div>
+                      ) : (
+                        <div className="w-16 h-16 bg-muted rounded flex-shrink-0 flex items-center justify-center">
+                          <ShoppingBag className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
+
+                      {/* Product Details */}
+                      <div className="flex-1">
+                        <p className="font-medium">{item.productName}</p>
+                        <p className="text-sm text-muted-foreground">
+                          {item.companyName}
+                        </p>
+                      </div>
+
+                      {/* Quantity */}
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Qty</p>
+                        <p className="font-semibold">{item.quantity}</p>
+                      </div>
+
+                      {/* Total Price */}
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground">Total</p>
+                        <p className="font-semibold text-green-600">
                           {formatCurrency(item.totalPrice)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell colSpan={3}>Total</TableCell>
-                      <TableCell className="text-right">
-                        {formatCurrency(
-                          playerInventory.reduce(
-                            (sum, item) => sum + item.totalPrice,
-                            0
-                          )
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>

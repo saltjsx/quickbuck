@@ -406,6 +406,17 @@ export default function MarketplacePage() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-4">
+                    {/* Product Image */}
+                    {product.image && (
+                      <div className="relative w-full h-48 bg-muted rounded-lg overflow-hidden">
+                        <img
+                          src={product.image}
+                          alt={product.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+
                     <p className="text-sm text-muted-foreground line-clamp-2">
                       {product.description}
                     </p>
@@ -491,26 +502,38 @@ export default function MarketplacePage() {
                   </p>
                 ) : (
                   <>
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Product</TableHead>
-                          <TableHead>Price</TableHead>
-                          <TableHead>Quantity</TableHead>
-                          <TableHead>Total</TableHead>
-                          <TableHead></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {cartItems.map((item) => (
-                          <TableRow key={item.productId}>
-                            <TableCell className="font-medium">
-                              {item.product?.name || "Unknown"}
-                            </TableCell>
-                            <TableCell>
-                              {formatCurrency(item.pricePerUnit)}
-                            </TableCell>
-                            <TableCell>
+                    <div className="space-y-4 max-h-96 overflow-y-auto">
+                      {cartItems.map((item) => (
+                        <div
+                          key={item.productId}
+                          className="flex gap-4 p-4 border rounded-lg"
+                        >
+                          {/* Product Image */}
+                          {item.product?.image ? (
+                            <div className="relative w-20 h-20 bg-muted rounded flex-shrink-0">
+                              <img
+                                src={item.product.image}
+                                alt={item.product.name}
+                                className="w-full h-full object-cover rounded"
+                              />
+                            </div>
+                          ) : (
+                            <div className="w-20 h-20 bg-muted rounded flex-shrink-0 flex items-center justify-center">
+                              <Package className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                          )}
+
+                          {/* Product Details */}
+                          <div className="flex-1 space-y-2">
+                            <div>
+                              <p className="font-medium">
+                                {item.product?.name || "Unknown"}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                {formatCurrency(item.pricePerUnit)} each
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2">
                               <Input
                                 type="number"
                                 min="1"
@@ -521,29 +544,32 @@ export default function MarketplacePage() {
                                     parseInt(e.target.value) || 1
                                   )
                                 }
-                                className="w-20"
+                                className="w-16"
                               />
-                            </TableCell>
-                            <TableCell>
-                              {formatCurrency(
-                                item.pricePerUnit * item.quantity
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() =>
-                                  handleRemoveFromCart(item.productId)
-                                }
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                              <p className="text-sm text-muted-foreground">
+                                {item.quantity} ×{" "}
+                                {formatCurrency(item.pricePerUnit)} ={" "}
+                                <span className="font-semibold">
+                                  {formatCurrency(
+                                    item.pricePerUnit * item.quantity
+                                  )}
+                                </span>
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Remove Button */}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleRemoveFromCart(item.productId)}
+                            className="h-full"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
 
                     <div className="flex justify-between border-t pt-4">
                       <p className="text-lg font-semibold">Total:</p>

@@ -618,21 +618,40 @@ export default function CompanyDashboardPage() {
                       {products.map((product) => (
                         <TableRow key={product._id}>
                           <TableCell>
-                            <div>
-                              <p className="font-medium">{product.name}</p>
-                              {product.tags && product.tags.length > 0 && (
-                                <div className="flex gap-1 mt-1">
-                                  {product.tags.slice(0, 3).map((tag, idx) => (
-                                    <Badge
-                                      key={idx}
-                                      variant="secondary"
-                                      className="text-xs"
-                                    >
-                                      {tag}
-                                    </Badge>
-                                  ))}
+                            <div className="flex gap-3 items-start">
+                              {/* Product Image */}
+                              {product.image ? (
+                                <div className="relative w-12 h-12 bg-muted rounded flex-shrink-0">
+                                  <img
+                                    src={product.image}
+                                    alt={product.name}
+                                    className="w-full h-full object-cover rounded"
+                                  />
+                                </div>
+                              ) : (
+                                <div className="w-12 h-12 bg-muted rounded flex-shrink-0 flex items-center justify-center">
+                                  <Package className="h-5 w-5 text-muted-foreground" />
                                 </div>
                               )}
+
+                              <div>
+                                <p className="font-medium">{product.name}</p>
+                                {product.tags && product.tags.length > 0 && (
+                                  <div className="flex gap-1 mt-1">
+                                    {product.tags
+                                      .slice(0, 3)
+                                      .map((tag, idx) => (
+                                        <Badge
+                                          key={idx}
+                                          variant="secondary"
+                                          className="text-xs"
+                                        >
+                                          {tag}
+                                        </Badge>
+                                      ))}
+                                  </div>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="font-medium">
@@ -712,8 +731,26 @@ export default function CompanyDashboardPage() {
                         <TableCell className="text-sm">
                           {new Date(order.createdAt).toLocaleDateString()}
                         </TableCell>
-                        <TableCell className="font-medium">
-                          {order.productName}
+                        <TableCell>
+                          <div className="flex gap-2 items-center">
+                            {/* Product Image */}
+                            {order.productImage ? (
+                              <div className="relative w-8 h-8 bg-muted rounded flex-shrink-0">
+                                <img
+                                  src={order.productImage}
+                                  alt={order.productName}
+                                  className="w-full h-full object-cover rounded"
+                                />
+                              </div>
+                            ) : (
+                              <div className="w-8 h-8 bg-muted rounded flex-shrink-0 flex items-center justify-center">
+                                <Package className="h-4 w-4 text-muted-foreground" />
+                              </div>
+                            )}
+                            <span className="font-medium">
+                              {order.productName}
+                            </span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">
                           {order.description}

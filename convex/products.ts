@@ -366,14 +366,16 @@ export const getProductBatchOrders = query({
       .order("desc")
       .take(50);
 
-    // Enrich with product names
+    // Enrich with product details including image
     const enriched = await Promise.all(
       transactions.map(async (tx) => {
-        if (!tx.assetId) return { ...tx, productName: "Unknown" };
+        if (!tx.assetId) return { ...tx, productName: "Unknown", productImage: undefined };
         const product = await ctx.db.get(tx.assetId as Id<"products">);
         return {
           ...tx,
           productName: product?.name || "Unknown",
+          productImage: product?.image,
+          productPrice: product?.price,
         };
       })
     );
@@ -389,9 +391,23 @@ export const getTopProductsByRevenue = query({
   },
   handler: async (ctx, args) => {
     const products = await ctx.db.query("products").collect();
-    return products
+    const sorted = products
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, args.limit);
+    
+    // Enrich with company details
+    const enriched = await Promise.all(
+      sorted.map(async (product) => {
+        const company = await ctx.db.get(product.companyId);
+        return {
+          ...product,
+          companyName: company?.name || "Unknown",
+          companyLogo: company?.logo,
+        };
+      })
+    );
+    
+    return enriched;
   },
 });
 
@@ -402,9 +418,23 @@ export const getTopProductsBySales = query({
   },
   handler: async (ctx, args) => {
     const products = await ctx.db.query("products").collect();
-    return products
+    const sorted = products
       .sort((a, b) => b.totalSold - a.totalSold)
       .slice(0, args.limit);
+    
+    // Enrich with company details
+    const enriched = await Promise.all(
+      sorted.map(async (product) => {
+        const company = await ctx.db.get(product.companyId);
+        return {
+          ...product,
+          companyName: company?.name || "Unknown",
+          companyLogo: company?.logo,
+        };
+      })
+    );
+    
+    return enriched;
   },
 });
 
