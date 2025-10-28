@@ -15,7 +15,7 @@ export function CountdownTimer({ lastTickTime }: CountdownTimerProps) {
   useEffect(() => {
     if (!lastTickTime) {
       // If no last tick time, assume next tick in 5 minutes
-      setTimeRemaining(20 * 60 * 1000);
+      setTimeRemaining(5 * 60 * 1000);
       return;
     }
 

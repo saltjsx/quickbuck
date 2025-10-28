@@ -1,6 +1,8 @@
 "use client";
 
 import { useAuth } from "@clerk/react-router";
+import { useQuery } from "convex/react";
+import { api } from "convex/_generated/api";
 import { PlayerStats } from "~/components/dashboard/player-stats";
 import { CountdownTimer } from "~/components/dashboard/countdown-timer";
 import { QuickActions } from "~/components/dashboard/quick-actions";
@@ -21,8 +23,9 @@ export default function DashboardPage() {
     isLoading,
   } = usePlayerData(userId || null);
 
-  // For now, assume tick just happened (will implement tick history later)
-  const lastTickTime = Date.now();
+  // Get the last tick timestamp from the backend
+  const lastTick = useQuery(api.tick.getLastTick);
+  const lastTickTime = lastTick?.timestamp;
 
   return (
     <div className="flex flex-1 flex-col">

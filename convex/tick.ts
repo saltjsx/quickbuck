@@ -501,3 +501,19 @@ export const getTickHistory = query({
       .take(100);
   },
 });
+
+// Query: Get last tick timestamp
+export const getLastTick = query({
+  handler: async (ctx) => {
+    const lastTick = await ctx.db
+      .query("tickHistory")
+      .withIndex("by_tickNumber")
+      .order("desc")
+      .first();
+    
+    return lastTick ? {
+      tickNumber: lastTick.tickNumber,
+      timestamp: lastTick.timestamp,
+    } : null;
+  },
+});
