@@ -5,8 +5,27 @@
 export function getTimeUntilNextTick(lastTickTime: number): number {
   const TICK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes in milliseconds
   const now = Date.now();
+  
+  // Guard against invalid lastTickTime
+  if (!lastTickTime || lastTickTime <= 0) {
+    return TICK_INTERVAL_MS;
+  }
+  
   const timeSinceLastTick = now - lastTickTime;
+  
+  // If time since last tick is negative (clock skew), return full interval
+  if (timeSinceLastTick < 0) {
+    return TICK_INTERVAL_MS;
+  }
+  
   const timeUntilNextTick = TICK_INTERVAL_MS - (timeSinceLastTick % TICK_INTERVAL_MS);
+  
+  // If calculated time is 0 or very close to the interval (likely just completed tick),
+  // return full interval to prevent the timer from showing as frozen at 0
+  if (timeUntilNextTick === 0 || timeUntilNextTick > TICK_INTERVAL_MS - 100) {
+    return TICK_INTERVAL_MS;
+  }
+  
   return timeUntilNextTick;
 }
 

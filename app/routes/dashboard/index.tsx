@@ -28,6 +28,7 @@ export default function DashboardPage() {
   } = usePlayerData(userId || null);
 
   // Get the last tick timestamp from the backend
+  // This query is automatically subscribed to real-time updates from Convex
   const lastTick = useQuery(api.tick.getLastTick);
   const lastTickTime = lastTick?.timestamp;
   const statsRef = useRef<HTMLDivElement | null>(null);
