@@ -1,10 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { getAuth } from "@clerk/react-router/ssr.server";
+import { redirect } from "react-router";
+import type { Route } from "./+types/stock.$companyId";
+import { useAuth } from "@clerk/react-router";
+import type { Id } from "convex/_generated/dataModel";
+import { formatCurrency } from "~/lib/game-utils";
+import { CompanyLogo } from "~/components/ui/company-logo";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Button } from "~/components/ui/button";
@@ -24,28 +37,25 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { formatCurrency } from "~/lib/game-utils";
-import { useAuth } from "@clerk/react-router";
-import { CompanyLogo } from "~/components/ui/company-logo";
 import {
-  Building2,
-  TrendingUp,
-  TrendingDown,
-  ArrowLeft,
-  DollarSign,
-} from "lucide-react";
-import type { Id } from "convex/_generated/dataModel";
-import {
+  ResponsiveContainer,
   LineChart,
   Line,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
-import { getAuth } from "@clerk/react-router/ssr.server";
-import { redirect } from "react-router";
-import type { Route } from "./+types/stock.$companyId";
+import {
+  ArrowLeft,
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Users,
+} from "lucide-react";
 
 type Timeframe = "1H" | "1D" | "1W" | "1M" | "1Y" | "ALL";
 
@@ -136,22 +146,77 @@ export default function StockDetailPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
+  // Default select personal account when available
+  useEffect(() => {
+    if (player && !selectedAccount) {
+      setSelectedAccount({ type: "player", id: player._id as Id<"players"> });
+    }
+  }, [player, selectedAccount]);
+
+  // Derived: selected account balance (in cents)
+  const selectedAccountBalance = useMemo(() => {
+    if (!selectedAccount) return 0;
+    if (selectedAccount.type === "player" && player) return player.balance || 0;
+    const company = playerCompanies?.find((c) => c._id === selectedAccount.id);
+    return company?.balance || 0;
+  }, [selectedAccount, player, playerCompanies]);
+
+  // Quick picks and Max setter
+  const quickSharePicks = [1, 10, 100, 1000];
+  const quickDollarPicks = [100, 1000, 5000, 10000];
+
+  const handleSetMax = () => {
+    if (!stock) return;
+    if (transactionMode === "sell" && currentHolding) {
+      setPurchaseType("shares");
+      setPurchaseAmount(String(Math.floor(currentHolding.shares)));
+    } else if (transactionMode === "buy") {
+      if (purchaseType === "dollars") {
+        setPurchaseAmount(String(Math.max(0, selectedAccountBalance / 100)));
+      } else {
+        const maxShares = Math.floor(selectedAccountBalance / stock.price);
+        setPurchaseAmount(String(Math.max(0, maxShares)));
+      }
+    }
+  };
+
   // Calculate price change
-  const priceChange = stock?.previousPrice
+  // Price change based on selected timeframe (fallback to previousPrice)
+  const timeframeChange = useMemo(() => {
+    if (!priceHistory || priceHistory.length < 2) return null;
+    const first = priceHistory[0].price;
+    const last = priceHistory[priceHistory.length - 1].price;
+    if (!first || first <= 0) return null;
+    return ((last - first) / first) * 100;
+  }, [priceHistory]);
+
+  const fallbackChange = stock?.previousPrice
     ? ((stock.price - stock.previousPrice) / stock.previousPrice) * 100
     : 0;
-  const isPositive = priceChange >= 0;
+  const priceChange = timeframeChange ?? fallbackChange;
+  const isPositive = (priceChange ?? 0) >= 0;
 
   // Calculate estimated values
-  const estimatedShares =
-    purchaseType === "dollars" && stock
-      ? (parseFloat(purchaseAmount) * 100) / stock.price
-      : parseFloat(purchaseAmount) || 0;
+  const estimatedShares = useMemo(() => {
+    if (!stock) return 0;
+    if (!purchaseAmount) return 0;
+    if (purchaseType === "shares")
+      return Math.floor(parseFloat(purchaseAmount) || 0);
+    // dollars -> convert dollars to cents then floor shares
+    const cents = Math.round(parseFloat(purchaseAmount) * 100);
+    return Math.floor(cents / stock.price);
+  }, [purchaseAmount, purchaseType, stock]);
 
-  const estimatedCost =
-    purchaseType === "shares" && stock
-      ? Math.round(parseFloat(purchaseAmount) * stock.price)
-      : Math.round(parseFloat(purchaseAmount) * 100);
+  const estimatedCost = useMemo(() => {
+    if (!stock) return 0;
+    if (!purchaseAmount) return 0;
+    if (purchaseType === "shares") {
+      const shares = Math.floor(parseFloat(purchaseAmount) || 0);
+      return Math.max(0, shares) * stock.price;
+    }
+    // dollars input is already dollar amount -> convert to cents
+    return Math.max(0, Math.round(parseFloat(purchaseAmount) * 100));
+  }, [purchaseAmount, purchaseType, stock]);
 
   // Handle buy stock
   const handleBuyStock = async (e: React.FormEvent) => {
@@ -165,7 +230,9 @@ export default function StockDetailPage() {
     }
 
     const shares =
-      purchaseType === "shares" ? parseFloat(purchaseAmount) : estimatedShares;
+      purchaseType === "shares"
+        ? Math.floor(parseFloat(purchaseAmount))
+        : Math.floor(estimatedShares);
 
     if (shares <= 0) {
       setError("Invalid number of shares");
@@ -183,10 +250,9 @@ export default function StockDetailPage() {
       });
 
       setSuccess(
-        `Successfully purchased ${shares.toLocaleString(undefined, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 8,
-        })} shares for ${formatCurrency(Math.round(shares * stock.price))}`
+        `Successfully purchased ${shares.toLocaleString()} shares for ${formatCurrency(
+          Math.round(shares * stock.price)
+        )}`
       );
       setPurchaseAmount("");
     } catch (err) {
@@ -208,14 +274,16 @@ export default function StockDetailPage() {
     }
 
     const shares =
-      purchaseType === "shares" ? parseFloat(purchaseAmount) : estimatedShares;
+      purchaseType === "shares"
+        ? Math.floor(parseFloat(purchaseAmount))
+        : Math.floor(estimatedShares);
 
     if (shares <= 0) {
       setError("Invalid number of shares");
       return;
     }
 
-    if (shares > currentHolding.shares) {
+    if (shares > Math.floor(currentHolding.shares)) {
       setError(
         `You only have ${currentHolding.shares.toLocaleString()} shares to sell`
       );
@@ -233,10 +301,9 @@ export default function StockDetailPage() {
       });
 
       setSuccess(
-        `Successfully sold ${shares.toLocaleString(undefined, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 8,
-        })} shares for ${formatCurrency(Math.round(shares * stock.price))}`
+        `Successfully sold ${shares.toLocaleString()} shares for ${formatCurrency(
+          Math.round(shares * stock.price)
+        )}`
       );
       setPurchaseAmount("");
     } catch (err) {
@@ -260,6 +327,15 @@ export default function StockDetailPage() {
     );
   }
 
+  // Ownership percentages for visualizer
+  const ownershipData = (topHolders || []).map((h) => ({
+    id: h._id,
+    shares: h.shares,
+    percent: stock.totalShares ? (h.shares / stock.totalShares) * 100 : 0,
+  }));
+  const totalTop = ownershipData.reduce((s, h) => s + h.percent, 0);
+  const othersPercent = Math.max(0, 100 - totalTop);
+
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
@@ -276,24 +352,23 @@ export default function StockDetailPage() {
               </Button>
               <div className="flex items-center gap-3">
                 <CompanyLogo
-                  src={company?.logo}
-                  alt={company?.name || "Company"}
+                  src={company.logo}
+                  alt={company.ticker || company.name}
                   size="lg"
                 />
                 <div>
                   <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className="font-mono text-lg font-bold"
-                    >
-                      {stock?.ticker}
-                    </Badge>
-                    {company?.isPublic && (
-                      <Badge variant="default">Public</Badge>
+                    {company.ticker && (
+                      <Badge
+                        variant="outline"
+                        className="font-mono text-lg font-bold"
+                      >
+                        {company.ticker}
+                      </Badge>
                     )}
                   </div>
                   <h1 className="text-3xl font-bold tracking-tight">
-                    {company?.name}
+                    {company.name}
                   </h1>
                 </div>
               </div>
@@ -305,17 +380,184 @@ export default function StockDetailPage() {
             <p className="text-muted-foreground">{company.description}</p>
           )}
 
+          {/* Top split: Chart (left) and Trade box (right) */}
           <div className="grid gap-4 lg:grid-cols-3">
-            {/* Left Column - Purchase Box */}
+            {/* Left Column - Price & Chart */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Price and stats */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Price
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-green-600">
+                      {formatCurrency(stock.price)}
+                    </p>
+                    <div className="mt-1 flex items-center gap-1">
+                      {isPositive ? (
+                        <TrendingUp className="h-3 w-3 text-green-600" />
+                      ) : (
+                        <TrendingDown className="h-3 w-3 text-red-600" />
+                      )}
+                      <span
+                        className={`text-xs font-semibold ${
+                          isPositive ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        {priceChange >= 0 ? "+" : ""}
+                        {Number(priceChange).toFixed(2)}%
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        ({selectedTimeframe})
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Market Cap
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-purple-600">
+                      {formatCurrency(
+                        stock.marketCap || company.marketCap || 0
+                      )}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Shares Outstanding
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">
+                      {stock.totalShares.toLocaleString()}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Price Chart */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Price History</CardTitle>
+                      <CardDescription>
+                        Interactive chart for {company.ticker || company.name}
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      {(
+                        ["1H", "1D", "1W", "1M", "1Y", "ALL"] as Timeframe[]
+                      ).map((tf) => (
+                        <Button
+                          key={tf}
+                          variant={
+                            selectedTimeframe === tf ? "default" : "outline"
+                          }
+                          size="sm"
+                          onClick={() => setSelectedTimeframe(tf)}
+                        >
+                          {tf}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!priceHistory || priceHistory.length === 0 ? (
+                    <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+                      No price history available yet
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={320}>
+                      <LineChart
+                        data={priceHistory}
+                        margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+                      >
+                        <XAxis
+                          dataKey="timestamp"
+                          tickFormatter={(ts) => {
+                            const date = new Date(ts as number);
+                            if (
+                              selectedTimeframe === "1H" ||
+                              selectedTimeframe === "1D"
+                            ) {
+                              return date.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              });
+                            }
+                            return date.toLocaleDateString([], {
+                              month: "short",
+                              day: "numeric",
+                            });
+                          }}
+                          stroke="hsl(var(--muted-foreground))"
+                        />
+                        <YAxis
+                          tickFormatter={(v) => formatCurrency(v as number)}
+                          stroke="hsl(var(--muted-foreground))"
+                          width={72}
+                        />
+                        <RechartsTooltip
+                          formatter={(value: number) => [
+                            formatCurrency(value),
+                            "Price",
+                          ]}
+                          labelFormatter={(ts) =>
+                            new Date(ts as number).toLocaleString()
+                          }
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--background))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "6px",
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="price"
+                          stroke="#22c55e"
+                          strokeWidth={3}
+                          dot={false}
+                          isAnimationActive
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column - Trade Box */}
             <div className="lg:col-span-1">
               <Card className="sticky top-4">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5" />
-                    Trade Shares
-                  </CardTitle>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-5 w-5" />
+                      <CardTitle>Trade Shares</CardTitle>
+                    </div>
+                    <Badge variant="outline" className="font-mono">
+                      {company.ticker || ""}
+                    </Badge>
+                  </div>
+                  <CardDescription>
+                    Price {formatCurrency(stock.price)} • Market Cap{" "}
+                    {formatCurrency(stock.marketCap || company.marketCap || 0)}
+                  </CardDescription>
                   {/* Buy/Sell Toggle */}
-                  <div className="flex gap-2 mt-2">
+                  <div className="mt-3 flex gap-2">
                     <Button
                       type="button"
                       variant={
@@ -348,62 +590,52 @@ export default function StockDetailPage() {
                     }
                     className="space-y-4"
                   >
-                    {/* Show holdings if selling */}
-                    {transactionMode === "sell" && currentHolding && (
-                      <div className="rounded-md bg-muted p-3">
-                        <p className="text-sm text-muted-foreground">
-                          Your Holdings
-                        </p>
-                        <p className="text-lg font-bold">
-                          {currentHolding.shares.toLocaleString()} shares
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Worth{" "}
-                          {formatCurrency(currentHolding.shares * stock.price)}
-                        </p>
+                    {/* Account/Balance */}
+                    <div className="rounded-md border p-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Account</span>
+                        <span className="text-muted-foreground">Balance</span>
                       </div>
-                    )}
-
-                    {/* Account Selector */}
-                    <div className="space-y-2">
-                      <Label>
-                        {transactionMode === "buy"
-                          ? "Payment Account"
-                          : "Receive To"}
-                      </Label>
-                      <Select
-                        value={
-                          selectedAccount
-                            ? `${selectedAccount.type}:${selectedAccount.id}`
-                            : ""
-                        }
-                        onValueChange={(value) => {
-                          const [type, id] = value.split(":");
-                          setSelectedAccount({
-                            type: type as "player" | "company",
-                            id: id as any,
-                          });
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select account" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {player && (
-                            <SelectItem value={`player:${player._id}`}>
-                              Personal ({formatCurrency(player.balance)})
-                            </SelectItem>
-                          )}
-                          {playerCompanies?.map((company) => (
-                            <SelectItem
-                              key={company._id}
-                              value={`company:${company._id}`}
-                            >
-                              {company.name} ({formatCurrency(company.balance)})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <Select
+                            value={
+                              selectedAccount
+                                ? `${selectedAccount.type}:${selectedAccount.id}`
+                                : ""
+                            }
+                            onValueChange={(value) => {
+                              const [type, id] = value.split(":");
+                              setSelectedAccount({
+                                type: type as any,
+                                id: id as any,
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-[220px]">
+                              <SelectValue placeholder="Select account" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {player && (
+                                <SelectItem value={`player:${player._id}`}>
+                                  Personal ({formatCurrency(player.balance)})
+                                </SelectItem>
+                              )}
+                              {playerCompanies?.map((c) => (
+                                <SelectItem
+                                  key={c._id}
+                                  value={`company:${c._id}`}
+                                >
+                                  {c.name} ({formatCurrency(c.balance)})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="text-right font-medium tabular-nums">
+                          {formatCurrency(selectedAccountBalance)}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Purchase Type */}
@@ -435,43 +667,69 @@ export default function StockDetailPage() {
                       </div>
                     </div>
 
-                    {/* Amount Input */}
+                    {/* Amount Input + Max + Picks */}
                     <div className="space-y-2">
                       <Label htmlFor="amount">
                         {purchaseType === "shares"
                           ? "Number of Shares"
                           : "Dollar Amount"}
                       </Label>
-                      <Input
-                        id="amount"
-                        type="number"
-                        step="any"
-                        min="0.00000001"
-                        max={
-                          transactionMode === "sell" &&
-                          currentHolding &&
-                          purchaseType === "shares"
-                            ? currentHolding.shares
-                            : undefined
-                        }
-                        placeholder={
-                          purchaseType === "shares" ? "0.5" : "1000.00"
-                        }
-                        value={purchaseAmount}
-                        onChange={(e) => setPurchaseAmount(e.target.value)}
-                        required
-                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="amount"
+                          type="number"
+                          step={purchaseType === "shares" ? 1 : "any"}
+                          min={0}
+                          max={
+                            transactionMode === "sell" &&
+                            currentHolding &&
+                            purchaseType === "shares"
+                              ? Math.floor(currentHolding.shares)
+                              : undefined
+                          }
+                          placeholder={
+                            purchaseType === "shares" ? "10" : "100.00"
+                          }
+                          value={purchaseAmount}
+                          onChange={(e) => setPurchaseAmount(e.target.value)}
+                          required
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleSetMax}
+                        >
+                          Max
+                        </Button>
+                      </div>
+                      {/* Quick picks */}
+                      <div className="flex flex-wrap gap-2">
+                        {(purchaseType === "shares"
+                          ? quickSharePicks
+                          : quickDollarPicks
+                        ).map((v) => (
+                          <Button
+                            key={v}
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setPurchaseAmount(String(v))}
+                          >
+                            {purchaseType === "shares"
+                              ? `${v}`
+                              : `$${v.toLocaleString()}`}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Estimated Values */}
                     {purchaseAmount && (
-                      <div className="rounded-md bg-muted p-3 space-y-1">
+                      <div className="space-y-1 rounded-md bg-muted p-3">
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Shares:</span>
                           <span className="font-medium">
-                            {purchaseType === "shares"
-                              ? parseFloat(purchaseAmount).toLocaleString()
-                              : estimatedShares.toLocaleString()}
+                            {estimatedShares.toLocaleString()}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -492,6 +750,19 @@ export default function StockDetailPage() {
                             {formatCurrency(stock.price)}
                           </span>
                         </div>
+                        {stock.totalShares > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">
+                              Est. Ownership:
+                            </span>
+                            <span className="font-medium">
+                              {(
+                                (estimatedShares / stock.totalShares) * 100 || 0
+                              ).toFixed(4)}
+                              %
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -529,90 +800,125 @@ export default function StockDetailPage() {
                 </CardContent>
               </Card>
             </div>
+          </div>
 
-            {/* Right Column - Stock Info */}
-            <div className="lg:col-span-2 space-y-4">
-              {/* Stats Cards */}
-              <div className="grid gap-4 md:grid-cols-3">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Stock Price
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold text-green-600">
-                      {formatCurrency(stock.price)}
-                    </p>
-                    {stock.previousPrice && (
-                      <div className="flex items-center gap-1 mt-1">
-                        {isPositive ? (
-                          <TrendingUp className="h-3 w-3 text-green-600" />
-                        ) : (
-                          <TrendingDown className="h-3 w-3 text-red-600" />
-                        )}
-                        <span
-                          className={`text-xs font-semibold ${
-                            isPositive ? "text-green-600" : "text-red-600"
-                          }`}
-                        >
-                          {isPositive ? "+" : ""}
-                          {priceChange.toFixed(2)}%
-                        </span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+          {/* Below the split: Ownership + Recent Trades */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Ownership Visualizer */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" /> Ownership
+                </CardTitle>
+                <CardDescription>
+                  Top holders and overall distribution
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Pie chart */}
+                {!topHolders || topHolders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No holders yet
+                  </p>
+                ) : (
+                  <div className="h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <RechartsTooltip
+                          formatter={(value: number, name: string) => [
+                            `${
+                              ((value as number) / stock.totalShares) * 100 > 0
+                                ? (
+                                    ((value as number) / stock.totalShares) *
+                                    100
+                                  ).toFixed(2) + "%"
+                                : "0%"
+                            }`,
+                            name,
+                          ]}
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--background))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "6px",
+                          }}
+                        />
+                        <Legend verticalAlign="bottom" height={24} />
+                        {(() => {
+                          const palette = [
+                            "#16a34a", // green-600
+                            "#2563eb", // blue-600
+                            "#f59e0b", // amber-500
+                            "#ef4444", // red-500
+                            "#8b5cf6", // violet-500
+                            "#06b6d4", // cyan-500
+                            "#84cc16", // lime-500
+                            "#e11d48", // rose-600
+                            "#0ea5e9", // sky-500
+                            "#f97316", // orange-500
+                            "#64748b", // slate-500
+                          ];
+                          const holdersSum =
+                            topHolders?.reduce((s, h) => s + h.shares, 0) || 0;
+                          const ceoValue = Math.max(
+                            0,
+                            (stock.totalShares || 0) - holdersSum
+                          );
+                          const pieData = [
+                            ...topHolders.map((h, idx) => ({
+                              name: `Holder #${idx + 1}`,
+                              value: h.shares,
+                            })),
+                            ...(ceoValue > 0
+                              ? [{ name: "CEO", value: ceoValue }]
+                              : []),
+                          ];
+                          return (
+                            <Pie
+                              dataKey="value"
+                              nameKey="name"
+                              data={pieData}
+                              cx="50%"
+                              cy="45%"
+                              outerRadius={100}
+                              innerRadius={60}
+                              paddingAngle={2}
+                            >
+                              {pieData.map((_, idx) => (
+                                <Cell
+                                  key={idx}
+                                  fill={palette[idx % palette.length]}
+                                  stroke="transparent"
+                                />
+                              ))}
+                            </Pie>
+                          );
+                        })()}
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Market Cap
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold text-purple-600">
-                      {formatCurrency(stock.marketCap || 0)}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Total Shares
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">
-                      {stock.totalShares.toLocaleString()}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Ownership Breakdown */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Top Shareholders</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {!topHolders || topHolders.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No shareholders yet
-                    </p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Rank</TableHead>
-                          <TableHead>Shares</TableHead>
-                          <TableHead>Ownership</TableHead>
-                          <TableHead>Value</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {topHolders.map((holder, index) => (
+                {/* Legend + table of top holders */}
+                {!topHolders || topHolders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No holders yet
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Rank</TableHead>
+                        <TableHead>Shares</TableHead>
+                        <TableHead>Ownership</TableHead>
+                        <TableHead>Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {topHolders.map((holder, index) => {
+                        const percent = calculateOwnershipPercentage(
+                          holder.shares
+                        );
+                        return (
                           <TableRow key={holder._id}>
                             <TableCell className="font-medium">
                               #{index + 1}
@@ -622,167 +928,79 @@ export default function StockDetailPage() {
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">
-                                {calculateOwnershipPercentage(
-                                  holder.shares
-                                ).toFixed(2)}
-                                %
+                                {percent.toFixed(2)}%
                               </Badge>
                             </TableCell>
                             <TableCell className="font-medium text-green-600">
-                              {formatCurrency(holder.shares * stock.price)}
+                              {formatCurrency(
+                                Math.floor(holder.shares * stock.price)
+                              )}
                             </TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
 
-              {/* Price Chart */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Price History</CardTitle>
-                    <div className="flex gap-2">
-                      {(
-                        ["1H", "1D", "1W", "1M", "1Y", "ALL"] as Timeframe[]
-                      ).map((tf) => (
-                        <Button
-                          key={tf}
-                          variant={
-                            selectedTimeframe === tf ? "default" : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setSelectedTimeframe(tf)}
-                        >
-                          {tf}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {!priceHistory || priceHistory.length === 0 ? (
-                    <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-                      No price history available yet
-                    </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={priceHistory}>
-                        <XAxis
-                          dataKey="timestamp"
-                          tickFormatter={(ts) => {
-                            const date = new Date(ts);
-                            if (selectedTimeframe === "1H") {
-                              return date.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              });
-                            } else if (selectedTimeframe === "1D") {
-                              return date.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              });
-                            } else {
-                              return date.toLocaleDateString([], {
-                                month: "short",
-                                day: "numeric",
-                              });
-                            }
-                          }}
-                          stroke="hsl(var(--muted-foreground))"
-                        />
-                        <YAxis
-                          tickFormatter={(value) => formatCurrency(value)}
-                          stroke="hsl(var(--muted-foreground))"
-                        />
-                        <Tooltip
-                          formatter={(value: number) => [
-                            formatCurrency(value),
-                            "Price",
-                          ]}
-                          labelFormatter={(ts) => new Date(ts).toLocaleString()}
-                          contentStyle={{
-                            backgroundColor: "hsl(var(--background))",
-                            border: "1px solid hsl(var(--border))",
-                            borderRadius: "6px",
-                          }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="price"
-                          stroke="#22c55e"
-                          strokeWidth={3}
-                          dot={false}
-                          isAnimationActive={true}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Recent Trades */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Trades</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {!recentTrades || recentTrades.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No trades yet
-                    </p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Time</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Shares</TableHead>
-                          <TableHead>Price/Share</TableHead>
-                          <TableHead>Total Value</TableHead>
+            {/* Recent Trades */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Trades</CardTitle>
+                <CardDescription>Anonymous recent activity</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!recentTrades || recentTrades.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No trades yet</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Time</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Shares</TableHead>
+                        <TableHead>Price/Share</TableHead>
+                        <TableHead>Total Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentTrades.map((trade) => (
+                        <TableRow key={trade._id}>
+                          <TableCell className="text-xs">
+                            {new Date(trade.timestamp).toLocaleString([], {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                trade.tradeType === "buy"
+                                  ? "default"
+                                  : "outline"
+                              }
+                            >
+                              {trade.tradeType.toUpperCase()}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{trade.shares.toLocaleString()}</TableCell>
+                          <TableCell>
+                            {formatCurrency(trade.pricePerShare)}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatCurrency(trade.totalValue)}
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {recentTrades.map((trade) => (
-                          <TableRow key={trade._id}>
-                            <TableCell className="text-xs">
-                              {new Date(trade.timestamp).toLocaleString([], {
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  trade.tradeType === "buy"
-                                    ? "default"
-                                    : "outline"
-                                }
-                              >
-                                {trade.tradeType.toUpperCase()}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {trade.shares.toLocaleString()}
-                            </TableCell>
-                            <TableCell>
-                              {formatCurrency(trade.pricePerShare)}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {formatCurrency(trade.totalValue)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
