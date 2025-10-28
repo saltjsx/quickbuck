@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import type { Id } from "convex/_generated/dataModel";
 
 /**
- * GlobalAlertBanner Component
- * Displays unread global alerts to users at the top of the page
+ * GlobalAlertModal Component
+ * Displays unread global alerts to users as a modal dialog
+ * Shows one alert at a time; next alert appears after dismissing
  * Auto-marks alerts as read when dismissed
  */
 export function GlobalAlertBanner() {
@@ -14,201 +15,332 @@ export function GlobalAlertBanner() {
   // @ts-ignore
   const markAsRead = useMutation(api.alerts?.markAlertAsRead);
 
+  const [currentAlertIndex, setCurrentAlertIndex] = useState(0);
   const [displayedAlerts, setDisplayedAlerts] = useState<any[]>([]);
 
   // Sync with unread alerts
   useEffect(() => {
     if (unreadAlerts) {
       setDisplayedAlerts(unreadAlerts);
+      setCurrentAlertIndex(0);
     }
   }, [unreadAlerts]);
 
-  const handleDismiss = async (alertId: Id<"globalAlerts">) => {
+  const currentAlert = displayedAlerts[currentAlertIndex];
+
+  const handleDismiss = async () => {
+    if (!currentAlert) return;
+
     try {
-      await markAsRead({ alertId });
-      setDisplayedAlerts((prev) => prev.filter((a) => a._id !== alertId));
+      await markAsRead({ alertId: currentAlert._id });
+      setDisplayedAlerts((prev) =>
+        prev.filter((_, i) => i !== currentAlertIndex)
+      );
+      // Keep index the same (will show next alert or close if none left)
+      if (currentAlertIndex >= displayedAlerts.length - 1) {
+        setCurrentAlertIndex(Math.max(0, displayedAlerts.length - 2));
+      }
     } catch (err) {
       console.error("Failed to mark alert as read:", err);
     }
   };
 
-  if (displayedAlerts.length === 0) {
+  const handleNext = async () => {
+    if (!currentAlert) return;
+
+    try {
+      await markAsRead({ alertId: currentAlert._id });
+      setDisplayedAlerts((prev) =>
+        prev.filter((_, i) => i !== currentAlertIndex)
+      );
+    } catch (err) {
+      console.error("Failed to mark alert as read:", err);
+    }
+  };
+
+  if (displayedAlerts.length === 0 || !currentAlert) {
     return null;
   }
 
+  const getAlertEmoji = (type: string) => {
+    switch (type) {
+      case "info":
+        return "ℹ️";
+      case "success":
+        return "✓";
+      case "warning":
+        return "⚠️";
+      case "error":
+        return "✗";
+      default:
+        return "📢";
+    }
+  };
+
   return (
-    <div className="global-alerts-container">
-      {displayedAlerts.map((alert) => (
-        <div key={alert._id} className={`global-alert alert-${alert.type}`}>
-          <div className="alert-content">
-            <div className="alert-title-line">
-              <strong>{alert.title}</strong>
-              <span className={`alert-badge alert-badge-${alert.type}`}>
-                {alert.type.toUpperCase()}
-              </span>
-            </div>
-            <p className="alert-text">{alert.message}</p>
-          </div>
+    <div className="global-alert-modal-overlay">
+      <div className={`global-alert-modal alert-${currentAlert.type}`}>
+        <div className="alert-modal-header">
+          <span className="alert-modal-emoji">
+            {getAlertEmoji(currentAlert.type)}
+          </span>
+          <h2 className="alert-modal-title">{currentAlert.title}</h2>
           <button
-            className="alert-close-btn"
-            onClick={() => handleDismiss(alert._id)}
+            className="alert-modal-close"
+            onClick={handleDismiss}
             title="Dismiss"
+            aria-label="Close alert"
           >
             ×
           </button>
         </div>
-      ))}
+
+        <div className="alert-modal-body">
+          <p className="alert-modal-message">{currentAlert.message}</p>
+        </div>
+
+        <div className="alert-modal-footer">
+          <span className="alert-count">
+            {currentAlertIndex + 1} of {displayedAlerts.length}
+          </span>
+          <div className="alert-modal-actions">
+            <button className="alert-btn-dismiss" onClick={handleDismiss}>
+              Dismiss
+            </button>
+            {displayedAlerts.length > 1 && (
+              <button className="alert-btn-next" onClick={handleNext}>
+                Next ({displayedAlerts.length - 1})
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
 
       <style>{`
-        .global-alerts-container {
+        .global-alert-modal-overlay {
           position: fixed;
           top: 0;
           left: 0;
           right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
           z-index: 9000;
-          display: flex;
-          flex-direction: column;
-          gap: 0;
-          max-height: 100vh;
-          overflow-y: auto;
-          pointer-events: none;
+          animation: fadeIn 0.3s ease-out;
         }
 
-        .global-alert {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 12px;
-          padding: 12px 16px;
-          margin: 0;
-          border-bottom: 2px solid;
-          background: #ffffff;
-          pointer-events: auto;
-          animation: slideDown 0.3s ease-out;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        }
-
-        @keyframes slideDown {
+        @keyframes fadeIn {
           from {
-            transform: translateY(-100%);
             opacity: 0;
           }
           to {
-            transform: translateY(0);
             opacity: 1;
           }
         }
 
-        .global-alert.alert-info {
+        @keyframes scaleIn {
+          from {
+            transform: scale(0.95);
+            opacity: 0;
+          }
+          to {
+            transform: scale(1);
+            opacity: 1;
+          }
+        }
+
+        .global-alert-modal {
+          background: #ffffff;
+          border: 3px solid;
+          border-radius: 8px;
+          box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+          max-width: 500px;
+          width: 90%;
+          max-height: 80vh;
+          display: flex;
+          flex-direction: column;
+          animation: scaleIn 0.3s ease-out;
+          overflow: hidden;
+        }
+
+        .global-alert-modal.alert-info {
           border-color: #0000ff;
-          background: #e6f2ff;
         }
 
-        .global-alert.alert-success {
+        .global-alert-modal.alert-success {
           border-color: #008000;
-          background: #e6ffe6;
         }
 
-        .global-alert.alert-warning {
+        .global-alert-modal.alert-warning {
           border-color: #ff8c00;
-          background: #fff9e6;
         }
 
-        .global-alert.alert-error {
+        .global-alert-modal.alert-error {
           border-color: #ff0000;
-          background: #ffe6e6;
         }
 
-        .alert-content {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .alert-title-line {
+        .alert-modal-header {
           display: flex;
           align-items: center;
-          gap: 8px;
-          margin-bottom: 4px;
+          gap: 12px;
+          padding: 20px;
+          border-bottom: 2px solid #e0e0e0;
+          position: relative;
         }
 
-        .alert-content strong {
-          color: #000000;
-          font-size: 14px;
-          font-weight: 600;
+        .alert-modal-emoji {
+          font-size: 24px;
+          flex-shrink: 0;
         }
 
-        .alert-badge {
-          display: inline-block;
-          font-size: 10px;
-          font-weight: bold;
-          padding: 2px 6px;
-          border-radius: 2px;
-          white-space: nowrap;
-        }
-
-        .alert-badge-info {
-          background: #0000ff;
-          color: #ffffff;
-        }
-
-        .alert-badge-success {
-          background: #008000;
-          color: #ffffff;
-        }
-
-        .alert-badge-warning {
-          background: #ff8c00;
-          color: #ffffff;
-        }
-
-        .alert-badge-error {
-          background: #ff0000;
-          color: #ffffff;
-        }
-
-        .alert-text {
+        .alert-modal-title {
           margin: 0;
+          font-size: 18px;
+          font-weight: 600;
           color: #000000;
-          font-size: 13px;
-          line-height: 1.4;
+          flex: 1;
+        }
+
+        .alert-modal-close {
+          width: 32px;
+          height: 32px;
+          padding: 0;
+          background: transparent;
+          border: none;
+          font-size: 24px;
+          color: #808080;
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          transition: color 0.2s;
+        }
+
+        .alert-modal-close:hover {
+          color: #000000;
+        }
+
+        .alert-modal-body {
+          padding: 20px;
+          flex: 1;
+          overflow-y: auto;
+        }
+
+        .alert-modal-message {
+          margin: 0;
+          color: #333333;
+          font-size: 14px;
+          line-height: 1.6;
           white-space: pre-wrap;
           word-wrap: break-word;
         }
 
-        .alert-close-btn {
-          flex-shrink: 0;
-          width: 28px;
-          height: 28px;
-          padding: 0;
-          background: transparent;
-          border: none;
+        .alert-modal-footer {
+          padding: 15px 20px;
+          border-top: 1px solid #e0e0e0;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          background: #f8f8f8;
+        }
+
+        .alert-count {
+          font-size: 12px;
           color: #808080;
-          font-size: 20px;
-          cursor: pointer;
-          line-height: 1;
-          transition: color 0.2s;
+          font-weight: 500;
         }
 
-        .alert-close-btn:hover {
+        .alert-modal-actions {
+          display: flex;
+          gap: 10px;
+        }
+
+        .alert-btn-dismiss,
+        .alert-btn-next {
+          padding: 8px 16px;
+          border: 1px solid #c0c0c0;
+          background: #f0f0f0;
           color: #000000;
+          font-weight: 500;
+          font-size: 13px;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: all 0.2s;
         }
 
-        @media (max-width: 768px) {
-          .global-alerts-container {
-            max-height: 50vh;
+        .alert-btn-dismiss:hover {
+          background: #e0e0e0;
+          border-color: #a0a0a0;
+        }
+
+        .alert-btn-dismiss:active {
+          transform: scale(0.98);
+        }
+
+        .alert-btn-next {
+          background: #0080ff;
+          color: #ffffff;
+          border-color: #0060df;
+        }
+
+        .alert-btn-next:hover {
+          background: #0060df;
+          border-color: #004aaf;
+        }
+
+        .alert-btn-next:active {
+          transform: scale(0.98);
+        }
+
+        @media (max-width: 600px) {
+          .global-alert-modal {
+            max-width: 95%;
+            max-height: 90vh;
           }
 
-          .global-alert {
-            padding: 10px 12px;
-            gap: 8px;
+          .alert-modal-header {
+            padding: 15px;
           }
 
-          .alert-content strong {
+          .alert-modal-emoji {
+            font-size: 20px;
+          }
+
+          .alert-modal-title {
+            font-size: 16px;
+          }
+
+          .alert-modal-close {
+            width: 28px;
+            height: 28px;
+            font-size: 20px;
+          }
+
+          .alert-modal-body {
+            padding: 15px;
+          }
+
+          .alert-modal-message {
             font-size: 13px;
           }
 
-          .alert-text {
-            font-size: 12px;
+          .alert-modal-footer {
+            flex-direction: column;
+            gap: 12px;
+            align-items: stretch;
+          }
+
+          .alert-modal-actions {
+            width: 100%;
+            gap: 8px;
+          }
+
+          .alert-btn-dismiss,
+          .alert-btn-next {
+            flex: 1;
           }
         }
       `}</style>
