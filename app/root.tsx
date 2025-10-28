@@ -15,6 +15,9 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { Analytics } from "@vercel/analytics/react";
 import { GlobalAlertBanner } from "./components/global-alert-banner";
+import * as Sentry from "@sentry/react";
+import { initializeSentryClient } from "./lib/sentry.client";
+import { useEffect } from "react";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
@@ -117,7 +120,15 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function App({ loaderData }: Route.ComponentProps) {
+function AppContent({ loaderData }: Route.ComponentProps) {
+  // Initialize Sentry on client-side only
+  useEffect(() => {
+    // Only run on client side
+    if (typeof window !== "undefined") {
+      initializeSentryClient();
+    }
+  }, []);
+
   return (
     <ClerkProvider
       loaderData={loaderData}
@@ -131,6 +142,18 @@ export default function App({ loaderData }: Route.ComponentProps) {
     </ClerkProvider>
   );
 }
+
+export default Sentry.withErrorBoundary(AppContent, {
+  fallback: (
+    <main className="pt-16 p-4 container mx-auto">
+      <h1>Application Error</h1>
+      <p>
+        We're sorry, but something went wrong. Our team has been notified and
+        will investigate.
+      </p>
+    </main>
+  ),
+});
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   let message = "Oops!";
