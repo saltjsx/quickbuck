@@ -195,16 +195,10 @@ export const updateProduct = mutation({
       validatedUpdates.description = validateDescription(updates.description, "Product description");
     }
 
-    // If price is being updated, recalculate production cost
-    let productionCost = product.productionCost;
-    if (updates.price !== undefined) {
-      const costPercentage = 0.35 + Math.random() * 0.32;
-      productionCost = Math.floor(updates.price * costPercentage);
-    }
-
+    // Production cost should never change after product creation
+    // It represents the fixed cost to manufacture the product
     await ctx.db.patch(productId, {
       ...validatedUpdates,
-      productionCost,
       updatedAt: Date.now(),
     });
 
