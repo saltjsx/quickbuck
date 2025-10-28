@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { validateName, validateDescription } from "./contentFilter";
 
 // Mutation: Create product (no initial stock, just the product listing)
 export const createProduct = mutation({
@@ -14,6 +15,10 @@ export const createProduct = mutation({
     maxPerOrder: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    // CONTENT FILTER: Validate product name and description
+    const validatedName = validateName(args.name, "Product name");
+    const validatedDescription = validateDescription(args.description, "Product description");
+
     // EXPLOIT FIX: Validate price is positive and safe integer
     if (args.price <= 0) {
       throw new Error("Price must be greater than 0");
@@ -49,8 +54,8 @@ export const createProduct = mutation({
 
     const productId = await ctx.db.insert("products", {
       companyId: args.companyId,
-      name: args.name,
-      description: args.description,
+      name: validatedName,
+      description: validatedDescription,
       price: args.price,
       productionCost: productionCost,
       image: args.image,
@@ -174,6 +179,15 @@ export const updateProduct = mutation({
       throw new Error("Product not found");
     }
 
+    // CONTENT FILTER: Validate name and description if provided
+    const validatedUpdates: any = { ...updates };
+    if (updates.name !== undefined) {
+      validatedUpdates.name = validateName(updates.name, "Product name");
+    }
+    if (updates.description !== undefined) {
+      validatedUpdates.description = validateDescription(updates.description, "Product description");
+    }
+
     // If price is being updated, recalculate production cost
     let productionCost = product.productionCost;
     if (updates.price !== undefined) {
@@ -182,7 +196,7 @@ export const updateProduct = mutation({
     }
 
     await ctx.db.patch(productId, {
-      ...updates,
+      ...validatedUpdates,
       productionCost,
       updatedAt: Date.now(),
     });

@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { validateName, validateDescription } from "./contentFilter";
 
 // Mutation: Create cryptocurrency
 export const createCryptocurrency = mutation({
@@ -12,10 +13,20 @@ export const createCryptocurrency = mutation({
     image: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // CONTENT FILTER: Validate cryptocurrency name and description
+    const validatedName = validateName(args.name, "Cryptocurrency name");
+    const validatedDescription = validateDescription(args.description, "Cryptocurrency description");
+    
+    // CONTENT FILTER: Validate ticker (alphanumeric only, 3-6 chars)
+    const tickerUpper = args.ticker.toUpperCase().trim();
+    if (!/^[A-Z0-9]{3,6}$/.test(tickerUpper)) {
+      throw new Error("Ticker must be 3-6 alphanumeric characters");
+    }
+
     // Check if ticker is already taken
     const existing = await ctx.db
       .query("cryptocurrencies")
-      .withIndex("by_ticker", (q) => q.eq("ticker", args.ticker.toUpperCase()))
+      .withIndex("by_ticker", (q) => q.eq("ticker", tickerUpper))
       .unique();
 
     if (existing) {
@@ -41,9 +52,9 @@ export const createCryptocurrency = mutation({
 
     const cryptoId = await ctx.db.insert("cryptocurrencies", {
       creatorId: args.creatorId,
-      name: args.name,
-      ticker: args.ticker.toUpperCase(),
-      description: args.description,
+      name: validatedName,
+      ticker: tickerUpper,
+      description: validatedDescription,
       image: args.image,
       price: initialPrice,
       marketCap: initialMarketCap,

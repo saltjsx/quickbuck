@@ -101,6 +101,19 @@ export const getOrCreatePlayer = mutation({
     let userId: Id<"users">;
     
     if (!user) {
+      // DUPLICATE EMAIL FIX: Check if email already exists before creating new user
+      if (identity.email) {
+        const existingEmailUser = await ctx.db
+          .query("users")
+          .withIndex("by_email", (q) => q.eq("email", identity.email))
+          .first();
+        
+        if (existingEmailUser) {
+          // Email exists with different token - prevent duplicate signup
+          throw new Error("An account with this email already exists. Please sign in with your existing account.");
+        }
+      }
+
       // Create new user if doesn't exist
       userId = await ctx.db.insert("users", {
         name: identity.name ?? "Anonymous",
@@ -111,7 +124,7 @@ export const getOrCreatePlayer = mutation({
       userId = user._id;
     }
 
-    // Check if player exists
+    // Check if player exists for this user
     const existingPlayer = await ctx.db
       .query("players")
       .withIndex("by_userId", (q) => q.eq("userId", userId))
@@ -119,6 +132,26 @@ export const getOrCreatePlayer = mutation({
 
     if (existingPlayer) {
       return existingPlayer;
+    }
+
+    // DUPLICATE EMAIL FIX: Double-check no player exists with this email
+    // This prevents edge case where user signs up with same email but different auth method
+    if (identity.email) {
+      const userWithSameEmail = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", identity.email))
+        .first();
+      
+      if (userWithSameEmail && userWithSameEmail._id !== userId) {
+        const existingPlayerForEmail = await ctx.db
+          .query("players")
+          .withIndex("by_userId", (q) => q.eq("userId", userWithSameEmail._id))
+          .unique();
+        
+        if (existingPlayerForEmail) {
+          throw new Error("A player account with this email already exists. Please sign in with your existing account.");
+        }
+      }
     }
 
     // Create new player with starting balance of $10,000

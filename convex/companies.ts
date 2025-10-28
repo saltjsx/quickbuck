@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import { validateName, validateDescription } from "./contentFilter";
 
 // Mutation: Create company
 export const createCompany = mutation({
@@ -13,13 +14,17 @@ export const createCompany = mutation({
     tags: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    // CONTENT FILTER: Validate company name and description
+    const validatedName = validateName(args.name, "Company name");
+    const validatedDescription = validateDescription(args.description, "Company description");
+
     const now = Date.now();
     
     const companyId = await ctx.db.insert("companies", {
       ownerId: args.ownerId,
-      name: args.name,
+      name: validatedName,
       ticker: args.ticker,
-      description: args.description,
+      description: validatedDescription,
       logo: args.logo,
       tags: args.tags,
       balance: 0,
@@ -53,8 +58,13 @@ export const updateCompanyInfo = mutation({
       updatedAt: Date.now(),
     };
 
-    if (args.name !== undefined) updates.name = args.name;
-    if (args.description !== undefined) updates.description = args.description;
+    // CONTENT FILTER: Validate name and description if provided
+    if (args.name !== undefined) {
+      updates.name = validateName(args.name, "Company name");
+    }
+    if (args.description !== undefined) {
+      updates.description = validateDescription(args.description, "Company description");
+    }
     if (args.logo !== undefined) updates.logo = args.logo;
     if (args.tags !== undefined) updates.tags = args.tags;
 

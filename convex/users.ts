@@ -1,5 +1,6 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { validateUsername } from "./contentFilter";
 
 export const findUserByToken = query({
   args: { tokenIdentifier: v.string() },
@@ -39,7 +40,17 @@ export const upsertUser = mutation({
       (identity as any)?.profileImageUrl ||
       undefined;
 
-    // Check if user exists
+    // CONTENT FILTER: Validate username if provided
+    let validatedUsername: string | undefined = undefined;
+    if (identity.username) {
+      try {
+        validatedUsername = validateUsername(identity.username as string);
+      } catch (error) {
+        throw new Error(`Invalid username: ${error instanceof Error ? error.message : 'contains inappropriate content'}`);
+      }
+    }
+
+    // Check if user exists by token
     const existingUser = await ctx.db
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
@@ -50,7 +61,7 @@ export const upsertUser = mutation({
       const updatedFields: Parameters<typeof ctx.db.patch>[1] = {
         name: identity.name,
         email: identity.email,
-        clerkUsername: (identity.username as string) ?? undefined,
+        clerkUsername: validatedUsername,
         image: clerkImage ?? undefined,
       };
 
@@ -69,11 +80,23 @@ export const upsertUser = mutation({
       return await ctx.db.get(existingUser._id);
     }
 
+    // DUPLICATE EMAIL FIX: Check if email already exists before creating new user
+    if (identity.email) {
+      const existingEmailUser = await ctx.db
+        .query("users")
+        .withIndex("by_email", (q) => q.eq("email", identity.email))
+        .first();
+      
+      if (existingEmailUser) {
+        throw new Error("An account with this email already exists. Please use a different email or sign in with your existing account.");
+      }
+    }
+
     // Create new user
     const userId = await ctx.db.insert("users", {
       name: identity.name,
       email: identity.email,
-      clerkUsername: (identity.username as string) ?? undefined,
+      clerkUsername: validatedUsername,
       image: clerkImage ?? undefined,
       tokenIdentifier: identity.subject,
     });

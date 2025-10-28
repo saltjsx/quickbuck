@@ -8,7 +8,9 @@ export default defineSchema({
     image: v.optional(v.string()),
     clerkUsername: v.optional(v.string()), // Clerk username identifier
     tokenIdentifier: v.string(),
-  }).index("by_token", ["tokenIdentifier"]),
+  })
+    .index("by_token", ["tokenIdentifier"])
+    .index("by_email", ["email"]),
   
   // Game tables
   players: defineTable({
