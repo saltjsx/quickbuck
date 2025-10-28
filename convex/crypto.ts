@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { validateName, validateDescription } from "./contentFilter";
+import { canCreateContent } from "./moderation";
 
 // Mutation: Create cryptocurrency
 export const createCryptocurrency = mutation({
@@ -13,6 +14,12 @@ export const createCryptocurrency = mutation({
     image: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // ROLE CHECK: Verify player can create crypto
+    const canCreate = await canCreateContent(ctx, args.creatorId);
+    if (!canCreate) {
+      throw new Error("Your account does not have permission to create cryptocurrencies");
+    }
+
     // CONTENT FILTER: Validate cryptocurrency name and description
     const validatedName = validateName(args.name, "Cryptocurrency name");
     const validatedDescription = validateDescription(args.description, "Cryptocurrency description");

@@ -8,6 +8,11 @@ import { api } from "../../../convex/_generated/api";
 import type { Route } from "./+types/layout";
 import { createClerkClient } from "@clerk/react-router/api.server";
 import { Outlet } from "react-router";
+import { useQuery } from "convex/react";
+import {
+  BannedAccountScreen,
+  LimitedAccountAlert,
+} from "~/components/account-status";
 
 export async function loader(args: Route.LoaderArgs) {
   const { userId } = await getAuth(args);
@@ -27,6 +32,17 @@ export async function loader(args: Route.LoaderArgs) {
 
 export default function DashboardLayout() {
   const { user } = useLoaderData();
+  // @ts-ignore - moderation API will be available after Convex regenerates types
+  const currentPlayer = useQuery(api.moderation?.getCurrentPlayer);
+
+  // Show banned screen if player is banned
+  if (currentPlayer?.role === "banned") {
+    return (
+      <BannedAccountScreen
+        reason={currentPlayer.banReason || "Your account has been banned."}
+      />
+    );
+  }
 
   return (
     <SidebarProvider
@@ -37,6 +53,11 @@ export default function DashboardLayout() {
         } as React.CSSProperties
       }
     >
+      {/* Show limited account alert if player is limited */}
+      {currentPlayer?.role === "limited" && currentPlayer.limitReason && (
+        <LimitedAccountAlert reason={currentPlayer.limitReason} />
+      )}
+
       <AppSidebar variant="inset" user={user} />
       <SidebarInset>
         <SiteHeader />

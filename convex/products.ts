@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { validateName, validateDescription } from "./contentFilter";
+import { canCreateContent } from "./moderation";
 
 // Mutation: Create product (no initial stock, just the product listing)
 export const createProduct = mutation({
@@ -15,6 +16,17 @@ export const createProduct = mutation({
     maxPerOrder: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const company = await ctx.db.get(args.companyId);
+    if (!company) {
+      throw new Error("Company not found");
+    }
+
+    // ROLE CHECK: Verify company owner can create products
+    const canCreate = await canCreateContent(ctx, company.ownerId);
+    if (!canCreate) {
+      throw new Error("Your account does not have permission to create products");
+    }
+
     // CONTENT FILTER: Validate product name and description
     const validatedName = validateName(args.name, "Product name");
     const validatedDescription = validateDescription(args.description, "Product description");
@@ -39,11 +51,6 @@ export const createProduct = mutation({
       if (args.maxPerOrder <= 0 || !Number.isSafeInteger(args.maxPerOrder)) {
         throw new Error("Invalid maxPerOrder value");
       }
-    }
-
-    const company = await ctx.db.get(args.companyId);
-    if (!company) {
-      throw new Error("Company not found");
     }
 
     const now = Date.now();

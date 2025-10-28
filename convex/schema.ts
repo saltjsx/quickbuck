@@ -17,10 +17,25 @@ export default defineSchema({
     userId: v.id("users"),
     balance: v.number(), // in cents
     netWorth: v.number(), // in cents, calculated field
+    role: v.optional(v.union(
+      v.literal("normal"),
+      v.literal("limited"),
+      v.literal("banned"),
+      v.literal("mod"),
+      v.literal("admin")
+    )), // Player role - defaults to "normal"
+    limitReason: v.optional(v.string()), // Reason for limited account
+    banReason: v.optional(v.string()), // Reason for ban
+    warnings: v.optional(v.array(v.object({
+      reason: v.string(),
+      createdAt: v.number(),
+    }))), // List of warnings
+    warningCount: v.optional(v.number()), // Total warnings (for quick access)
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_userId", ["userId"]),
+    .index("by_userId", ["userId"])
+    .index("by_role", ["role"]),
 
   companies: defineTable({
     ownerId: v.id("players"),

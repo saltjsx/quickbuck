@@ -74,6 +74,7 @@ export const createPlayer = mutation({
       userId: args.userId,
       balance: 1000000, // Start with $10,000 (in cents)
       netWorth: 1000000,
+      role: "normal", // Default role
       createdAt: now,
       updatedAt: now,
     });
@@ -160,6 +161,7 @@ export const getOrCreatePlayer = mutation({
       userId: userId,
       balance: 1000000, // $10,000 in cents
       netWorth: 1000000,
+      role: "normal", // Default role
       createdAt: now,
       updatedAt: now,
     });

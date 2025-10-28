@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { validateName, validateDescription } from "./contentFilter";
+import { canCreateContent } from "./moderation";
 
 // Mutation: Create company
 export const createCompany = mutation({
@@ -14,6 +15,12 @@ export const createCompany = mutation({
     tags: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
+    // ROLE CHECK: Verify player can create companies
+    const canCreate = await canCreateContent(ctx, args.ownerId);
+    if (!canCreate) {
+      throw new Error("Your account does not have permission to create companies");
+    }
+
     // CONTENT FILTER: Validate company name and description
     const validatedName = validateName(args.name, "Company name");
     const validatedDescription = validateDescription(args.description, "Company description");
