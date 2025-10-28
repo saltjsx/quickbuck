@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery } from "convex/react";
 import { api } from "convex/_generated/api";
@@ -18,17 +18,13 @@ import { CompanyLogo } from "~/components/ui/company-logo";
 import { UserAvatar } from "~/components/ui/user-avatar";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
-import {
-  TrendingUp,
-  Building2,
-  Coins,
-  ShoppingBag,
-  ArrowUpDown,
-} from "lucide-react";
+import { Building2, Coins, ShoppingBag, ArrowUpDown } from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
 import { getAuth } from "@clerk/react-router/ssr.server";
 import { redirect } from "react-router";
 import type { Route } from "./+types/portfolio";
+import { NetWorthBreakdownModern } from "~/components/dashboard/modern/net-worth-breakdown-modern";
+import { AnimatedNumber } from "~/components/ui/animated-number";
 
 type SortField = "value" | "amount" | "name";
 type SortOrder = "asc" | "desc";
@@ -57,9 +53,15 @@ export default function PortfolioPage() {
     user ? { userId: user._id as Id<"users"> } : "skip"
   );
 
-  // Get player data for net worth calculation
-  const playerData = useQuery(
-    api.players.getPlayer,
+  // Get player balance and net worth (for KPI cards)
+  const balance = useQuery(
+    api.players.getPlayerBalance,
+    player?._id ? { playerId: player._id } : "skip"
+  );
+
+  // Get player's companies to compute equity
+  const playerCompanies = useQuery(
+    api.companies.getPlayerCompanies,
     player?._id ? { playerId: player._id } : "skip"
   );
 
@@ -141,7 +143,12 @@ export default function PortfolioPage() {
       0
     ) || 0;
 
-  const totalNetWorth = playerData?.netWorth || 0;
+  const totalBalance = balance ?? 0;
+  const companyEquity =
+    playerCompanies?.reduce(
+      (sum, company) => sum + (company.balance + (company.marketCap ?? 0)),
+      0
+    ) ?? 0;
 
   const sortStocks = (data: typeof stocksWithDetails) => {
     if (!data) return [];
@@ -192,94 +199,120 @@ export default function PortfolioPage() {
   const sortedStocks = sortStocks(stocksWithDetails);
   const sortedCrypto = sortCrypto(cryptoWithDetails);
 
+  // Memoize P/L calculations for rows
+  const stockRows = useMemo(() => {
+    return sortedStocks.map((item) => {
+      const value = item.stock ? item.holding.shares * item.stock.price : 0;
+      const cost =
+        item.holding.shares * (item.holding.averagePurchasePrice || 0);
+      const pnl = value - cost;
+      const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
+      return { ...item, value, cost, pnl, pnlPct };
+    });
+  }, [sortedStocks]);
+
+  const cryptoRows = useMemo(() => {
+    return sortedCrypto.map((item) => {
+      const value = item.crypto
+        ? Math.floor(item.holding.amount * item.crypto.price)
+        : 0;
+      const cost = Math.floor(
+        item.holding.amount * (item.holding.averagePurchasePrice || 0)
+      );
+      const pnl = value - cost;
+      const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
+      return { ...item, value, cost, pnl, pnlPct };
+    });
+  }, [sortedCrypto]);
+
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
         <div className="flex flex-col gap-4 p-4 md:gap-6 md:p-6">
-          {/* Header with Net Worth */}
-          <div className="text-center">
-            <h1 className="text-3xl font-bold tracking-tight mb-2">
+          {/* Page Header */}
+          <div className="flex flex-col gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
               Portfolio
             </h1>
-            <div className="inline-flex items-center gap-2 rounded-lg bg-primary/10 px-6 py-4">
-              <TrendingUp className="h-6 w-6 text-primary" />
-              <div className="text-left">
-                <p className="text-sm text-muted-foreground">Total Net Worth</p>
-                <p className="text-3xl font-bold text-primary">
-                  {formatCurrency(totalNetWorth)}
-                </p>
-              </div>
-            </div>
+            <p className="text-sm text-muted-foreground">
+              A clear overview of your assets, holdings, and allocations.
+            </p>
           </div>
 
-          {/* Stocks Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle>Stock Holdings</CardTitle>
+          {/* Removed large KPI cards to emphasize sections */}
+
+          {/* Holdings Sections */}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-muted-foreground" />
+                    <CardTitle>Stock Holdings</CardTitle>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Total Value</p>
+                    <div className="text-lg font-semibold text-foreground">
+                      <AnimatedNumber
+                        value={totalStocksValue}
+                        compact={false}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <Badge variant="outline" className="text-lg font-semibold">
-                  {formatCurrency(totalStocksValue)}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {!stocksWithDetails || stocksWithDetails.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No stock holdings yet
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Company</TableHead>
-                      <TableHead>Ticker</TableHead>
-                      <TableHead
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() =>
-                          setStockSort({
-                            field: "amount",
-                            order:
-                              stockSort.field === "amount" &&
-                              stockSort.order === "desc"
-                                ? "asc"
-                                : "desc",
-                          })
-                        }
-                      >
-                        <div className="flex items-center gap-1">
-                          Shares
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </TableHead>
-                      <TableHead
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() =>
-                          setStockSort({
-                            field: "value",
-                            order:
-                              stockSort.field === "value" &&
-                              stockSort.order === "desc"
-                                ? "asc"
-                                : "desc",
-                          })
-                        }
-                      >
-                        <div className="flex items-center gap-1">
-                          Value
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedStocks.map((item) => {
-                      const value = item.stock
-                        ? item.holding.shares * item.stock.price
-                        : 0;
-                      return (
+              </CardHeader>
+              <CardContent>
+                {!stocksWithDetails || stocksWithDetails.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No stock holdings yet
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Asset</TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() =>
+                            setStockSort({
+                              field: "amount",
+                              order:
+                                stockSort.field === "amount" &&
+                                stockSort.order === "desc"
+                                  ? "asc"
+                                  : "desc",
+                            })
+                          }
+                        >
+                          <div className="flex items-center gap-1">
+                            Shares
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead>Avg Price</TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() =>
+                            setStockSort({
+                              field: "value",
+                              order:
+                                stockSort.field === "value" &&
+                                stockSort.order === "desc"
+                                  ? "asc"
+                                  : "desc",
+                            })
+                          }
+                        >
+                          <div className="flex items-center gap-1">
+                            Value
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead className="text-right">P/L</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {stockRows.map((item) => (
                         <TableRow
                           key={item.holding._id}
                           className="cursor-pointer hover:bg-muted/50"
@@ -293,105 +326,122 @@ export default function PortfolioPage() {
                               <Badge variant="outline" className="font-mono">
                                 {item.stock?.ticker}
                               </Badge>
-                              <div className="flex flex-col">
-                                <span className="text-sm">Stock</span>
-                              </div>
+                              <span className="text-xs text-muted-foreground">
+                                Stock
+                              </span>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="font-mono">
-                              {item.stock?.ticker}
-                            </Badge>
                           </TableCell>
                           <TableCell>
                             {item.holding.shares.toLocaleString()}
                           </TableCell>
-                          <TableCell className="font-semibold text-green-600">
-                            {formatCurrency(value)}
+                          <TableCell className="text-muted-foreground">
+                            {formatCurrency(
+                              item.holding.averagePurchasePrice || 0
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatCurrency(item.value)}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            <span
+                              className={
+                                item.pnl >= 0
+                                  ? "text-green-600"
+                                  : "text-red-500"
+                              }
+                            >
+                              {item.pnl >= 0 ? "+" : "-"}
+                              {formatCurrency(Math.abs(item.pnl))}
+                            </span>
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({item.pnlPct.toFixed(1)}%)
+                            </span>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell colSpan={3}>Total</TableCell>
-                      <TableCell className="text-green-600">
-                        {formatCurrency(totalStocksValue)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                      ))}
+                      <TableRow className="bg-muted/50 font-bold">
+                        <TableCell colSpan={4}>Total</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(totalStocksValue)}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
 
-          {/* Crypto Section */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Coins className="h-5 w-5 text-muted-foreground" />
-                  <CardTitle>Crypto Holdings</CardTitle>
+            {/* Crypto Section */}
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Coins className="h-5 w-5 text-muted-foreground" />
+                    <CardTitle>Crypto Holdings</CardTitle>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">Total Value</p>
+                    <div className="text-lg font-semibold text-foreground">
+                      <AnimatedNumber
+                        value={totalCryptoValue}
+                        compact={false}
+                      />
+                    </div>
+                  </div>
                 </div>
-                <Badge variant="outline" className="text-lg font-semibold">
-                  {formatCurrency(totalCryptoValue)}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {!cryptoWithDetails || cryptoWithDetails.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-8">
-                  No crypto holdings yet
-                </p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Cryptocurrency</TableHead>
-                      <TableHead>Ticker</TableHead>
-                      <TableHead
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() =>
-                          setCryptoSort({
-                            field: "amount",
-                            order:
-                              cryptoSort.field === "amount" &&
-                              cryptoSort.order === "desc"
-                                ? "asc"
-                                : "desc",
-                          })
-                        }
-                      >
-                        <div className="flex items-center gap-1">
-                          Tokens
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </TableHead>
-                      <TableHead
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() =>
-                          setCryptoSort({
-                            field: "value",
-                            order:
-                              cryptoSort.field === "value" &&
-                              cryptoSort.order === "desc"
-                                ? "asc"
-                                : "desc",
-                          })
-                        }
-                      >
-                        <div className="flex items-center gap-1">
-                          Value
-                          <ArrowUpDown className="h-3 w-3" />
-                        </div>
-                      </TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sortedCrypto.map((item) => {
-                      const value = item.crypto
-                        ? Math.floor(item.holding.amount * item.crypto.price)
-                        : 0;
-                      return (
+              </CardHeader>
+              <CardContent>
+                {!cryptoWithDetails || cryptoWithDetails.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-8">
+                    No crypto holdings yet
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Asset</TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() =>
+                            setCryptoSort({
+                              field: "amount",
+                              order:
+                                cryptoSort.field === "amount" &&
+                                cryptoSort.order === "desc"
+                                  ? "asc"
+                                  : "desc",
+                            })
+                          }
+                        >
+                          <div className="flex items-center gap-1">
+                            Tokens
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead>Avg Price</TableHead>
+                        <TableHead
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() =>
+                            setCryptoSort({
+                              field: "value",
+                              order:
+                                cryptoSort.field === "value" &&
+                                cryptoSort.order === "desc"
+                                  ? "asc"
+                                  : "desc",
+                            })
+                          }
+                        >
+                          <div className="flex items-center gap-1">
+                            Value
+                            <ArrowUpDown className="h-3 w-3" />
+                          </div>
+                        </TableHead>
+                        <TableHead className="text-right">P/L</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {cryptoRows.map((item) => (
                         <TableRow
                           key={item.holding._id}
                           className="cursor-pointer hover:bg-muted/50"
@@ -409,34 +459,63 @@ export default function PortfolioPage() {
                                   className="h-8 w-8 rounded"
                                 />
                               )}
-                              {item.crypto?.name}
+                              <div className="flex items-center gap-2">
+                                <span>{item.crypto?.name}</span>
+                                <Badge variant="outline" className="font-mono">
+                                  {item.crypto?.ticker}
+                                </Badge>
+                              </div>
                             </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="font-mono">
-                              {item.crypto?.ticker}
-                            </Badge>
                           </TableCell>
                           <TableCell>
                             {item.holding.amount.toLocaleString()}
                           </TableCell>
-                          <TableCell className="font-semibold text-green-600">
-                            {formatCurrency(value)}
+                          <TableCell className="text-muted-foreground">
+                            {formatCurrency(
+                              item.holding.averagePurchasePrice || 0
+                            )}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatCurrency(item.value)}
+                          </TableCell>
+                          <TableCell className="text-right font-medium">
+                            <span
+                              className={
+                                item.pnl >= 0
+                                  ? "text-green-600"
+                                  : "text-red-500"
+                              }
+                            >
+                              {item.pnl >= 0 ? "+" : "-"}
+                              {formatCurrency(Math.abs(item.pnl))}
+                            </span>
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              ({item.pnlPct.toFixed(1)}%)
+                            </span>
                           </TableCell>
                         </TableRow>
-                      );
-                    })}
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell colSpan={3}>Total</TableCell>
-                      <TableCell className="text-green-600">
-                        {formatCurrency(totalCryptoValue)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
+                      ))}
+                      <TableRow className="bg-muted/50 font-bold">
+                        <TableCell colSpan={4}>Total</TableCell>
+                        <TableCell className="text-right">
+                          {formatCurrency(totalCryptoValue)}
+                        </TableCell>
+                      </TableRow>
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Net Worth Breakdown (now after holdings, with correct equity) */}
+          <NetWorthBreakdownModern
+            cash={totalBalance}
+            stocksValue={totalStocksValue}
+            cryptoValue={totalCryptoValue}
+            companyEquity={companyEquity}
+            isLoading={player === undefined}
+          />
 
           {/* Collections Section (Marketplace Items) */}
           <Card>
@@ -446,14 +525,20 @@ export default function PortfolioPage() {
                   <ShoppingBag className="h-5 w-5 text-muted-foreground" />
                   <CardTitle>Collections</CardTitle>
                 </div>
-                <Badge variant="outline" className="text-lg font-semibold">
-                  {formatCurrency(
-                    playerInventory?.reduce(
-                      (sum, item) => sum + item.totalPrice,
-                      0
-                    ) || 0
-                  )}
-                </Badge>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Total Value</p>
+                  <div className="text-lg font-semibold text-foreground">
+                    <AnimatedNumber
+                      value={
+                        playerInventory?.reduce(
+                          (sum, item) => sum + item.totalPrice,
+                          0
+                        ) || 0
+                      }
+                      compact={false}
+                    />
+                  </div>
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -462,47 +547,54 @@ export default function PortfolioPage() {
                   No marketplace items owned yet
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                   {playerInventory.map((item) => (
                     <div
                       key={item._id}
-                      className="flex gap-4 p-4 border rounded-lg items-center"
+                      className="overflow-hidden rounded-lg border"
                     >
-                      {/* Product Image */}
-                      {item.productImage ? (
-                        <div className="relative w-16 h-16 bg-muted rounded flex-shrink-0">
+                      {/* Image Section */}
+                      <div className="relative h-32 w-full bg-muted">
+                        {item.productImage && item.productImage.trim() ? (
                           <img
                             src={item.productImage}
                             alt={item.productName}
-                            className="w-full h-full object-cover rounded"
+                            className="h-full w-full object-cover"
+                            onError={(e) => {
+                              // Fallback to icon if image fails to load
+                              e.currentTarget.style.display = "none";
+                            }}
                           />
-                        </div>
-                      ) : (
-                        <div className="w-16 h-16 bg-muted rounded flex-shrink-0 flex items-center justify-center">
-                          <ShoppingBag className="h-6 w-6 text-muted-foreground" />
-                        </div>
-                      )}
-
-                      {/* Product Details */}
-                      <div className="flex-1">
-                        <p className="font-medium">{item.productName}</p>
-                        <p className="text-sm text-muted-foreground">
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-muted">
+                            <ShoppingBag className="h-8 w-8 text-muted-foreground" />
+                          </div>
+                        )}
+                      </div>
+                      {/* Info Section */}
+                      <div className="p-3">
+                        <p className="truncate font-medium text-sm">
+                          {item.productName}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
                           {item.companyName}
                         </p>
-                      </div>
-
-                      {/* Quantity */}
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Qty</p>
-                        <p className="font-semibold">{item.quantity}</p>
-                      </div>
-
-                      {/* Total Price */}
-                      <div className="text-right">
-                        <p className="text-sm text-muted-foreground">Total</p>
-                        <p className="font-semibold text-green-600">
-                          {formatCurrency(item.totalPrice)}
-                        </p>
+                        <div className="mt-3 flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-muted-foreground">Qty</p>
+                            <p className="font-semibold text-sm">
+                              {item.quantity}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground">
+                              Total
+                            </p>
+                            <p className="font-semibold text-sm">
+                              {formatCurrency(item.totalPrice)}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
