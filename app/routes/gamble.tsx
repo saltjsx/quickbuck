@@ -613,7 +613,27 @@ function Roulette({ playerBalance }: { playerBalance: number }) {
     <Card>
       <CardHeader>
         <CardTitle>Roulette 🎡</CardTitle>
-        <CardDescription>Place your bets and spin the wheel!</CardDescription>
+        <CardDescription>
+          Place your bets and spin the wheel!
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs">
+              View Number Guide
+            </summary>
+            <div className="mt-2 text-xs space-y-1">
+              <p>
+                <span className="font-bold text-red-600">Red:</span>{" "}
+                1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36
+              </p>
+              <p>
+                <span className="font-bold">Black:</span>{" "}
+                2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35
+              </p>
+              <p>
+                <span className="font-bold text-green-600">Green:</span> 0
+              </p>
+            </div>
+          </details>
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div>
@@ -670,15 +690,24 @@ function Roulette({ playerBalance }: { playerBalance: number }) {
             <div
               className={`text-6xl font-bold p-8 border-4 rounded-full inline-block ${
                 result.color === "green"
-                  ? "border-green-500 text-green-600"
+                  ? "border-green-500 text-green-600 bg-green-50"
                   : result.color === "red"
-                  ? "border-red-500 text-red-600"
-                  : "border-gray-800 text-gray-800"
+                  ? "border-red-500 text-red-600 bg-red-50"
+                  : "border-gray-800 text-gray-800 bg-gray-50"
               }`}
             >
               {result.number}
             </div>
-            <p className="text-xl font-medium">{result.color.toUpperCase()}</p>
+            <div className="space-y-1">
+              <p className="text-xl font-bold">{result.color.toUpperCase()}</p>
+              <div className="text-sm text-muted-foreground">
+                {result.isOdd && "ODD"} {result.isEven && "EVEN"}
+                {result.number >= 1 && result.number <= 18 && " • LOW (1-18)"}
+                {result.number >= 19 &&
+                  result.number <= 36 &&
+                  " • HIGH (19-36)"}
+              </div>
+            </div>
             <div
               className={`text-2xl font-bold ${
                 result.result === "win" ? "text-green-600" : "text-red-600"

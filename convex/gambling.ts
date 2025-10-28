@@ -452,19 +452,25 @@ export const playRoulette = mutation({
     // Spin the wheel (0-36)
     const number = Math.floor(Math.random() * 37);
     
-    // Red numbers: 1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36
-    const redNumbers = [1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36];
+    // Correct American Roulette red and black numbers
+    // Red: 1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36
+    // Black: 2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35
+    const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+    const blackNumbers = [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35];
+    
+    // Determine properties of the spun number
+    const isGreen = number === 0;
     const isRed = redNumbers.includes(number);
-    const isBlack = number !== 0 && !isRed;
-    const isOdd = number % 2 === 1 && number !== 0;
-    const isEven = number % 2 === 0 && number !== 0;
+    const isBlack = blackNumbers.includes(number);
+    const isOdd = number > 0 && number % 2 === 1;
+    const isEven = number > 0 && number % 2 === 0;
     const isLow = number >= 1 && number <= 18;
     const isHigh = number >= 19 && number <= 36;
-    const isGreen = number === 0;
 
     let won = false;
     let multiplier = 0;
 
+    // Check if bet wins
     if (args.specificNumber !== undefined) {
       won = number === args.specificNumber;
       multiplier = 36;
@@ -524,6 +530,10 @@ export const playRoulette = mutation({
         betType: args.betType,
         specificNumber: args.specificNumber,
         multiplier,
+        isRed,
+        isBlack,
+        isOdd,
+        isEven,
       },
       timestamp: Date.now(),
     });
@@ -536,6 +546,10 @@ export const playRoulette = mutation({
       netChange,
       multiplier,
       newBalance: player.balance + netChange,
+      isRed,
+      isBlack,
+      isOdd,
+      isEven,
     };
   },
 });
