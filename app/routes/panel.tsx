@@ -30,6 +30,10 @@ export default function Panel() {
   // @ts-ignore
   const warnPlayer = useMutation(api.moderation?.warnPlayer);
   // @ts-ignore
+  const clearWarnings = useMutation(api.moderation?.clearWarnings);
+  // @ts-ignore
+  const removeWarning = useMutation(api.moderation?.removeWarning);
+  // @ts-ignore
   const banPlayer = useMutation(api.moderation?.banPlayer);
   // @ts-ignore
   const unbanPlayer = useMutation(api.moderation?.unbanPlayer);
@@ -57,6 +61,11 @@ export default function Panel() {
     playerName: string;
   } | null>(null);
   const [warningReason, setWarningReason] = useState<string>("");
+  const [viewWarningsModal, setViewWarningsModal] = useState<{
+    playerId: Id<"players">;
+    playerName: string;
+    warnings: Array<{ reason: string; createdAt: number }>;
+  } | null>(null);
 
   const showMessage = (message: string) => {
     setActionMessage(message);
@@ -230,6 +239,40 @@ export default function Panel() {
     }
   };
 
+  const handleClearWarnings = async (playerId: Id<"players">) => {
+    if (!confirm("Clear all warnings for this player?")) return;
+    try {
+      await clearWarnings({ targetPlayerId: playerId });
+      showMessage("✓ All warnings cleared");
+      setViewWarningsModal(null);
+    } catch (e: any) {
+      showMessage("✗ Error: " + e.message);
+    }
+  };
+
+  const handleRemoveWarning = async (
+    playerId: Id<"players">,
+    warningIndex: number
+  ) => {
+    if (!confirm("Remove this warning?")) return;
+    try {
+      await removeWarning({ targetPlayerId: playerId, warningIndex });
+      showMessage("✓ Warning removed");
+      // Close and reopen the modal to refresh warnings
+      setViewWarningsModal(null);
+    } catch (e: any) {
+      showMessage("✗ Error: " + e.message);
+    }
+  };
+
+  const handleViewWarnings = (player: any) => {
+    setViewWarningsModal({
+      playerId: player._id,
+      playerName: player.userName,
+      warnings: player.warnings || [],
+    });
+  };
+
   const handleDeleteCompany = async (companyId: Id<"companies">) => {
     const reason = prompt("Enter reason for deleting this company:");
     if (!reason) return;
@@ -380,8 +423,9 @@ export default function Panel() {
                       <td>
                         {player.warningCount ? (
                           <span
-                            className="warning-count"
-                            title="Click to see warnings"
+                            className="warning-count clickable"
+                            title="Click to view warnings"
+                            onClick={() => handleViewWarnings(player)}
                           >
                             ⚠️ {player.warningCount}
                           </span>
@@ -418,6 +462,17 @@ export default function Panel() {
                               >
                                 ⚠️
                               </button>
+                              {(player.warningCount ?? 0) > 0 && (
+                                <button
+                                  onClick={() =>
+                                    handleClearWarnings(player._id)
+                                  }
+                                  className="btn-small btn-info"
+                                  title="Clear all warnings"
+                                >
+                                  Clear ⚠️
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleLimitPlayer(player._id)}
                                 className="btn-small btn-warn"
@@ -461,6 +516,17 @@ export default function Panel() {
                               >
                                 ⚠️
                               </button>
+                              {(player.warningCount ?? 0) > 0 && (
+                                <button
+                                  onClick={() =>
+                                    handleClearWarnings(player._id)
+                                  }
+                                  className="btn-small btn-info"
+                                  title="Clear all warnings"
+                                >
+                                  Clear ⚠️
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleUnlimitPlayer(player._id)}
                                 className="btn-small btn-success"
@@ -728,6 +794,68 @@ export default function Panel() {
         </div>
       </div>
 
+      {/* View Warnings Modal */}
+      <div
+        className={`warning-modal-overlay ${
+          viewWarningsModal ? "visible" : ""
+        }`}
+      >
+        <div className="warning-modal-box view-warnings-box">
+          <h3>⚠️ Player Warnings</h3>
+          <p>
+            Player: <strong>{viewWarningsModal?.playerName}</strong>
+          </p>
+          <p>
+            Total Warnings:{" "}
+            <strong>{viewWarningsModal?.warnings.length || 0}</strong>
+          </p>
+
+          {viewWarningsModal && viewWarningsModal.warnings.length > 0 ? (
+            <div className="warnings-list">
+              {viewWarningsModal.warnings.map((warning, index) => (
+                <div key={index} className="warning-item">
+                  <div className="warning-header">
+                    <span className="warning-number">Warning #{index + 1}</span>
+                    <span className="warning-date">
+                      {new Date(warning.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <div className="warning-reason">{warning.reason}</div>
+                  <button
+                    onClick={() =>
+                      handleRemoveWarning(viewWarningsModal.playerId, index)
+                    }
+                    className="btn-small btn-danger"
+                    style={{ marginTop: "5px" }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="no-warnings-text">No warnings on record</p>
+          )}
+
+          <div className="warning-modal-buttons">
+            <button
+              className="btn-cancel"
+              onClick={() => setViewWarningsModal(null)}
+            >
+              Close
+            </button>
+            {viewWarningsModal && viewWarningsModal.warnings.length > 0 && (
+              <button
+                className="btn-danger-action"
+                onClick={() => handleClearWarnings(viewWarningsModal.playerId)}
+              >
+                Clear All Warnings
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       <style>{`
         .retro-panel {
           min-height: 100vh;
@@ -965,6 +1093,10 @@ export default function Panel() {
           z-index: 9999;
         }
 
+        .warning-modal-overlay.visible {
+          display: flex;
+        }
+
         .warning-modal-box {
           background: #c0c0c0;
           border: 3px solid #000000;
@@ -972,6 +1104,10 @@ export default function Panel() {
           max-width: 400px;
           width: 90%;
           box-shadow: 5px 5px 0 #808080;
+        }
+
+        .view-warnings-box {
+          max-width: 600px;
         }
 
         .warning-modal-box h3 {
@@ -1036,6 +1172,77 @@ export default function Panel() {
           background: #ff0000;
           border-color: #800000;
           color: #ffffff;
+        }
+
+        .warning-modal-buttons .btn-danger-action {
+          background: #ff0000;
+          border-color: #800000;
+          color: #ffffff;
+        }
+
+        .warnings-list {
+          max-height: 400px;
+          overflow-y: auto;
+          margin: 15px 0;
+          border: 2px inset #dfdfdf;
+          background: #ffffff;
+          padding: 10px;
+        }
+
+        .warning-item {
+          background: #ffffe0;
+          border: 2px solid #ffa500;
+          padding: 10px;
+          margin-bottom: 10px;
+        }
+
+        .warning-header {
+          display: flex;
+          justify-content: space-between;
+          margin-bottom: 8px;
+          font-weight: bold;
+        }
+
+        .warning-number {
+          color: #ff0000;
+        }
+
+        .warning-date {
+          color: #808080;
+          font-size: 12px;
+        }
+
+        .warning-reason {
+          color: #000000;
+          margin-bottom: 5px;
+          padding: 5px;
+          background: #ffffff;
+          border: 1px solid #c0c0c0;
+        }
+
+        .no-warnings-text {
+          text-align: center;
+          color: #808080;
+          font-style: italic;
+          padding: 20px;
+        }
+
+        .warning-count {
+          color: #ff8c00;
+          font-weight: bold;
+        }
+
+        .warning-count.clickable {
+          cursor: pointer;
+          text-decoration: underline;
+        }
+
+        .warning-count.clickable:hover {
+          color: #ff0000;
+        }
+
+        .no-warnings {
+          color: #808080;
         }
       `}</style>
     </div>

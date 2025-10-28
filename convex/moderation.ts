@@ -397,7 +397,7 @@ export const warnPlayer = mutation({
   },
 });
 
-// Mutation: Clear warnings for a player (admin only)
+// Mutation: Clear warnings for a player (mod and admin can do this)
 export const clearWarnings = mutation({
   args: {
     targetPlayerId: v.id("players"),
@@ -420,9 +420,10 @@ export const clearWarnings = mutation({
 
     if (!currentPlayer) throw new Error("Player not found");
 
-    const isAdmin = await hasPermission(ctx, currentPlayer._id, "admin");
-    if (!isAdmin) {
-      throw new Error("Insufficient permissions - admin required");
+    // Mods and admins can clear warnings
+    const hasAccess = await hasPermission(ctx, currentPlayer._id, "mod");
+    if (!hasAccess) {
+      throw new Error("Insufficient permissions - mod or admin required");
     }
 
     await ctx.db.patch(args.targetPlayerId, {
@@ -432,6 +433,61 @@ export const clearWarnings = mutation({
     });
 
     return { success: true, message: "All warnings cleared for player" };
+  },
+});
+
+// Mutation: Remove a specific warning (mod and admin can do this)
+export const removeWarning = mutation({
+  args: {
+    targetPlayerId: v.id("players"),
+    warningIndex: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    const currentPlayer = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    if (!currentPlayer) throw new Error("Player not found");
+
+    // Mods and admins can remove warnings
+    const hasAccess = await hasPermission(ctx, currentPlayer._id, "mod");
+    if (!hasAccess) {
+      throw new Error("Insufficient permissions - mod or admin required");
+    }
+
+    const targetPlayer = await ctx.db.get(args.targetPlayerId);
+    if (!targetPlayer) throw new Error("Target player not found");
+
+    const warnings = targetPlayer.warnings || [];
+    if (args.warningIndex < 0 || args.warningIndex >= warnings.length) {
+      throw new Error("Invalid warning index");
+    }
+
+    // Remove the specific warning
+    const newWarnings = warnings.filter((_, index) => index !== args.warningIndex);
+
+    await ctx.db.patch(args.targetPlayerId, {
+      warnings: newWarnings,
+      warningCount: newWarnings.length,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      success: true,
+      message: "Warning removed successfully",
+      remainingWarnings: newWarnings.length,
+    };
   },
 });
 

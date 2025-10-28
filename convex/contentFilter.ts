@@ -76,13 +76,16 @@ export function containsInappropriateContent(text: string | undefined | null): b
   }
 
   // Check for excessive special characters (spam indicator)
+  // Be more lenient with punctuation - only flag if >40% of text is special chars
   const specialCharCount = (text.match(/[!@#$%^&*()_+={}\[\]|\\:;"'<>,.?\/~`]/g) || []).length;
-  if (specialCharCount > text.length * 0.3) {
+  if (specialCharCount > text.length * 0.4) {
     return true;
   }
 
   // Check for excessive repetition (spam indicator)
-  const repetitionPattern = /(.)\1{5,}/g;
+  // Allow up to 3 consecutive characters (e.g., "..." or "!!!" is ok)
+  // Only flag if 4+ consecutive identical characters
+  const repetitionPattern = /(.)\1{4,}/g;
   if (repetitionPattern.test(text)) {
     return true;
   }
