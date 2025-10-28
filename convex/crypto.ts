@@ -544,6 +544,51 @@ export const getCryptoPriceHistory = query({
   },
 });
 
+// Query: Get 1-hour price history for multiple cryptocurrencies (for sparklines)
+export const getCryptosPriceHistory1H = query({
+  args: {
+    cryptoIds: v.array(v.id("cryptocurrencies")),
+    points: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const startTime = now - 60 * 60 * 1000; // last 1 hour
+    const maxPoints = Math.max(10, Math.min(args.points || 60, 120));
+
+    const result: Record<string, { timestamp: number; price: number }[]> = {};
+
+    for (const cryptoId of args.cryptoIds) {
+      // Fetch last hour history for each cryptocurrency
+      const history = await ctx.db
+        .query("cryptoPriceHistory")
+        .withIndex("by_cryptoId_timestamp", (q) =>
+          q.eq("cryptoId", cryptoId).gte("timestamp", startTime)
+        )
+        .order("asc")
+        .collect();
+
+      // Downsample if needed to at most maxPoints (uniform sampling)
+      let series = history.map((h) => ({ timestamp: h.timestamp, price: h.price }));
+      if (series.length > maxPoints) {
+        const step = Math.ceil(series.length / maxPoints);
+        series = series.filter((_, idx) => idx % step === 0);
+        // Ensure we include last point
+        if (
+          series[series.length - 1]?.timestamp !==
+          history[history.length - 1]?.timestamp
+        ) {
+          const last = history[history.length - 1];
+          series.push({ timestamp: last.timestamp, price: last.price });
+        }
+      }
+
+      result[cryptoId] = series;
+    }
+
+    return result;
+  },
+});
+
 // Query: Get recent crypto trades
 export const getRecentCryptoTrades = query({
   args: {

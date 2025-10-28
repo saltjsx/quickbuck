@@ -1,10 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate } from "react-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "convex/_generated/api";
-import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { getAuth } from "@clerk/react-router/ssr.server";
+import { redirect } from "react-router";
+import type { Route } from "./+types/crypto.$cryptoId";
+import { useAuth } from "@clerk/react-router";
+import type { Id } from "convex/_generated/dataModel";
+import { formatCurrency } from "~/lib/game-utils";
+import { CompanyLogo } from "~/components/ui/company-logo";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Button } from "~/components/ui/button";
@@ -24,37 +37,31 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
-import { formatCurrency } from "~/lib/game-utils";
-import { useAuth } from "@clerk/react-router";
 import {
-  Coins,
-  TrendingUp,
-  TrendingDown,
-  ArrowLeft,
-  DollarSign,
-} from "lucide-react";
-import type { Id } from "convex/_generated/dataModel";
-import {
+  ResponsiveContainer,
   LineChart,
   Line,
   XAxis,
   YAxis,
-  Tooltip,
-  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
 } from "recharts";
-import { getAuth } from "@clerk/react-router/ssr.server";
-import { redirect } from "react-router";
-import type { Route } from "./+types/crypto.$cryptoId";
+import {
+  ArrowLeft,
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  Users,
+} from "lucide-react";
 
 type Timeframe = "1H" | "1D" | "1W" | "1M" | "1Y" | "ALL";
 
 export async function loader(args: Route.LoaderArgs) {
   const { userId } = await getAuth(args);
-
-  if (!userId) {
-    throw redirect("/sign-in");
-  }
-
+  if (!userId) throw redirect("/sign-in");
   return {};
 }
 
@@ -63,7 +70,7 @@ export default function CryptoDetailPage() {
   const navigate = useNavigate();
   const { userId: clerkUserId } = useAuth();
 
-  // Get user and player
+  // User and player
   const user = useQuery(
     api.users.findUserByToken,
     clerkUserId ? { tokenIdentifier: clerkUserId } : "skip"
@@ -73,19 +80,19 @@ export default function CryptoDetailPage() {
     user ? { userId: user._id as Id<"users"> } : "skip"
   );
 
-  // Get crypto data
+  // Crypto data
   const crypto = useQuery(
     api.crypto.getCryptocurrency,
     cryptoId ? { cryptoId: cryptoId as Id<"cryptocurrencies"> } : "skip"
   );
 
-  // Get player's companies for account selector
+  // Accounts
   const playerCompanies = useQuery(
     api.companies.getPlayerCompanies,
     player?._id ? { playerId: player._id } : "skip"
   );
 
-  // Get top crypto holders
+  // Holders and history
   const topHolders = useQuery(
     api.crypto.getTopCryptoHolders,
     cryptoId
@@ -93,7 +100,6 @@ export default function CryptoDetailPage() {
       : "skip"
   );
 
-  // Price history and timeframe
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>("1W");
   const priceHistory = useQuery(
     api.crypto.getCryptoPriceHistory,
@@ -102,7 +108,6 @@ export default function CryptoDetailPage() {
       : "skip"
   );
 
-  // Recent trades
   const recentTrades = useQuery(
     api.crypto.getRecentCryptoTrades,
     crypto?._id ? { cryptoId: crypto._id, limit: 20 } : "skip"
@@ -112,17 +117,18 @@ export default function CryptoDetailPage() {
   const buyCrypto = useMutation(api.crypto.buyCryptocurrency);
   const sellCrypto = useMutation(api.crypto.sellCryptocurrency);
 
-  // Get player's holdings for this crypto
-  const playerHoldings = useQuery(
+  // Player holdings for this crypto
+  const holdings = useQuery(
     api.crypto.getPlayerCryptoHoldings,
     player?._id ? { playerId: player._id } : "skip"
   );
-  const currentHolding = playerHoldings?.find((h) => h.cryptoId === cryptoId);
+  const currentHolding = useMemo(
+    () => holdings?.find((h) => h.cryptoId === (cryptoId as any)),
+    [holdings, cryptoId]
+  );
 
-  // Transaction mode state
+  // Trading state
   const [transactionMode, setTransactionMode] = useState<"buy" | "sell">("buy");
-
-  // Purchase state
   const [purchaseType, setPurchaseType] = useState<"tokens" | "dollars">(
     "tokens"
   );
@@ -135,42 +141,84 @@ export default function CryptoDetailPage() {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Calculate price change
-  const priceChange = crypto?.previousPrice
+  // Default account selection
+  useEffect(() => {
+    if (player && !selectedAccount) {
+      setSelectedAccount({ type: "player", id: player._id as Id<"players"> });
+    }
+  }, [player, selectedAccount]);
+
+  // Selected account balance (cents)
+  const selectedAccountBalance = useMemo(() => {
+    if (!selectedAccount) return 0;
+    if (selectedAccount.type === "player" && player) return player.balance || 0;
+    const company = playerCompanies?.find((c) => c._id === selectedAccount.id);
+    return company?.balance || 0;
+  }, [selectedAccount, player, playerCompanies]);
+
+  // Quick picks and Max
+  const quickTokenPicks = [1, 10, 100, 1000];
+  const quickDollarPicks = [100, 500, 1000, 5000];
+
+  const handleSetMax = () => {
+    if (!crypto) return;
+    if (transactionMode === "sell" && currentHolding) {
+      setPurchaseType("tokens");
+      setPurchaseAmount(String(Math.max(0, Math.floor(currentHolding.amount))));
+    } else if (transactionMode === "buy") {
+      if (purchaseType === "dollars") {
+        setPurchaseAmount(String(Math.max(0, selectedAccountBalance / 100)));
+      } else {
+        const maxTokens = Math.floor(selectedAccountBalance / crypto.price);
+        setPurchaseAmount(String(Math.max(0, maxTokens)));
+      }
+    }
+  };
+
+  // Timeframe-based price change with fallback
+  const timeframeChange = useMemo(() => {
+    if (!priceHistory || priceHistory.length < 2) return null;
+    const first = priceHistory[0].price;
+    const last = priceHistory[priceHistory.length - 1].price;
+    if (!first || first <= 0) return null;
+    return ((last - first) / first) * 100;
+  }, [priceHistory]);
+  const fallbackChange = crypto?.previousPrice
     ? ((crypto.price - crypto.previousPrice) / crypto.previousPrice) * 100
     : 0;
-  const isPositive = priceChange >= 0;
+  const priceChange = timeframeChange ?? fallbackChange;
+  const isPositive = (priceChange ?? 0) >= 0;
 
-  // Calculate estimated values
-  const estimatedTokens =
-    purchaseType === "dollars" && crypto
-      ? (parseFloat(purchaseAmount) * 100) / crypto.price
-      : parseFloat(purchaseAmount) || 0;
+  // Estimated values
+  const estimatedTokens = useMemo(() => {
+    if (!crypto) return 0;
+    if (!purchaseAmount) return 0;
+    if (purchaseType === "tokens")
+      return Math.floor(parseFloat(purchaseAmount) || 0);
+    const cents = Math.round(parseFloat(purchaseAmount) * 100);
+    return Math.max(0, Math.floor(cents / crypto.price));
+  }, [purchaseAmount, purchaseType, crypto]);
 
-  const estimatedCost =
-    purchaseType === "tokens" && crypto
-      ? Math.round(parseFloat(purchaseAmount) * crypto.price)
-      : Math.round(parseFloat(purchaseAmount) * 100);
+  const estimatedCost = useMemo(() => {
+    if (!crypto) return 0;
+    const tokens = estimatedTokens;
+    return Math.max(0, Math.floor(tokens * crypto.price));
+  }, [estimatedTokens, crypto]);
 
-  // Handle buy crypto
+  // Actions
   const handleBuyCrypto = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
-
     if (!player || !crypto || !selectedAccount) {
       setError("Missing required information");
       return;
     }
-
-    const tokens =
-      purchaseType === "tokens" ? parseFloat(purchaseAmount) : estimatedTokens;
-
-    if (tokens <= 0) {
-      setError("Invalid number of tokens");
+    const tokens = estimatedTokens;
+    if (!Number.isSafeInteger(tokens) || tokens <= 0) {
+      setError("Enter a whole number of tokens");
       return;
     }
-
     setIsSubmitting(true);
     try {
       await buyCrypto({
@@ -180,14 +228,10 @@ export default function CryptoDetailPage() {
         accountType: selectedAccount.type,
         accountId: selectedAccount.id,
       });
-
       setSuccess(
-        `Successfully purchased ${tokens.toLocaleString(undefined, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 8,
-        })} ${crypto.ticker} for ${formatCurrency(
-          Math.round(tokens * crypto.price)
-        )}`
+        `Successfully purchased ${tokens.toLocaleString()} ${
+          crypto.ticker
+        } for ${formatCurrency(Math.round(tokens * crypto.price))}`
       );
       setPurchaseAmount("");
     } catch (err) {
@@ -199,32 +243,25 @@ export default function CryptoDetailPage() {
     }
   };
 
-  // Handle sell crypto
   const handleSellCrypto = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setSuccess("");
-
     if (!player || !crypto || !selectedAccount || !currentHolding) {
       setError("Missing required information or no tokens to sell");
       return;
     }
-
-    const tokens =
-      purchaseType === "tokens" ? parseFloat(purchaseAmount) : estimatedTokens;
-
-    if (tokens <= 0) {
-      setError("Invalid number of tokens");
+    const tokens = estimatedTokens;
+    if (!Number.isSafeInteger(tokens) || tokens <= 0) {
+      setError("Enter a whole number of tokens");
       return;
     }
-
-    if (tokens > currentHolding.amount) {
+    if (tokens > Math.floor(currentHolding.amount)) {
       setError(
         `You only have ${currentHolding.amount.toLocaleString()} tokens to sell`
       );
       return;
     }
-
     setIsSubmitting(true);
     try {
       await sellCrypto({
@@ -234,14 +271,10 @@ export default function CryptoDetailPage() {
         accountType: selectedAccount.type,
         accountId: selectedAccount.id,
       });
-
       setSuccess(
-        `Successfully sold ${tokens.toLocaleString(undefined, {
-          minimumFractionDigits: 0,
-          maximumFractionDigits: 8,
-        })} ${crypto.ticker} for ${formatCurrency(
-          Math.round(tokens * crypto.price)
-        )}`
+        `Successfully sold ${tokens.toLocaleString()} ${
+          crypto.ticker
+        } for ${formatCurrency(Math.round(tokens * crypto.price))}`
       );
       setPurchaseAmount("");
     } catch (err) {
@@ -251,21 +284,27 @@ export default function CryptoDetailPage() {
     }
   };
 
-  // Calculate ownership percentages
+  // Ownership percentage
   const calculateOwnershipPercentage = (amount: number) => {
-    if (!crypto || !crypto.circulatingSupply) return 0;
-    return (amount / crypto.circulatingSupply) * 100;
+    if (!crypto || !crypto.totalSupply) return 0;
+    return (amount / crypto.totalSupply) * 100;
   };
 
   if (!crypto) {
     return (
       <div className="flex flex-1 items-center justify-center">
-        <p className="text-muted-foreground">
-          Loading cryptocurrency information...
-        </p>
+        <p className="text-muted-foreground">Loading crypto information...</p>
       </div>
     );
   }
+
+  const ownershipData = (topHolders || []).map((h) => ({
+    id: h._id,
+    amount: h.amount,
+    percent: crypto.totalSupply ? (h.amount / crypto.totalSupply) * 100 : 0,
+  }));
+  const totalTop = ownershipData.reduce((s, h) => s + h.percent, 0);
+  const ceoPercent = Math.max(0, 100 - totalTop);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -282,17 +321,21 @@ export default function CryptoDetailPage() {
                 <ArrowLeft className="h-5 w-5" />
               </Button>
               <div className="flex items-center gap-3">
-                <div className="rounded-full bg-primary/10 p-3">
-                  <Coins className="h-10 w-10 text-primary" />
-                </div>
+                <CompanyLogo
+                  src={crypto.image}
+                  alt={crypto.ticker || crypto.name}
+                  size="lg"
+                />
                 <div>
                   <div className="flex items-center gap-2">
-                    <Badge
-                      variant="outline"
-                      className="font-mono text-lg font-bold"
-                    >
-                      {crypto.ticker}
-                    </Badge>
+                    {crypto.ticker && (
+                      <Badge
+                        variant="outline"
+                        className="font-mono text-lg font-bold"
+                      >
+                        {crypto.ticker}
+                      </Badge>
+                    )}
                   </div>
                   <h1 className="text-3xl font-bold tracking-tight">
                     {crypto.name}
@@ -307,17 +350,183 @@ export default function CryptoDetailPage() {
             <p className="text-muted-foreground">{crypto.description}</p>
           )}
 
+          {/* Top split */}
           <div className="grid gap-4 lg:grid-cols-3">
-            {/* Left Column - Purchase Box */}
+            {/* Left: Price & Chart */}
+            <div className="lg:col-span-2 space-y-4">
+              {/* Stats */}
+              <div className="grid gap-4 md:grid-cols-3">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Price
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-green-600">
+                      {formatCurrency(crypto.price)}
+                    </p>
+                    <div className="mt-1 flex items-center gap-1">
+                      {isPositive ? (
+                        <TrendingUp className="h-3 w-3 text-green-600" />
+                      ) : (
+                        <TrendingDown className="h-3 w-3 text-red-600" />
+                      )}
+                      <span
+                        className={`text-xs font-semibold ${
+                          isPositive ? "text-green-600" : "text-red-600"
+                        }`}
+                      >
+                        {priceChange >= 0 ? "+" : ""}
+                        {Number(priceChange).toFixed(2)}%
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        ({selectedTimeframe})
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Market Cap
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold text-purple-600">
+                      {formatCurrency(crypto.marketCap || 0)}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium text-muted-foreground">
+                      Circulating Supply
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">
+                      {(crypto.circulatingSupply || 0).toLocaleString()}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Price Chart */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle>Price History</CardTitle>
+                      <CardDescription>
+                        Interactive chart for {crypto.ticker || crypto.name}
+                      </CardDescription>
+                    </div>
+                    <div className="flex gap-2">
+                      {(
+                        ["1H", "1D", "1W", "1M", "1Y", "ALL"] as Timeframe[]
+                      ).map((tf) => (
+                        <Button
+                          key={tf}
+                          variant={
+                            selectedTimeframe === tf ? "default" : "outline"
+                          }
+                          size="sm"
+                          onClick={() => setSelectedTimeframe(tf)}
+                        >
+                          {tf}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {!priceHistory || priceHistory.length === 0 ? (
+                    <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
+                      No price history available yet
+                    </div>
+                  ) : (
+                    <ResponsiveContainer width="100%" height={320}>
+                      <LineChart
+                        data={priceHistory}
+                        margin={{ left: 8, right: 8, top: 8, bottom: 8 }}
+                      >
+                        <XAxis
+                          dataKey="timestamp"
+                          tickFormatter={(ts) => {
+                            const date = new Date(ts as number);
+                            if (
+                              selectedTimeframe === "1H" ||
+                              selectedTimeframe === "1D"
+                            ) {
+                              return date.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              });
+                            }
+                            return date.toLocaleDateString([], {
+                              month: "short",
+                              day: "numeric",
+                            });
+                          }}
+                          stroke="hsl(var(--muted-foreground))"
+                        />
+                        <YAxis
+                          tickFormatter={(v) => formatCurrency(v as number)}
+                          stroke="hsl(var(--muted-foreground))"
+                          width={72}
+                        />
+                        <RechartsTooltip
+                          formatter={(value: number) => [
+                            formatCurrency(value),
+                            "Price",
+                          ]}
+                          labelFormatter={(ts) =>
+                            new Date(ts as number).toLocaleString()
+                          }
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--background))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "6px",
+                          }}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="price"
+                          stroke="#22c55e"
+                          strokeWidth={3}
+                          dot={false}
+                          isAnimationActive
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right: Trade Box */}
             <div className="lg:col-span-1">
               <Card className="sticky top-4">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5" />
-                    Trade Tokens
-                  </CardTitle>
-                  {/* Buy/Sell Toggle */}
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-5 w-5" />
+                      <CardTitle>Trade Tokens</CardTitle>
+                    </div>
+                    {crypto.ticker && (
+                      <Badge variant="outline" className="font-mono">
+                        {crypto.ticker}
+                      </Badge>
+                    )}
+                  </div>
+                  <CardDescription>
+                    Price {formatCurrency(crypto.price)} • Market Cap{" "}
+                    {formatCurrency(crypto.marketCap || 0)}
+                  </CardDescription>
+                  <div className="mt-3 flex gap-2">
                     <Button
                       type="button"
                       variant={
@@ -350,64 +559,52 @@ export default function CryptoDetailPage() {
                     }
                     className="space-y-4"
                   >
-                    {/* Show holdings if selling */}
-                    {transactionMode === "sell" && currentHolding && (
-                      <div className="rounded-md bg-muted p-3">
-                        <p className="text-sm text-muted-foreground">
-                          Your Holdings
-                        </p>
-                        <p className="text-lg font-bold">
-                          {currentHolding.amount.toLocaleString()} tokens
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Worth{" "}
-                          {formatCurrency(
-                            Math.floor(currentHolding.amount * crypto.price)
-                          )}
-                        </p>
+                    {/* Account/Balance */}
+                    <div className="rounded-md border p-3">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Account</span>
+                        <span className="text-muted-foreground">Balance</span>
                       </div>
-                    )}
-
-                    {/* Account Selector */}
-                    <div className="space-y-2">
-                      <Label>
-                        {transactionMode === "buy"
-                          ? "Payment Account"
-                          : "Receive To"}
-                      </Label>
-                      <Select
-                        value={
-                          selectedAccount
-                            ? `${selectedAccount.type}:${selectedAccount.id}`
-                            : ""
-                        }
-                        onValueChange={(value) => {
-                          const [type, id] = value.split(":");
-                          setSelectedAccount({
-                            type: type as "player" | "company",
-                            id: id as any,
-                          });
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select account" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {player && (
-                            <SelectItem value={`player:${player._id}`}>
-                              Personal ({formatCurrency(player.balance)})
-                            </SelectItem>
-                          )}
-                          {playerCompanies?.map((company) => (
-                            <SelectItem
-                              key={company._id}
-                              value={`company:${company._id}`}
-                            >
-                              {company.name} ({formatCurrency(company.balance)})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <Select
+                            value={
+                              selectedAccount
+                                ? `${selectedAccount.type}:${selectedAccount.id}`
+                                : ""
+                            }
+                            onValueChange={(value) => {
+                              const [type, id] = value.split(":");
+                              setSelectedAccount({
+                                type: type as any,
+                                id: id as any,
+                              });
+                            }}
+                          >
+                            <SelectTrigger className="w-[220px]">
+                              <SelectValue placeholder="Select account" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {player && (
+                                <SelectItem value={`player:${player._id}`}>
+                                  Personal ({formatCurrency(player.balance)})
+                                </SelectItem>
+                              )}
+                              {playerCompanies?.map((c) => (
+                                <SelectItem
+                                  key={c._id}
+                                  value={`company:${c._id}`}
+                                >
+                                  {c.name} ({formatCurrency(c.balance)})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="text-right font-medium tabular-nums">
+                          {formatCurrency(selectedAccountBalance)}
+                        </div>
+                      </div>
                     </div>
 
                     {/* Purchase Type */}
@@ -439,43 +636,68 @@ export default function CryptoDetailPage() {
                       </div>
                     </div>
 
-                    {/* Amount Input */}
+                    {/* Amount Input + Max + Picks */}
                     <div className="space-y-2">
                       <Label htmlFor="amount">
                         {purchaseType === "tokens"
                           ? "Number of Tokens"
                           : "Dollar Amount"}
                       </Label>
-                      <Input
-                        id="amount"
-                        type="number"
-                        step="any"
-                        min="0.00000001"
-                        max={
-                          transactionMode === "sell" &&
-                          currentHolding &&
-                          purchaseType === "tokens"
-                            ? currentHolding.amount
-                            : undefined
-                        }
-                        placeholder={
-                          purchaseType === "tokens" ? "0.5" : "100.00"
-                        }
-                        value={purchaseAmount}
-                        onChange={(e) => setPurchaseAmount(e.target.value)}
-                        required
-                      />
+                      <div className="flex items-center gap-2">
+                        <Input
+                          id="amount"
+                          type="number"
+                          step={purchaseType === "tokens" ? 1 : "any"}
+                          min={purchaseType === "tokens" ? 0 : 0}
+                          max={
+                            transactionMode === "sell" &&
+                            currentHolding &&
+                            purchaseType === "tokens"
+                              ? Math.floor(currentHolding.amount)
+                              : undefined
+                          }
+                          placeholder={
+                            purchaseType === "tokens" ? "10" : "100.00"
+                          }
+                          value={purchaseAmount}
+                          onChange={(e) => setPurchaseAmount(e.target.value)}
+                          required
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleSetMax}
+                        >
+                          Max
+                        </Button>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {(purchaseType === "tokens"
+                          ? quickTokenPicks
+                          : quickDollarPicks
+                        ).map((v) => (
+                          <Button
+                            key={v}
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setPurchaseAmount(String(v))}
+                          >
+                            {purchaseType === "tokens"
+                              ? `${v}`
+                              : `$${v.toLocaleString()}`}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
 
                     {/* Estimated Values */}
                     {purchaseAmount && (
-                      <div className="rounded-md bg-muted p-3 space-y-1">
+                      <div className="space-y-1 rounded-md bg-muted p-3">
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">Tokens:</span>
                           <span className="font-medium">
-                            {purchaseType === "tokens"
-                              ? parseFloat(purchaseAmount).toLocaleString()
-                              : estimatedTokens.toLocaleString()}
+                            {estimatedTokens.toLocaleString()}
                           </span>
                         </div>
                         <div className="flex justify-between text-sm">
@@ -533,90 +755,121 @@ export default function CryptoDetailPage() {
                 </CardContent>
               </Card>
             </div>
+          </div>
 
-            {/* Right Column - Crypto Info */}
-            <div className="lg:col-span-2 space-y-4">
-              {/* Stats Cards */}
-              <div className="grid gap-4 md:grid-cols-3">
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Price
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold text-green-600">
-                      {formatCurrency(crypto.price)}
-                    </p>
-                    {crypto.previousPrice && (
-                      <div className="flex items-center gap-1 mt-1">
-                        {isPositive ? (
-                          <TrendingUp className="h-3 w-3 text-green-600" />
-                        ) : (
-                          <TrendingDown className="h-3 w-3 text-red-600" />
-                        )}
-                        <span
-                          className={`text-xs font-semibold ${
-                            isPositive ? "text-green-600" : "text-red-600"
-                          }`}
-                        >
-                          {isPositive ? "+" : ""}
-                          {priceChange.toFixed(2)}%
-                        </span>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
+          {/* Below split: Ownership + Trades */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Ownership */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="h-5 w-5" /> Ownership
+                </CardTitle>
+                <CardDescription>
+                  Top holders and overall distribution
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {!topHolders || topHolders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No holders yet
+                  </p>
+                ) : (
+                  <div className="h-[320px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <RechartsTooltip
+                          formatter={(value: number, name: string) => [
+                            crypto.totalSupply && (value as number) > 0
+                              ? `${(
+                                  ((value as number) / crypto.totalSupply) *
+                                  100
+                                ).toFixed(2)}%`
+                              : "0%",
+                            name,
+                          ]}
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--background))",
+                            border: "1px solid hsl(var(--border))",
+                            borderRadius: "6px",
+                          }}
+                        />
+                        <Legend verticalAlign="bottom" height={24} />
+                        {(() => {
+                          const palette = [
+                            "#16a34a",
+                            "#2563eb",
+                            "#f59e0b",
+                            "#ef4444",
+                            "#8b5cf6",
+                            "#06b6d4",
+                            "#84cc16",
+                            "#e11d48",
+                            "#0ea5e9",
+                            "#f97316",
+                            "#64748b",
+                          ];
+                          const holdersSum =
+                            topHolders?.reduce((s, h) => s + h.amount, 0) || 0;
+                          const ceoValue = Math.max(
+                            0,
+                            (crypto.totalSupply || 0) - holdersSum
+                          );
+                          const pieData = [
+                            ...topHolders.map((h, idx) => ({
+                              name: `Holder #${idx + 1}`,
+                              value: h.amount,
+                            })),
+                            ...(ceoValue > 0
+                              ? [{ name: "CEO", value: ceoValue }]
+                              : []),
+                          ];
+                          return (
+                            <Pie
+                              dataKey="value"
+                              nameKey="name"
+                              data={pieData}
+                              cx="50%"
+                              cy="45%"
+                              outerRadius={100}
+                              innerRadius={60}
+                              paddingAngle={2}
+                            >
+                              {pieData.map((_, idx) => (
+                                <Cell
+                                  key={idx}
+                                  fill={palette[idx % palette.length]}
+                                  stroke="transparent"
+                                />
+                              ))}
+                            </Pie>
+                          );
+                        })()}
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
 
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Market Cap
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold text-purple-600">
-                      {formatCurrency(crypto.marketCap || 0)}
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-muted-foreground">
-                      Volume (24h)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-2xl font-bold">
-                      {formatCurrency(crypto.volume)}
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Top Holders */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Top Holders</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {!topHolders || topHolders.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No holders yet
-                    </p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Rank</TableHead>
-                          <TableHead>Tokens</TableHead>
-                          <TableHead>Ownership</TableHead>
-                          <TableHead>Value</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {topHolders.map((holder, index) => (
+                {!topHolders || topHolders.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    No holders yet
+                  </p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Rank</TableHead>
+                        <TableHead>Tokens</TableHead>
+                        <TableHead>Ownership</TableHead>
+                        <TableHead>Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {topHolders.map((holder, index) => {
+                        const percent = calculateOwnershipPercentage(
+                          holder.amount
+                        );
+                        return (
                           <TableRow key={holder._id}>
                             <TableCell className="font-medium">
                               #{index + 1}
@@ -626,10 +879,7 @@ export default function CryptoDetailPage() {
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">
-                                {calculateOwnershipPercentage(
-                                  holder.amount
-                                ).toFixed(2)}
-                                %
+                                {percent.toFixed(2)}%
                               </Badge>
                             </TableCell>
                             <TableCell className="font-medium text-green-600">
@@ -638,155 +888,70 @@ export default function CryptoDetailPage() {
                               )}
                             </TableCell>
                           </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
 
-              {/* Price Chart */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle>Price History</CardTitle>
-                    <div className="flex gap-2">
-                      {(
-                        ["1H", "1D", "1W", "1M", "1Y", "ALL"] as Timeframe[]
-                      ).map((tf) => (
-                        <Button
-                          key={tf}
-                          variant={
-                            selectedTimeframe === tf ? "default" : "outline"
-                          }
-                          size="sm"
-                          onClick={() => setSelectedTimeframe(tf)}
-                        >
-                          {tf}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  {!priceHistory || priceHistory.length === 0 ? (
-                    <div className="flex h-[300px] items-center justify-center text-sm text-muted-foreground">
-                      No price history available yet
-                    </div>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={300}>
-                      <LineChart data={priceHistory}>
-                        <XAxis
-                          dataKey="timestamp"
-                          tickFormatter={(ts) => {
-                            const date = new Date(ts);
-                            if (
-                              selectedTimeframe === "1H" ||
-                              selectedTimeframe === "1D"
-                            ) {
-                              return date.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              });
-                            } else {
-                              return date.toLocaleDateString([], {
-                                month: "short",
-                                day: "numeric",
-                              });
-                            }
-                          }}
-                          stroke="hsl(var(--muted-foreground))"
-                        />
-                        <YAxis
-                          tickFormatter={(value) => formatCurrency(value)}
-                          stroke="hsl(var(--muted-foreground))"
-                        />
-                        <Tooltip
-                          formatter={(value: number) => [
-                            formatCurrency(value),
-                            "Price",
-                          ]}
-                          labelFormatter={(ts) => new Date(ts).toLocaleString()}
-                          contentStyle={{
-                            backgroundColor: "hsl(var(--background))",
-                            border: "1px solid hsl(var(--border))",
-                            borderRadius: "6px",
-                          }}
-                        />
-                        <Line
-                          type="monotone"
-                          dataKey="price"
-                          stroke="#22c55e"
-                          strokeWidth={3}
-                          dot={false}
-                          isAnimationActive={true}
-                        />
-                      </LineChart>
-                    </ResponsiveContainer>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Recent Trades */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Trades</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {!recentTrades || recentTrades.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">
-                      No trades yet
-                    </p>
-                  ) : (
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Time</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Tokens</TableHead>
-                          <TableHead>Price/Token</TableHead>
-                          <TableHead>Total Value</TableHead>
+            {/* Recent Trades */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Trades</CardTitle>
+                <CardDescription>Anonymous recent activity</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {!recentTrades || recentTrades.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No trades yet</p>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Time</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Tokens</TableHead>
+                        <TableHead>Price/Token</TableHead>
+                        <TableHead>Total Value</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {recentTrades.map((trade) => (
+                        <TableRow key={trade._id}>
+                          <TableCell className="text-xs">
+                            {new Date(trade.timestamp).toLocaleString([], {
+                              month: "short",
+                              day: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                trade.tradeType === "buy"
+                                  ? "default"
+                                  : "outline"
+                              }
+                            >
+                              {trade.tradeType.toUpperCase()}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{trade.amount.toLocaleString()}</TableCell>
+                          <TableCell>
+                            {formatCurrency(trade.pricePerToken)}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {formatCurrency(trade.totalValue)}
+                          </TableCell>
                         </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {recentTrades.map((trade) => (
-                          <TableRow key={trade._id}>
-                            <TableCell className="text-xs">
-                              {new Date(trade.timestamp).toLocaleString([], {
-                                month: "short",
-                                day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </TableCell>
-                            <TableCell>
-                              <Badge
-                                variant={
-                                  trade.tradeType === "buy"
-                                    ? "default"
-                                    : "outline"
-                                }
-                              >
-                                {trade.tradeType.toUpperCase()}
-                              </Badge>
-                            </TableCell>
-                            <TableCell>
-                              {trade.amount.toLocaleString()}
-                            </TableCell>
-                            <TableCell>
-                              {formatCurrency(trade.pricePerToken)}
-                            </TableCell>
-                            <TableCell className="font-medium">
-                              {formatCurrency(trade.totalValue)}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

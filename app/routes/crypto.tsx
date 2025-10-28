@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "convex/_generated/api";
@@ -27,18 +27,13 @@ import {
 import { Textarea } from "~/components/ui/textarea";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
-import {
-  TrendingUp,
-  TrendingDown,
-  Plus,
-  Coins,
-  Search,
-  ArrowUpDown,
-} from "lucide-react";
+import { TrendingUp, TrendingDown, Plus, Coins, Search } from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
 import { getAuth } from "@clerk/react-router/ssr.server";
 import { redirect } from "react-router";
 import type { Route } from "./+types/crypto";
+import { CompanyLogo } from "~/components/ui/company-logo";
+import { Sparkline } from "~/components/ui/sparkline";
 
 export async function loader(args: Route.LoaderArgs) {
   const { userId } = await getAuth(args);
@@ -70,12 +65,11 @@ export default function CryptoMarketPage() {
   // Create crypto mutation
   const createCrypto = useMutation(api.crypto.createCryptocurrency);
 
-  // Search and sort state
+  // Search and sort state (match stocks page options)
   const [searchQuery, setSearchQuery] = useState("");
-  const [sortBy, setSortBy] = useState<"price" | "marketCap" | "change">(
-    "marketCap"
-  );
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [sortBy, setSortBy] = useState<
+    "price-asc" | "price-desc" | "marketcap-asc" | "marketcap-desc" | "newest"
+  >("marketcap-desc");
 
   // Create modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -88,7 +82,7 @@ export default function CryptoMarketPage() {
   const [createError, setCreateError] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  // Validate ticker format (*XXX where X is letter, max 3 chars after *)
+  // Validate ticker format - keep existing UI rules
   const validateTicker = (ticker: string): boolean => {
     const tickerRegex = /^\*[A-Z]{1,3}$/;
     return tickerRegex.test(ticker.toUpperCase());
@@ -145,52 +139,65 @@ export default function CryptoMarketPage() {
   };
 
   // Filter and sort cryptos
-  const filteredAndSortedCryptos = allCryptos
-    ? allCryptos
-        .filter((crypto) => {
-          if (!searchQuery) return true;
-          const query = searchQuery.toLowerCase();
-          return (
-            crypto.name.toLowerCase().includes(query) ||
-            crypto.ticker.toLowerCase().includes(query)
-          );
-        })
-        .sort((a, b) => {
-          let comparison = 0;
-          switch (sortBy) {
-            case "price":
-              comparison = a.price - b.price;
-              break;
-            case "marketCap":
-              comparison = a.marketCap - b.marketCap;
-              break;
-            case "change": {
-              const aChange = a.previousPrice
-                ? ((a.price - a.previousPrice) / a.previousPrice) * 100
-                : 0;
-              const bChange = b.previousPrice
-                ? ((b.price - b.previousPrice) / b.previousPrice) * 100
-                : 0;
-              comparison = aChange - bChange;
-              break;
-            }
-          }
-          return sortOrder === "asc" ? comparison : -comparison;
-        })
-    : [];
+  const filteredCryptos = useMemo(() => {
+    if (!allCryptos) return [];
+
+    let filtered = allCryptos.filter((c) => {
+      if (!searchQuery) return true;
+      const q = searchQuery.toLowerCase();
+      return (
+        c.ticker.toLowerCase().includes(q) || c.name.toLowerCase().includes(q)
+      );
+    });
+
+    switch (sortBy) {
+      case "price-asc":
+        filtered.sort((a, b) => a.price - b.price);
+        break;
+      case "price-desc":
+        filtered.sort((a, b) => b.price - a.price);
+        break;
+      case "marketcap-asc":
+        filtered.sort((a, b) => (a.marketCap || 0) - (b.marketCap || 0));
+        break;
+      case "marketcap-desc":
+        filtered.sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0));
+        break;
+      case "newest":
+        filtered.sort((a, b) => b.createdAt - a.createdAt);
+        break;
+    }
+
+    return filtered;
+  }, [allCryptos, searchQuery, sortBy]);
+
+  // Prepare sparkline ids (limit to 24 to reduce load)
+  const sparklineIds = useMemo(
+    () => filteredCryptos.slice(0, 24).map((c) => c._id),
+    [filteredCryptos]
+  );
+
+  // Batch query 1h history for sparklines (cast to any to avoid codegen timing)
+  const sparklineData = useQuery(
+    (api as any).crypto.getCryptosPriceHistory1H,
+    sparklineIds.length
+      ? { cryptoIds: sparklineIds, points: 60 }
+      : ("skip" as const)
+  );
 
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
         <div className="flex flex-col gap-4 p-4 md:gap-6 md:p-6">
-          {/* Header */}
+          {/* Modern Header */}
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">
-                Crypto Market
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight bg-gradient-to-r from-foreground to-primary/70 bg-clip-text text-transparent">
+                Crypto
               </h1>
-              <p className="text-muted-foreground">
-                Trade cryptocurrencies or create your own
+              <p className="text-sm md:text-base text-muted-foreground">
+                Discover, compare, and trade community coins with real-time
+                updates.
               </p>
             </div>
             <Dialog
@@ -318,48 +325,47 @@ export default function CryptoMarketPage() {
           </div>
 
           {/* Search and Sort */}
-          <div className="flex flex-col gap-4 md:flex-row">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by name or ticker..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-              />
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="md:col-span-2">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="search"
+                  className="pl-9"
+                  placeholder="Search by ticker or name..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="flex gap-2">
+            <div>
               <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
-                <SelectTrigger className="w-[180px]">
-                  <ArrowUpDown className="mr-2 h-4 w-4" />
-                  <SelectValue />
+                <SelectTrigger id="sort">
+                  <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="marketCap">Market Cap</SelectItem>
-                  <SelectItem value="price">Price</SelectItem>
-                  <SelectItem value="change">Change %</SelectItem>
+                  <SelectItem value="marketcap-desc">
+                    Market Cap: High to Low
+                  </SelectItem>
+                  <SelectItem value="marketcap-asc">
+                    Market Cap: Low to High
+                  </SelectItem>
+                  <SelectItem value="price-desc">Price: High to Low</SelectItem>
+                  <SelectItem value="price-asc">Price: Low to High</SelectItem>
+                  <SelectItem value="newest">Newest</SelectItem>
                 </SelectContent>
               </Select>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() =>
-                  setSortOrder(sortOrder === "asc" ? "desc" : "asc")
-                }
-              >
-                {sortOrder === "asc" ? "↑" : "↓"}
-              </Button>
             </div>
           </div>
 
-          {/* Crypto Cards */}
+          {/* Crypto Grid */}
           {!allCryptos ? (
             <div className="flex items-center justify-center py-12">
               <p className="text-muted-foreground">
                 Loading cryptocurrencies...
               </p>
             </div>
-          ) : filteredAndSortedCryptos.length === 0 ? (
+          ) : filteredCryptos.length === 0 ? (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Coins className="h-12 w-12 text-muted-foreground mb-4" />
@@ -372,80 +378,129 @@ export default function CryptoMarketPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredAndSortedCryptos.map((crypto) => {
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredCryptos.map((crypto) => {
                 const priceChange = crypto.previousPrice
                   ? ((crypto.price - crypto.previousPrice) /
                       crypto.previousPrice) *
                     100
                   : 0;
                 const isPositive = priceChange >= 0;
+                const series = (sparklineData as any)?.[crypto._id] as
+                  | { timestamp: number; price: number }[]
+                  | undefined;
+                const seriesPositive =
+                  series && series.length > 1
+                    ? series[series.length - 1].price - series[0].price >= 0
+                    : isPositive;
 
                 return (
                   <Card
                     key={crypto._id}
-                    className="cursor-pointer transition-all hover:shadow-lg hover:scale-[1.02]"
+                    className="group cursor-pointer transition-all hover:shadow-lg hover:scale-[1.01] border-border/70"
                     onClick={() => navigate(`/crypto/${crypto._id}`)}
                   >
-                    <CardHeader className="pb-3">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="rounded-full bg-primary/10 p-2">
-                            <Coins className="h-6 w-6 text-primary" />
-                          </div>
-                          <div>
-                            <Badge
-                              variant="outline"
-                              className="font-mono text-xs"
-                            >
-                              {crypto.ticker}
-                            </Badge>
-                            <CardTitle className="text-base mt-1">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <CompanyLogo
+                            src={(crypto as any).image}
+                            alt={crypto.name}
+                            size="md"
+                          />
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <Badge
+                                variant="outline"
+                                className="font-mono text-sm font-semibold"
+                              >
+                                {crypto.ticker}
+                              </Badge>
+                              {crypto.previousPrice ? (
+                                <span
+                                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                                    isPositive
+                                      ? "bg-green-500/10 text-green-600"
+                                      : "bg-red-500/10 text-red-600"
+                                  }`}
+                                >
+                                  {isPositive ? (
+                                    <TrendingUp className="h-3 w-3" />
+                                  ) : (
+                                    <TrendingDown className="h-3 w-3" />
+                                  )}
+                                  {isPositive ? "+" : ""}
+                                  {priceChange.toFixed(2)}%
+                                </span>
+                              ) : null}
+                            </div>
+                            <p className="truncate text-xs text-muted-foreground">
                               {crypto.name}
-                            </CardTitle>
+                            </p>
                           </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">Price</p>
+                          <p
+                            className={`text-xl font-bold ${
+                              isPositive ? "text-green-600" : "text-red-600"
+                            }`}
+                          >
+                            {formatCurrency(crypto.price)}
+                          </p>
                         </div>
                       </div>
                     </CardHeader>
-                    <CardContent>
-                      <div className="space-y-2">
-                        <div className="flex items-baseline justify-between">
-                          <span className="text-2xl font-bold text-green-600">
-                            {formatCurrency(crypto.price)}
+                    <CardContent className="space-y-3">
+                      {/* Sparkline */}
+                      <div className="rounded-md border bg-muted/30 p-2 transition-colors group-hover:bg-muted/50">
+                        <Sparkline
+                          data={series}
+                          positive={seriesPositive}
+                          height={54}
+                        />
+                        <div className="mt-1 flex items-center justify-between">
+                          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                            1h preview
                           </span>
-                          {crypto.previousPrice && (
-                            <div className="flex items-center gap-1">
-                              {isPositive ? (
-                                <TrendingUp className="h-3 w-3 text-green-600" />
-                              ) : (
-                                <TrendingDown className="h-3 w-3 text-red-600" />
-                              )}
-                              <span
-                                className={`text-sm font-semibold ${
-                                  isPositive ? "text-green-600" : "text-red-600"
-                                }`}
-                              >
-                                {isPositive ? "+" : ""}
-                                {priceChange.toFixed(2)}%
-                              </span>
-                            </div>
-                          )}
+                          {series && series.length > 1 ? (
+                            <span
+                              className={`text-xs font-medium ${
+                                seriesPositive
+                                  ? "text-green-600"
+                                  : "text-red-600"
+                              }`}
+                            >
+                              {seriesPositive ? "+" : ""}
+                              {(
+                                ((series[series.length - 1].price -
+                                  series[0].price) /
+                                  series[0].price) *
+                                100
+                              ).toFixed(2)}
+                              %
+                            </span>
+                          ) : null}
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
+                      </div>
+
+                      {/* Meta */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="text-xs text-muted-foreground">
                             Market Cap
-                          </span>
-                          <span className="font-medium">
-                            {formatCurrency(crypto.marketCap)}
-                          </span>
+                          </p>
+                          <p className="text-sm font-semibold text-purple-600">
+                            {formatCurrency(crypto.marketCap || 0)}
+                          </p>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Volume (24h)
-                          </span>
-                          <span className="font-medium">
-                            {formatCurrency(crypto.volume)}
-                          </span>
+                        <div className="text-right">
+                          <p className="text-xs text-muted-foreground">
+                            Circulating
+                          </p>
+                          <p className="text-sm font-medium">
+                            {(crypto.circulatingSupply || 0).toLocaleString()}
+                          </p>
                         </div>
                       </div>
                     </CardContent>
