@@ -486,6 +486,48 @@ export const getStockPriceHistory = query({
   },
 });
 
+// Query: Get 1-hour price history for multiple stocks (for sparklines)
+export const getStocksPriceHistory1H = query({
+  args: {
+    stockIds: v.array(v.id("stocks")),
+    points: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const startTime = now - 60 * 60 * 1000; // last 1 hour
+    const maxPoints = Math.max(10, Math.min(args.points || 60, 120));
+
+    const result: Record<string, { timestamp: number; price: number }[]> = {};
+
+    for (const stockId of args.stockIds) {
+      // Fetch last hour history for each stock
+      const history = await ctx.db
+        .query("stockPriceHistory")
+        .withIndex("by_stockId_timestamp", (q) =>
+          q.eq("stockId", stockId).gte("timestamp", startTime)
+        )
+        .order("asc")
+        .collect();
+
+      // Downsample if needed to at most maxPoints (uniform sampling)
+      let series = history.map((h) => ({ timestamp: h.timestamp, price: h.price }));
+      if (series.length > maxPoints) {
+        const step = Math.ceil(series.length / maxPoints);
+        series = series.filter((_, idx) => idx % step === 0);
+        // Ensure we include last point
+        if (series[series.length - 1]?.timestamp !== history[history.length - 1]?.timestamp) {
+          const last = history[history.length - 1];
+          series.push({ timestamp: last.timestamp, price: last.price });
+        }
+      }
+
+      result[stockId] = series;
+    }
+
+    return result;
+  },
+});
+
 // Query: Get recent stock trades
 export const getRecentStockTrades = query({
   args: {

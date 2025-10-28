@@ -195,6 +195,11 @@ Make sure to deploy the output of `npm run build`
  - Modern dashboard UI with subtle Motion animations
  - Animated number updates for live balances/net worth
 
+#### Markets: Stocks & Crypto
+- Modern Stocks Market page redesign aligned with dashboard/portfolio theme
+- Compact 1-hour preview sparklines on stock cards (powered by Convex)
+- Company logos, colorful change badges, and smooth hover animations
+
 #### AI Chat Integration
 - OpenAI-powered conversations
 - Real-time message streaming
