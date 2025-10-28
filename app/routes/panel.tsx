@@ -52,10 +52,23 @@ export default function Panel() {
   // @ts-ignore
   const setCompanyBalance = useMutation(api.moderation?.setCompanyBalance);
 
+  // Alert mutations and queries
+  // @ts-ignore
+  const sendGlobalAlert = useMutation(api.alerts?.sendGlobalAlert);
+  // @ts-ignore
+  const getAllAlerts = useQuery(api.alerts?.getAllAlerts);
+
   const [activeTab, setActiveTab] = useState<
-    "players" | "companies" | "products" | "crypto"
+    "players" | "companies" | "products" | "crypto" | "alerts"
   >("players");
   const [actionMessage, setActionMessage] = useState<string>("");
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertForm, setAlertForm] = useState({
+    title: "",
+    message: "",
+    type: "info" as "info" | "warning" | "success" | "error",
+  });
+  const [isSubmittingAlert, setIsSubmittingAlert] = useState(false);
   const [warningModal, setWarningModal] = useState<{
     playerId: Id<"players">;
     playerName: string;
@@ -344,6 +357,38 @@ export default function Panel() {
     }
   };
 
+  // Alert handler
+  const handleSendAlert = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!alertForm.title.trim() || !alertForm.message.trim()) {
+      showMessage("✗ Please fill in all fields");
+      return;
+    }
+    if (alertForm.title.length > 200) {
+      showMessage("✗ Title must be 200 characters or less");
+      return;
+    }
+    if (alertForm.message.length > 2000) {
+      showMessage("✗ Message must be 2000 characters or less");
+      return;
+    }
+    setIsSubmittingAlert(true);
+    try {
+      await sendGlobalAlert({
+        title: alertForm.title,
+        message: alertForm.message,
+        type: alertForm.type,
+      });
+      showMessage("✓ Global alert sent successfully!");
+      setShowAlertModal(false);
+      setAlertForm({ title: "", message: "", type: "info" });
+    } catch (e: any) {
+      showMessage("✗ Error: " + e.message);
+    } finally {
+      setIsSubmittingAlert(false);
+    }
+  };
+
   return (
     <div className="retro-panel">
       <div className="retro-header">
@@ -384,6 +429,14 @@ export default function Panel() {
         >
           Cryptocurrencies
         </button>
+        {isAdmin && (
+          <button
+            className={`retro-tab ${activeTab === "alerts" ? "active" : ""}`}
+            onClick={() => setActiveTab("alerts")}
+          >
+            Global Alerts
+          </button>
+        )}
       </div>
 
       <div className="retro-content">
@@ -761,6 +814,51 @@ export default function Panel() {
             )}
           </div>
         )}
+
+        {activeTab === "alerts" && (
+          <div className="alerts-section">
+            <div className="alerts-header">
+              <h2>Global Alerts</h2>
+              <button
+                className="retro-button btn-primary"
+                onClick={() => setShowAlertModal(true)}
+              >
+                ✉️ Send New Alert
+              </button>
+            </div>
+
+            {getAllAlerts === undefined ? (
+              <div className="loading">Loading alerts...</div>
+            ) : getAllAlerts.length === 0 ? (
+              <div className="no-data">No alerts sent yet</div>
+            ) : (
+              <div className="alerts-list">
+                {getAllAlerts.map((alert: any) => (
+                  <div
+                    key={alert._id}
+                    className={`alert-item alert-${alert.type}`}
+                  >
+                    <div className="alert-header">
+                      <strong>{alert.title}</strong>
+                      <span className="alert-type">
+                        {alert.type.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="alert-message">{alert.message}</p>
+                    <div className="alert-footer">
+                      <span className="alert-time">
+                        {new Date(alert.sentAt).toLocaleString()}
+                      </span>
+                      <span className="alert-readers">
+                        Read by {alert.readBy?.length || 0} players
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Warning Modal */}
@@ -853,6 +951,95 @@ export default function Panel() {
               </button>
             )}
           </div>
+        </div>
+      </div>
+
+      {/* Global Alert Modal */}
+      <div className={`alert-modal-overlay ${showAlertModal ? "visible" : ""}`}>
+        <div className="alert-modal-box">
+          <h3>📢 Send Global Alert</h3>
+          <form onSubmit={handleSendAlert}>
+            <label htmlFor="alert-title">Title (max 200 chars):</label>
+            <input
+              id="alert-title"
+              type="text"
+              value={alertForm.title}
+              onChange={(e) =>
+                setAlertForm({ ...alertForm, title: e.target.value })
+              }
+              placeholder="Enter alert title..."
+              maxLength={200}
+            />
+            <div className="char-count">{alertForm.title.length} / 200</div>
+
+            <label htmlFor="alert-message">Message (max 2000 chars):</label>
+            <textarea
+              id="alert-message"
+              value={alertForm.message}
+              onChange={(e) =>
+                setAlertForm({ ...alertForm, message: e.target.value })
+              }
+              placeholder="Enter alert message..."
+              maxLength={2000}
+              rows={8}
+            />
+            <div className="char-count">{alertForm.message.length} / 2000</div>
+
+            <label htmlFor="alert-type">Alert Type:</label>
+            <select
+              id="alert-type"
+              value={alertForm.type}
+              onChange={(e) =>
+                setAlertForm({
+                  ...alertForm,
+                  type: e.target.value as any,
+                })
+              }
+            >
+              <option value="info">ℹ️ Info</option>
+              <option value="success">✓ Success</option>
+              <option value="warning">⚠️ Warning</option>
+              <option value="error">✗ Error</option>
+            </select>
+
+            <div className="alert-preview">
+              <div className="alert-label">Preview:</div>
+              <div className={`alert-item alert-${alertForm.type}`}>
+                <div className="alert-header">
+                  <strong>
+                    {alertForm.title || "(Title will appear here)"}
+                  </strong>
+                  <span className="alert-type">
+                    {alertForm.type.toUpperCase()}
+                  </span>
+                </div>
+                <p className="alert-message">
+                  {alertForm.message || "(Message will appear here)"}
+                </p>
+              </div>
+            </div>
+
+            <div className="alert-modal-buttons">
+              <button
+                type="button"
+                className="btn-cancel"
+                onClick={() => {
+                  setShowAlertModal(false);
+                  setAlertForm({ title: "", message: "", type: "info" });
+                }}
+                disabled={isSubmittingAlert}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="btn-submit"
+                disabled={isSubmittingAlert}
+              >
+                {isSubmittingAlert ? "Sending..." : "Send Alert"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
@@ -1243,6 +1430,252 @@ export default function Panel() {
 
         .no-warnings {
           color: #808080;
+        }
+
+        /* Alert Modal Styles */
+        .alert-modal-overlay {
+          display: none;
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          align-items: center;
+          justify-content: center;
+          z-index: 9999;
+        }
+
+        .alert-modal-overlay.visible {
+          display: flex;
+        }
+
+        .alert-modal-box {
+          background: #c0c0c0;
+          border: 3px solid #000000;
+          padding: 20px;
+          max-width: 600px;
+          width: 90%;
+          box-shadow: 5px 5px 0 #808080;
+          max-height: 90vh;
+          overflow-y: auto;
+        }
+
+        .alert-modal-box h3 {
+          margin-top: 0;
+          color: #000080;
+          font-size: 16px;
+        }
+
+        .alert-modal-box label {
+          display: block;
+          margin: 15px 0 5px 0;
+          font-weight: bold;
+          color: #000000;
+        }
+
+        .alert-modal-box input[type="text"],
+        .alert-modal-box textarea,
+        .alert-modal-box select {
+          width: 100%;
+          padding: 5px;
+          font-family: "MS Sans Serif", "Tahoma", sans-serif;
+          border: 2px inset #dfdfdf;
+          background: #ffffff;
+          color: #000000;
+          box-sizing: border-box;
+          margin-bottom: 5px;
+        }
+
+        .alert-modal-box textarea {
+          resize: vertical;
+          min-height: 120px;
+        }
+
+        .char-count {
+          font-size: 11px;
+          color: #808080;
+          text-align: right;
+          margin-bottom: 10px;
+        }
+
+        .alert-preview {
+          margin: 20px 0;
+          padding: 10px;
+          background: #f0f0f0;
+          border: 2px inset #dfdfdf;
+        }
+
+        .alert-preview .alert-label {
+          font-weight: bold;
+          margin-bottom: 10px;
+          color: #000080;
+        }
+
+        .alert-modal-buttons {
+          display: flex;
+          gap: 10px;
+          justify-content: flex-end;
+          margin-top: 20px;
+        }
+
+        .alert-modal-buttons button {
+          padding: 6px 16px;
+          background: #c0c0c0;
+          border: 2px outset #dfdfdf;
+          cursor: pointer;
+          font-weight: bold;
+          font-family: "MS Sans Serif", "Tahoma", sans-serif;
+        }
+
+        .alert-modal-buttons button:hover:not(:disabled) {
+          filter: brightness(1.1);
+        }
+
+        .alert-modal-buttons button:active:not(:disabled) {
+          border-style: inset;
+        }
+
+        .alert-modal-buttons button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .alert-modal-buttons .btn-submit {
+          background: #00ff00;
+          border-color: #008000;
+        }
+
+        .alert-modal-buttons .btn-cancel {
+          background: #ff0000;
+          border-color: #800000;
+          color: #ffffff;
+        }
+
+        /* Alerts Section Styles */
+        .alerts-section h2 {
+          color: #000080;
+          border-bottom: 2px solid #000080;
+          padding-bottom: 5px;
+          margin-bottom: 15px;
+        }
+
+        .alerts-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 20px;
+        }
+
+        .alerts-header h2 {
+          margin: 0;
+          flex: 1;
+        }
+
+        .alerts-header button {
+          white-space: nowrap;
+        }
+
+        .alerts-list {
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+        }
+
+        .alert-item {
+          border: 2px solid;
+          padding: 12px;
+          border-radius: 2px;
+          background: #ffffff;
+        }
+
+        .alert-item.alert-info {
+          border-color: #0000ff;
+          background: #e6f2ff;
+        }
+
+        .alert-item.alert-success {
+          border-color: #008000;
+          background: #e6ffe6;
+        }
+
+        .alert-item.alert-warning {
+          border-color: #ff8c00;
+          background: #fff9e6;
+        }
+
+        .alert-item.alert-error {
+          border-color: #ff0000;
+          background: #ffe6e6;
+        }
+
+        .alert-item .alert-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: baseline;
+          margin-bottom: 8px;
+        }
+
+        .alert-item .alert-header strong {
+          color: #000000;
+          font-size: 14px;
+        }
+
+        .alert-type {
+          display: inline-block;
+          font-size: 11px;
+          font-weight: bold;
+          padding: 2px 6px;
+          background: #c0c0c0;
+          border: 1px solid #808080;
+        }
+
+        .alert-item.alert-info .alert-type {
+          background: #0000ff;
+          color: #ffffff;
+        }
+
+        .alert-item.alert-success .alert-type {
+          background: #008000;
+          color: #ffffff;
+        }
+
+        .alert-item.alert-warning .alert-type {
+          background: #ff8c00;
+          color: #ffffff;
+        }
+
+        .alert-item.alert-error .alert-type {
+          background: #ff0000;
+          color: #ffffff;
+        }
+
+        .alert-message {
+          margin: 8px 0;
+          color: #000000;
+          white-space: pre-wrap;
+          word-wrap: break-word;
+          line-height: 1.4;
+        }
+
+        .alert-footer {
+          display: flex;
+          justify-content: space-between;
+          font-size: 11px;
+          color: #808080;
+          margin-top: 8px;
+          border-top: 1px solid #c0c0c0;
+          padding-top: 8px;
+        }
+
+        .btn-primary {
+          background: #0080ff;
+          border-color: #0000ff;
+          color: #ffffff;
+        }
+
+        .btn-primary:hover {
+          background: #0060df;
         }
       `}</style>
     </div>

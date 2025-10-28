@@ -441,4 +441,15 @@ export default defineSchema({
   })
     .index("type", ["type"])
     .index("polarEventId", ["polarEventId"]),
+
+  globalAlerts: defineTable({
+    createdBy: v.id("players"), // admin who created it
+    title: v.string(),
+    message: v.string(),
+    type: v.union(v.literal("info"), v.literal("warning"), v.literal("success"), v.literal("error")), // alert type/color
+    readBy: v.optional(v.array(v.id("players"))), // players who have seen it (starts empty)
+    sentAt: v.number(), // timestamp when sent
+    createdAt: v.number(),
+  })
+    .index("by_sentAt", ["sentAt"]),
 });
