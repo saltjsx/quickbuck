@@ -452,20 +452,24 @@ export const playRoulette = mutation({
     // Spin the wheel (0-36)
     const number = Math.floor(Math.random() * 37);
     
-    // Correct American Roulette red and black numbers
+    console.log(`[ROULETTE] Spin result: number=${number}, betType="${args.betType}"`);
+    
+    // American Roulette red/black determination
+    // Official American Roulette layout:
     // Red: 1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36
     // Black: 2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35
     const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
-    const blackNumbers = [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35];
     
     // Determine properties of the spun number
     const isGreen = number === 0;
     const isRed = redNumbers.includes(number);
-    const isBlack = blackNumbers.includes(number);
+    const isBlack = number !== 0 && !isRed; // All non-zero, non-red numbers are black
     const isOdd = number > 0 && number % 2 === 1;
     const isEven = number > 0 && number % 2 === 0;
     const isLow = number >= 1 && number <= 18;
     const isHigh = number >= 19 && number <= 36;
+
+    console.log(`[ROULETTE] Properties: isRed=${isRed}, isBlack=${isBlack}, isOdd=${isOdd}, isEven=${isEven}, isLow=${isLow}, isHigh=${isHigh}`);
 
     let won = false;
     let multiplier = 0;
@@ -504,12 +508,17 @@ export const playRoulette = mutation({
           won = isGreen;
           multiplier = 36;
           break;
+        default:
+          console.error(`[ROULETTE] Unknown bet type: "${args.betType}"`);
+          throw new Error(`Invalid bet type: ${args.betType}`);
       }
     }
 
     const result = won ? "win" : "loss";
     const payout = won ? args.betAmount * multiplier : 0;
     const netChange = payout - args.betAmount;
+
+    console.log(`[ROULETTE] Decision: won=${won}, multiplier=${multiplier}, payout=${payout}, result=${result}`);
 
     // Update balance
     await ctx.db.patch(player._id, {
