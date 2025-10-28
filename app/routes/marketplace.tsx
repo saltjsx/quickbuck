@@ -65,7 +65,7 @@ export default function MarketplacePage() {
 
   // Get all products and companies
   const allProducts = useQuery(api.products.getAllProducts);
-  const allCompanies = useQuery(api.companies.getAllPublicCompanies);
+  const allCompanies = useQuery(api.companies.getAllCompanies);
 
   // Get player's cart
   const cartData = useQuery(

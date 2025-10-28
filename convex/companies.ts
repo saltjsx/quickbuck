@@ -221,6 +221,13 @@ export const getAllPublicCompanies = query({
   },
 });
 
+// Query: Get all companies (public and private)
+export const getAllCompanies = query({
+  handler: async (ctx) => {
+    return await ctx.db.query("companies").collect();
+  },
+});
+
 // Query: Get company by ticker
 export const getCompanyByTicker = query({
   args: {
