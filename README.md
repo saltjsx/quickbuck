@@ -192,6 +192,8 @@ Make sure to deploy the output of `npm run build`
 - User profile management
 - AI chat functionality
 - Subscription status display
+ - Modern dashboard UI with subtle Motion animations
+ - Animated number updates for live balances/net worth
 
 #### AI Chat Integration
 - OpenAI-powered conversations
