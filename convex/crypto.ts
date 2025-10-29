@@ -72,6 +72,10 @@ export const createCryptocurrency = mutation({
       volume: 0,
       totalSupply: totalSupply,
       circulatingSupply: 0, // No coins in circulation initially
+      // Initialize crypto algorithm fields for tick price updates
+      sentiment: 0, // neutral sentiment
+      newsScore: 0, // no news impact initially
+      volatilityEst: 2.5, // high base volatility for crypto
       createdAt: now,
       updatedAt: now,
     });
@@ -184,11 +188,45 @@ export const buyCryptocurrency = mutation({
       });
     }
 
-    // Update circulating supply
-    await ctx.db.patch(args.cryptoId, {
-      circulatingSupply: crypto.circulatingSupply + args.amount,
-      updatedAt: Date.now(),
-    });
+    // Apply STRONG upward price pressure when crypto is bought
+    // Cryptocurrencies should be highly volatile and react strongly to trades
+    const newCirculatingSupply = crypto.circulatingSupply + args.amount;
+    const circulatingSupply = Math.max(newCirculatingSupply, 1);
+    const buyPressure = args.amount / circulatingSupply;
+    
+    // Much stronger price impact: 20-50% impact possible on large trades
+    // Minimum 0.5% increase even on tiny trades for volatility
+    const baseImpact = Math.max(buyPressure * 0.5, 0.005); // Base: 50% of buy pressure, min 0.5%
+    const volatilityMultiplier = 1.5 + Math.random(); // Random 1.5x-2.5x multiplier
+    const priceImpact = Math.min(baseImpact * volatilityMultiplier, 0.5); // Max 50% impact per trade
+    
+    const newPrice = Math.max(1, Math.floor(crypto.price * (1 + priceImpact)));
+    const newMarketCap = Math.floor(newPrice * newCirculatingSupply);
+    
+    // Validate and update all crypto fields in one atomic patch
+    if (Number.isFinite(newPrice) && newPrice > 0 && Number.isFinite(newMarketCap) && newMarketCap >= 0) {
+      await ctx.db.patch(args.cryptoId, {
+        circulatingSupply: newCirculatingSupply,
+        previousPrice: crypto.price,
+        price: newPrice,
+        marketCap: newMarketCap,
+        volume: crypto.volume + totalCost,
+        updatedAt: Date.now(),
+      });
+      
+      // Record price history for live charting
+      await ctx.db.insert("cryptoPriceHistory", {
+        cryptoId: args.cryptoId,
+        price: newPrice,
+        timestamp: Date.now(),
+      });
+    } else {
+      // If price update fails validation, still update circulating supply
+      await ctx.db.patch(args.cryptoId, {
+        circulatingSupply: newCirculatingSupply,
+        updatedAt: Date.now(),
+      });
+    }
 
     // Create transaction
     await ctx.db.insert("transactions", {
@@ -212,40 +250,6 @@ export const buyCryptocurrency = mutation({
       tradeType: "buy",
       timestamp: Date.now(),
     });
-
-    // Apply STRONG upward price pressure when crypto is bought
-    // Cryptocurrencies should be highly volatile and react strongly to trades
-    const circulatingSupply = Math.max(crypto.circulatingSupply + args.amount, 1);
-    const buyPressure = args.amount / circulatingSupply;
-    
-    // Much stronger price impact: 20-50% impact possible on large trades
-    // Minimum 0.5% increase even on tiny trades for volatility
-    const baseImpact = Math.max(buyPressure * 0.5, 0.005); // Base: 50% of buy pressure, min 0.5%
-    const volatilityMultiplier = 1.5 + Math.random(); // Random 1.5x-2.5x multiplier
-    const priceImpact = Math.min(baseImpact * volatilityMultiplier, 0.5); // Max 50% impact per trade
-    
-    const newPrice = Math.max(1, Math.floor(crypto.price * (1 + priceImpact)));
-    
-    // Validate and update price
-    if (Number.isFinite(newPrice) && newPrice > 0 && newPrice !== crypto.price) {
-      const newMarketCap = Math.floor(newPrice * (crypto.circulatingSupply + args.amount));
-      if (Number.isFinite(newMarketCap) && newMarketCap >= 0) {
-        await ctx.db.patch(args.cryptoId, {
-          previousPrice: crypto.price,
-          price: newPrice,
-          marketCap: newMarketCap,
-          volume: crypto.volume + totalCost,
-          updatedAt: Date.now(),
-        });
-        
-        // Record price history for live charting
-        await ctx.db.insert("cryptoPriceHistory", {
-          cryptoId: args.cryptoId,
-          price: newPrice,
-          timestamp: Date.now(),
-        });
-      }
-    }
 
     return existingHolding?._id;
   },
@@ -302,11 +306,45 @@ export const sellCryptocurrency = mutation({
       });
     }
 
-    // Update circulating supply
-    await ctx.db.patch(args.cryptoId, {
-      circulatingSupply: Math.max(0, crypto.circulatingSupply - args.amount),
-      updatedAt: Date.now(),
-    });
+    // Apply STRONG downward price pressure when crypto is sold
+    // Selling should cause significant price drops for volatility
+    const newCirculatingSupply = Math.max(0, crypto.circulatingSupply - args.amount);
+    const circulatingSupply = Math.max(newCirculatingSupply, 1);
+    const sellPressure = args.amount / Math.max(crypto.circulatingSupply, 1); // Use old supply for pressure calculation
+    
+    // Much stronger price impact: 20-50% drop possible on large sells
+    // Minimum 0.5% decrease even on tiny sells for volatility
+    const baseImpact = Math.max(sellPressure * 0.5, 0.005); // Base: 50% of sell pressure, min 0.5%
+    const volatilityMultiplier = 1.5 + Math.random(); // Random 1.5x-2.5x multiplier
+    const priceImpact = Math.min(baseImpact * volatilityMultiplier, 0.5); // Max 50% drop per trade
+    
+    const newPrice = Math.max(1, Math.floor(crypto.price * (1 - priceImpact)));
+    const newMarketCap = Math.floor(newPrice * newCirculatingSupply);
+    
+    // Validate and update all crypto fields in one atomic patch
+    if (Number.isFinite(newPrice) && newPrice > 0 && Number.isFinite(newMarketCap) && newMarketCap >= 0) {
+      await ctx.db.patch(args.cryptoId, {
+        circulatingSupply: newCirculatingSupply,
+        previousPrice: crypto.price,
+        price: newPrice,
+        marketCap: newMarketCap,
+        volume: crypto.volume + totalValue,
+        updatedAt: Date.now(),
+      });
+      
+      // Record price history for live charting
+      await ctx.db.insert("cryptoPriceHistory", {
+        cryptoId: args.cryptoId,
+        price: newPrice,
+        timestamp: Date.now(),
+      });
+    } else {
+      // If price update fails validation, still update circulating supply
+      await ctx.db.patch(args.cryptoId, {
+        circulatingSupply: newCirculatingSupply,
+        updatedAt: Date.now(),
+      });
+    }
 
     // Credit account
     if (args.accountType === "player") {
@@ -349,40 +387,6 @@ export const sellCryptocurrency = mutation({
       tradeType: "sell",
       timestamp: Date.now(),
     });
-
-    // Apply STRONG downward price pressure when crypto is sold
-    // Selling should cause significant price drops for volatility
-    const circulatingSupply = Math.max(crypto.circulatingSupply, 1);
-    const sellPressure = args.amount / circulatingSupply;
-    
-    // Much stronger price impact: 20-50% drop possible on large sells
-    // Minimum 0.5% decrease even on tiny sells for volatility
-    const baseImpact = Math.max(sellPressure * 0.5, 0.005); // Base: 50% of sell pressure, min 0.5%
-    const volatilityMultiplier = 1.5 + Math.random(); // Random 1.5x-2.5x multiplier
-    const priceImpact = Math.min(baseImpact * volatilityMultiplier, 0.5); // Max 50% drop per trade
-    
-    const newPrice = Math.max(1, Math.floor(crypto.price * (1 - priceImpact)));
-    
-    // Validate and update price
-    if (Number.isFinite(newPrice) && newPrice > 0 && newPrice !== crypto.price) {
-      const newMarketCap = Math.floor(newPrice * Math.max(0, crypto.circulatingSupply - args.amount));
-      if (Number.isFinite(newMarketCap) && newMarketCap >= 0) {
-        await ctx.db.patch(args.cryptoId, {
-          previousPrice: crypto.price,
-          price: newPrice,
-          marketCap: newMarketCap,
-          volume: crypto.volume + totalValue,
-          updatedAt: Date.now(),
-        });
-        
-        // Record price history for live charting
-        await ctx.db.insert("cryptoPriceHistory", {
-          cryptoId: args.cryptoId,
-          price: newPrice,
-          timestamp: Date.now(),
-        });
-      }
-    }
 
     return totalValue;
   },

@@ -378,6 +378,21 @@ async function updateCryptoPrices(ctx: any) {
         continue;
       }
       
+      // Initialize missing fields for existing cryptos (backward compatibility)
+      if (crypto.sentiment === undefined || crypto.newsScore === undefined || crypto.volatilityEst === undefined) {
+        console.log(`Initializing missing fields for crypto ${crypto._id}`);
+        await ctx.db.patch(crypto._id, {
+          sentiment: crypto.sentiment ?? 0,
+          newsScore: crypto.newsScore ?? 0,
+          volatilityEst: crypto.volatilityEst ?? 2.5,
+        });
+        // Re-fetch with updated fields
+        const updatedCrypto = await ctx.db.get(crypto._id);
+        if (updatedCrypto) {
+          Object.assign(crypto, updatedCrypto);
+        }
+      }
+      
       // HIGHLY VOLATILE crypto price movement (much more than stocks)
       // Cryptos should swing wildly every tick
       const baseVolatility = crypto.volatilityEst || 2.5; // Much higher default than stocks
