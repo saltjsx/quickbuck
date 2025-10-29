@@ -1,10 +1,9 @@
 import { useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
-import type { Route } from "./+types/admin-maintenance";
 import { api } from "../../../convex/_generated/api";
 
-export default function AdminMaintenancePage({}: Route.ComponentProps) {
+export default function AdminMaintenancePage() {
   const navigate = useNavigate();
   const [isAuthorized, setIsAuthorized] = useState<boolean | null>(null);
   const [message, setMessage] = useState(
