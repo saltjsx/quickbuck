@@ -21,6 +21,7 @@ import type * as gameConfig from "../gameConfig.js";
 import type * as http from "../http.js";
 import type * as leaderboard from "../leaderboard.js";
 import type * as loans from "../loans.js";
+import type * as maintenance from "../maintenance.js";
 import type * as moderation from "../moderation.js";
 import type * as players from "../players.js";
 import type * as portfolio from "../portfolio.js";
@@ -60,6 +61,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   leaderboard: typeof leaderboard;
   loans: typeof loans;
+  maintenance: typeof maintenance;
   moderation: typeof moderation;
   players: typeof players;
   portfolio: typeof portfolio;

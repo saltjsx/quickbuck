@@ -10,7 +10,9 @@ export default [
   route("sign-in/*", "routes/sign-in.tsx"),
   route("sign-up/*", "routes/sign-up.tsx"),
   route("success", "routes/success.tsx"),
+  route("maintenance", "routes/maintenance.tsx"),
   route("panel", "routes/panel.tsx"),
+  route("admin/maintenance", "routes/admin/maintenance.tsx"),
   layout("routes/dashboard/layout.tsx", [
     route("dashboard", "routes/dashboard/index.tsx"),
     route("leaderboard", "routes/leaderboard.tsx"),

@@ -14,6 +14,7 @@ import {
   LimitedAccountAlert,
   WarningModal,
 } from "~/components/account-status";
+import { MaintenanceCheck } from "~/components/maintenance-check";
 import { useState } from "react";
 
 export async function loader(args: Route.LoaderArgs) {
@@ -60,6 +61,9 @@ export default function DashboardLayout() {
         } as React.CSSProperties
       }
     >
+      {/* Check if maintenance mode is enabled and redirect if necessary */}
+      <MaintenanceCheck />
+
       {/* Show warning modal if player has warnings */}
       {hasWarnings && !dismissedWarnings && currentPlayer.warnings && (
         <WarningModal
