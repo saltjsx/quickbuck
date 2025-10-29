@@ -22,7 +22,8 @@ export const createLoan = mutation({
       throw new Error("Player not found");
     }
 
-    // EXPLOIT FIX: Check total outstanding debt to prevent excessive loans
+    // RACE CONDITION FIX: Check total outstanding debt to prevent excessive loans
+    // We check this BEFORE any DB modifications to prevent race conditions
     const activeLoans = await ctx.db
       .query("loans")
       .withIndex("by_playerId", (q) => q.eq("playerId", args.playerId))
@@ -35,10 +36,20 @@ export const createLoan = mutation({
       throw new Error("Total outstanding debt would exceed maximum loan limit of $5,000,000");
     }
 
+    // RACE CONDITION FIX: Additional check to prevent multiple simultaneous loans
+    // Check if there's a very recent loan (within last 1 second) to prevent duplicates
+    const veryRecentLoans = activeLoans.filter(loan => 
+      Date.now() - loan.createdAt < 1000
+    );
+    
+    if (veryRecentLoans.length > 0) {
+      throw new Error("Please wait a moment before requesting another loan");
+    }
+
     const now = Date.now();
     const interestRate = 5; // 5% daily interest
 
-    // Create loan
+    // Create loan FIRST before crediting balance (atomic-like operation)
     const loanId = await ctx.db.insert("loans", {
       playerId: args.playerId,
       amount: args.amount,
@@ -50,9 +61,17 @@ export const createLoan = mutation({
       status: "active" as const,
     });
 
-    // Credit player's account
+    // Re-fetch player to get latest balance (prevents race condition)
+    const latestPlayer = await ctx.db.get(args.playerId);
+    if (!latestPlayer) {
+      // Rollback: delete the loan we just created
+      await ctx.db.delete(loanId);
+      throw new Error("Player not found");
+    }
+
+    // Credit player's account with latest balance
     await ctx.db.patch(args.playerId, {
-      balance: player.balance + args.amount,
+      balance: latestPlayer.balance + args.amount,
       updatedAt: now,
     });
 
@@ -179,23 +198,55 @@ export const applyLoanInterest = mutation({
         // Deduct from player balance if possible
         const player = await ctx.db.get(loan.playerId);
         if (player) {
-          // Allow negative balance for loan interest
-          await ctx.db.patch(loan.playerId, {
-            balance: player.balance - interestAmount,
-            updatedAt: now,
-          });
+          // NEGATIVE BALANCE FIX: Only allow balance to go negative up to -$50,000 (-5,000,000 cents)
+          // This prevents excessive debt spirals while still allowing reasonable overdraft
+          const minAllowedBalance = -5000000; // -$50,000
+          const newBalance = player.balance - interestAmount;
+          
+          if (newBalance < minAllowedBalance) {
+            // If applying interest would push below minimum, only deduct what's possible
+            const maxDeduction = player.balance - minAllowedBalance;
+            
+            if (maxDeduction > 0) {
+              // Partial deduction - deduct what we can
+              await ctx.db.patch(loan.playerId, {
+                balance: minAllowedBalance,
+                updatedAt: now,
+              });
 
-          // Create transaction record
-          await ctx.db.insert("transactions", {
-            fromAccountId: loan.playerId,
-            fromAccountType: "player" as const,
-            toAccountId: loan.playerId, // System/bank
-            toAccountType: "player" as const,
-            amount: interestAmount,
-            assetType: "cash" as const,
-            description: `Loan interest: $${(interestAmount / 100).toFixed(2)}`,
-            createdAt: now,
-          });
+              // Create transaction record for partial deduction
+              await ctx.db.insert("transactions", {
+                fromAccountId: loan.playerId,
+                fromAccountType: "player" as const,
+                toAccountId: loan.playerId, // System/bank
+                toAccountType: "player" as const,
+                amount: maxDeduction,
+                assetType: "cash" as const,
+                description: `Loan interest (partial): $${(maxDeduction / 100).toFixed(2)}`,
+                createdAt: now,
+              });
+            }
+            // Note: Loan balance still increases even if we can't deduct full interest
+            // This represents accumulating debt that must be paid
+          } else {
+            // Normal case: can afford full interest deduction
+            await ctx.db.patch(loan.playerId, {
+              balance: newBalance,
+              updatedAt: now,
+            });
+
+            // Create transaction record
+            await ctx.db.insert("transactions", {
+              fromAccountId: loan.playerId,
+              fromAccountType: "player" as const,
+              toAccountId: loan.playerId, // System/bank
+              toAccountType: "player" as const,
+              amount: interestAmount,
+              assetType: "cash" as const,
+              description: `Loan interest: $${(interestAmount / 100).toFixed(2)}`,
+              createdAt: now,
+            });
+          }
         }
       }
     }

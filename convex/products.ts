@@ -118,7 +118,9 @@ export const orderProductBatch = mutation({
 
     // EXPLOIT FIX: Calculate production cost from percentage and CURRENT price
     // This prevents the exploit where price is increased after creation
-    const productionCost = Math.floor(product.price * product.productionCostPercentage);
+    // Handle legacy products with productionCost field
+    const productionCostPercentage = product.productionCostPercentage ?? 0.35; // Default to 35%
+    const productionCost = Math.floor(product.price * productionCostPercentage);
 
     // Calculate total production cost for this batch
     const totalCost = productionCost * args.quantity;

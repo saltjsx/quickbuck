@@ -168,9 +168,14 @@ export const playSlots = mutation({
     if (args.betAmount > 1000000) throw new Error("Maximum bet is $10,000");
     if (player.balance < args.betAmount) throw new Error("Insufficient balance");
 
+    // RACE CONDITION FIX: Re-fetch player to get latest balance before deduction
+    const latestPlayer = await ctx.db.get(player._id);
+    if (!latestPlayer) throw new Error("Player not found");
+    if (latestPlayer.balance < args.betAmount) throw new Error("Insufficient balance");
+
     // Deduct bet
     await ctx.db.patch(player._id, {
-      balance: player.balance - args.betAmount,
+      balance: latestPlayer.balance - args.betAmount,
       updatedAt: Date.now(),
     });
 
@@ -232,7 +237,7 @@ export const playSlots = mutation({
       payout,
       result,
       multiplier,
-      newBalance: player.balance - args.betAmount + payout,
+      newBalance: latestPlayer.balance - args.betAmount + payout,
     };
   },
 });
@@ -278,9 +283,14 @@ export const startBlackjack = mutation({
       throw new Error("You already have an active game. Finish it first.");
     }
 
+    // RACE CONDITION FIX: Re-fetch player to get latest balance before deduction
+    const latestPlayer = await ctx.db.get(player._id);
+    if (!latestPlayer) throw new Error("Player not found");
+    if (latestPlayer.balance < args.betAmount) throw new Error("Insufficient balance");
+
     // Deduct bet
     await ctx.db.patch(player._id, {
-      balance: player.balance - args.betAmount,
+      balance: latestPlayer.balance - args.betAmount,
       updatedAt: Date.now(),
     });
 
@@ -594,9 +604,14 @@ export const playDice = mutation({
     if (args.betAmount > 1000000) throw new Error("Maximum bet is $10,000");
     if (player.balance < args.betAmount) throw new Error("Insufficient balance");
 
+    // RACE CONDITION FIX: Re-fetch player to get latest balance before deduction
+    const latestPlayer = await ctx.db.get(player._id);
+    if (!latestPlayer) throw new Error("Player not found");
+    if (latestPlayer.balance < args.betAmount) throw new Error("Insufficient balance");
+
     // Deduct bet
     await ctx.db.patch(player._id, {
-      balance: player.balance - args.betAmount,
+      balance: latestPlayer.balance - args.betAmount,
       updatedAt: Date.now(),
     });
 
@@ -653,7 +668,7 @@ export const playDice = mutation({
       payout,
       result,
       multiplier,
-      newBalance: player.balance - args.betAmount + payout,
+      newBalance: latestPlayer.balance - args.betAmount + payout,
     };
   },
 });

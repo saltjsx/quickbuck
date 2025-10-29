@@ -73,7 +73,8 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     price: v.number(), // in cents
-    productionCostPercentage: v.number(), // 0-1, percentage of price (e.g., 0.35 = 35%)
+    productionCostPercentage: v.optional(v.number()), // 0-1, percentage of price (e.g., 0.35 = 35%)
+    productionCost: v.optional(v.number()), // DEPRECATED: old field, kept for backwards compatibility
     image: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     stock: v.optional(v.number()), // null means unlimited

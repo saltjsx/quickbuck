@@ -1233,3 +1233,144 @@ export const grantAdminRole = mutation({
     };
   },
 });
+
+// ===============================
+// ADMIN FIX FUNCTIONS
+// ===============================
+
+/**
+ * ADMIN FUNCTION: Fix player balance after duplicate loan issue
+ * 
+ * This function corrects the balance of players who received duplicate loan credits
+ * due to a race condition that has now been fixed.
+ */
+export const fixDuplicateLoanBalance = mutation({
+  args: {
+    playerId: v.id("players"),
+    adjustmentAmount: v.number(), // Amount to add (in cents)
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Check if current user is admin
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    const currentPlayer = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    if (!currentPlayer) throw new Error("Player not found");
+
+    const hasAccess = await hasPermission(ctx, currentPlayer._id, "admin");
+    if (!hasAccess) {
+      throw new Error("Insufficient permissions - admin required");
+    }
+
+    // Get the target player
+    const player = await ctx.db.get(args.playerId);
+    if (!player) {
+      throw new Error("Target player not found");
+    }
+
+    console.log(`Admin ${currentPlayer._id} fixing player ${args.playerId}`);
+    console.log(`Current balance: $${(player.balance / 100).toFixed(2)}`);
+    console.log(`Adjustment: $${(args.adjustmentAmount / 100).toFixed(2)}`);
+    console.log(`Reason: ${args.reason}`);
+
+    const newBalance = player.balance + args.adjustmentAmount;
+
+    await ctx.db.patch(args.playerId, {
+      balance: newBalance,
+      updatedAt: Date.now(),
+    });
+
+    // Create a transaction record for audit purposes
+    await ctx.db.insert("transactions", {
+      fromAccountId: args.playerId,
+      fromAccountType: "player" as const,
+      toAccountId: args.playerId,
+      toAccountType: "player" as const,
+      amount: args.adjustmentAmount,
+      assetType: "cash" as const,
+      description: `Admin adjustment by ${user.email || user.name}: ${args.reason}`,
+      createdAt: Date.now(),
+    });
+
+    console.log(`New balance: $${(newBalance / 100).toFixed(2)}`);
+
+    return {
+      oldBalance: player.balance,
+      newBalance,
+      adjustment: args.adjustmentAmount,
+      message: "Balance fixed successfully",
+    };
+  },
+});
+
+/**
+ * ADMIN FUNCTION: Check player's financial state
+ * Use this to verify balances and investigate issues
+ */
+export const checkPlayerFinances = query({
+  args: {
+    playerId: v.id("players"),
+  },
+  handler: async (ctx, args) => {
+    const player = await ctx.db.get(args.playerId);
+    if (!player) {
+      throw new Error("Player not found");
+    }
+
+    // Get all loans
+    const loans = await ctx.db
+      .query("loans")
+      .withIndex("by_playerId", (q) => q.eq("playerId", args.playerId))
+      .collect();
+
+    // Get all transactions
+    const sentTransactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.playerId))
+      .collect();
+
+    const receivedTransactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_toAccountId", (q) => q.eq("toAccountId", args.playerId))
+      .collect();
+
+    const totalReceived = receivedTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+    const totalSent = sentTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+
+    return {
+      playerId: args.playerId,
+      currentBalance: player.balance,
+      loans: loans.map(loan => ({
+        amount: loan.amount,
+        remaining: loan.remainingBalance,
+        status: loan.status,
+        created: new Date(loan.createdAt).toISOString(),
+      })),
+      transactionSummary: {
+        totalReceived,
+        totalSent,
+        net: totalReceived - totalSent,
+      },
+      calculatedBalance: {
+        startingBalance: 1000000, // Default starting balance
+        plusReceived: totalReceived,
+        minusSent: totalSent,
+        expected: 1000000 + totalReceived - totalSent,
+        actual: player.balance,
+        difference: player.balance - (1000000 + totalReceived - totalSent),
+      },
+    };
+  },
+});

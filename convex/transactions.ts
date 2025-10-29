@@ -124,11 +124,18 @@ export const transferCash = mutation({
       throw new Error("Amount must be positive");
     }
 
+    // EXPLOIT FIX: Prevent self-transfers
+    if (args.fromAccountId === args.toAccountId && args.fromAccountType === args.toAccountType) {
+      throw new Error("Cannot transfer to yourself");
+    }
+
+    // RACE CONDITION FIX: Fetch latest balances before any modifications
     // Deduct from sender
     if (args.fromAccountType === "player") {
       const playerId = args.fromAccountId as Id<"players">;
       const player = await ctx.db.get(playerId);
-      if (!player || player.balance < args.amount) {
+      if (!player) throw new Error("Sender not found");
+      if (player.balance < args.amount) {
         throw new Error("Insufficient balance");
       }
       await ctx.db.patch(playerId, {
@@ -138,7 +145,8 @@ export const transferCash = mutation({
     } else {
       const companyId = args.fromAccountId as Id<"companies">;
       const company = await ctx.db.get(companyId);
-      if (!company || company.balance < args.amount) {
+      if (!company) throw new Error("Sender not found");
+      if (company.balance < args.amount) {
         throw new Error("Insufficient balance");
       }
       await ctx.db.patch(companyId, {
