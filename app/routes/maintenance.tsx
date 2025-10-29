@@ -1,8 +1,18 @@
 import { useQuery } from "convex/react";
+import { useNavigate } from "react-router";
+import { useEffect } from "react";
 import { api } from "../../convex/_generated/api";
 
 export default function MaintenancePage() {
+  const navigate = useNavigate();
   const maintenanceStatus = useQuery(api.maintenance.getMaintenanceStatus);
+
+  // Redirect back to dashboard if maintenance is disabled
+  useEffect(() => {
+    if (maintenanceStatus && !maintenanceStatus.isEnabled) {
+      navigate("/dashboard");
+    }
+  }, [maintenanceStatus, navigate]);
 
   if (!maintenanceStatus) {
     return (
