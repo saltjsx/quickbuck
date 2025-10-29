@@ -243,7 +243,7 @@ export const unlimitPlayer = mutation({
   },
 });
 
-// Mutation: Ban player
+// Mutation: Ban player and clear all their data
 export const banPlayer = mutation({
   args: {
     targetPlayerId: v.id("players"),
@@ -284,13 +284,217 @@ export const banPlayer = mutation({
       throw new Error("Cannot ban yourself");
     }
 
+    // Delete all user companies and their products
+    const companies = await ctx.db
+      .query("companies")
+      .withIndex("by_ownerId", (q) => q.eq("ownerId", args.targetPlayerId))
+      .collect();
+
+    for (const company of companies) {
+      // Delete all products for this company
+      const products = await ctx.db
+        .query("products")
+        .withIndex("by_companyId", (q) => q.eq("companyId", company._id))
+        .collect();
+
+      for (const product of products) {
+        await ctx.db.delete(product._id);
+      }
+
+      // Delete stock if it exists
+      const stock = await ctx.db
+        .query("stocks")
+        .withIndex("by_companyId", (q) => q.eq("companyId", company._id))
+        .unique();
+
+      if (stock) {
+        await ctx.db.delete(stock._id);
+      }
+
+      // Delete marketplace listings
+      const listings = await ctx.db
+        .query("marketplaceListings")
+        .withIndex("by_sellerCompanyId", (q) => q.eq("sellerCompanyId", company._id))
+        .collect();
+
+      for (const listing of listings) {
+        await ctx.db.delete(listing._id);
+      }
+
+      // Delete company sales
+      const companySales = await ctx.db
+        .query("companySales")
+        .withIndex("by_companyId", (q) => q.eq("companyId", company._id))
+        .collect();
+
+      for (const sale of companySales) {
+        await ctx.db.delete(sale._id);
+      }
+
+      // Delete the company
+      await ctx.db.delete(company._id);
+    }
+
+    // Delete all user stock holdings
+    const stockHoldings = await ctx.db
+      .query("userStockHoldings")
+      .withIndex("by_userId", (q) => q.eq("userId", args.targetPlayerId))
+      .collect();
+
+    for (const holding of stockHoldings) {
+      await ctx.db.delete(holding._id);
+    }
+
+    // Delete all user crypto holdings
+    const cryptoHoldings = await ctx.db
+      .query("userCryptoHoldings")
+      .withIndex("by_userId", (q) => q.eq("userId", args.targetPlayerId))
+      .collect();
+
+    for (const holding of cryptoHoldings) {
+      await ctx.db.delete(holding._id);
+    }
+
+    // Delete all cryptocurrencies created by user
+    const cryptos = await ctx.db
+      .query("cryptocurrencies")
+      .withIndex("by_creatorId", (q) => q.eq("creatorId", args.targetPlayerId))
+      .collect();
+
+    for (const crypto of cryptos) {
+      // Delete all trades for this crypto
+      const trades = await ctx.db
+        .query("cryptoTrades")
+        .withIndex("by_cryptoId", (q) => q.eq("cryptoId", crypto._id))
+        .collect();
+
+      for (const trade of trades) {
+        await ctx.db.delete(trade._id);
+      }
+
+      // Delete price history
+      const priceHistory = await ctx.db
+        .query("cryptoPriceHistory")
+        .withIndex("by_cryptoId", (q) => q.eq("cryptoId", crypto._id))
+        .collect();
+
+      for (const history of priceHistory) {
+        await ctx.db.delete(history._id);
+      }
+
+      await ctx.db.delete(crypto._id);
+    }
+
+    // Delete user cart and cart items
+    const cart = await ctx.db
+      .query("carts")
+      .withIndex("by_userId", (q) => q.eq("userId", args.targetPlayerId))
+      .unique();
+
+    if (cart) {
+      const cartItems = await ctx.db
+        .query("cartItems")
+        .withIndex("by_cartId", (q) => q.eq("cartId", cart._id))
+        .collect();
+
+      for (const item of cartItems) {
+        await ctx.db.delete(item._id);
+      }
+
+      await ctx.db.delete(cart._id);
+    }
+
+    // Delete all user transactions
+    const transactionsFrom = await ctx.db
+      .query("transactions")
+      .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.targetPlayerId))
+      .collect();
+
+    for (const tx of transactionsFrom) {
+      await ctx.db.delete(tx._id);
+    }
+
+    const transactionsTo = await ctx.db
+      .query("transactions")
+      .withIndex("by_toAccountId", (q) => q.eq("toAccountId", args.targetPlayerId))
+      .collect();
+
+    for (const tx of transactionsTo) {
+      await ctx.db.delete(tx._id);
+    }
+
+    // Delete all user loans
+    const loans = await ctx.db
+      .query("loans")
+      .withIndex("by_playerId", (q) => q.eq("playerId", args.targetPlayerId))
+      .collect();
+
+    for (const loan of loans) {
+      await ctx.db.delete(loan._id);
+    }
+
+    // Delete all company shares owned by user
+    const companyShares = await ctx.db
+      .query("companyShares")
+      .withIndex("by_userId", (q) => q.eq("userId", args.targetPlayerId))
+      .collect();
+
+    for (const share of companyShares) {
+      await ctx.db.delete(share._id);
+    }
+
+    // Delete marketplace sales where user was involved (as purchaser)
+    const purchaserSales = await ctx.db
+      .query("marketplaceSales")
+      .withIndex("by_purchaserId", (q) => q.eq("purchaserId", args.targetPlayerId))
+      .collect();
+
+    for (const sale of purchaserSales) {
+      await ctx.db.delete(sale._id);
+    }
+
+    // Delete player inventory
+    const inventory = await ctx.db
+      .query("playerInventory")
+      .withIndex("by_playerId", (q) => q.eq("playerId", args.targetPlayerId))
+      .collect();
+
+    for (const item of inventory) {
+      await ctx.db.delete(item._id);
+    }
+
+    // Delete upgrades
+    const upgrades = await ctx.db
+      .query("upgrades")
+      .withIndex("by_playerId", (q) => q.eq("playerId", args.targetPlayerId))
+      .collect();
+
+    for (const upgrade of upgrades) {
+      await ctx.db.delete(upgrade._id);
+    }
+
+    // Delete gambling history
+    const gamblingHistory = await ctx.db
+      .query("gamblingHistory")
+      .withIndex("by_playerId", (q) => q.eq("playerId", args.targetPlayerId))
+      .collect();
+
+    for (const entry of gamblingHistory) {
+      await ctx.db.delete(entry._id);
+    }
+
+    // Delete stock price history and trades where relevant (keep these as they're historical)
+    // Actually, we should keep these for admin records. Skip.
+
+    // Now set the player as banned
     await ctx.db.patch(args.targetPlayerId, {
       role: "banned",
       banReason: args.reason,
+      balance: 0,
       updatedAt: Date.now(),
     });
 
-    return { success: true, message: "Player banned successfully" };
+    return { success: true, message: "Player banned successfully and all data cleared" };
   },
 });
 
