@@ -1,8 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { validateName, validateDescription } from "./contentFilter";
 import { canCreateContent } from "./moderation";
+import { validateName, validateDescription, validateTags } from "./contentFilter";
 
 // Mutation: Create product (no initial stock, just the product listing)
 export const createProduct = mutation({
@@ -27,9 +27,10 @@ export const createProduct = mutation({
       throw new Error("Your account does not have permission to create products");
     }
 
-    // CONTENT FILTER: Validate product name and description
+    // CONTENT FILTER: Validate product name, description, and tags
     const validatedName = validateName(args.name, "Product name");
     const validatedDescription = validateDescription(args.description, "Product description");
+    const validatedTags = validateTags(args.tags);
 
     // EXPLOIT FIX: Validate price is positive and safe integer
     if (args.price <= 0) {
@@ -66,7 +67,7 @@ export const createProduct = mutation({
       price: args.price,
       productionCost: productionCost,
       image: args.image,
-      tags: args.tags,
+      tags: validatedTags,
       stock: 0, // Start with 0 stock - must order batches
       maxPerOrder: args.maxPerOrder,
       totalRevenue: 0,
@@ -186,13 +187,19 @@ export const updateProduct = mutation({
       throw new Error("Product not found");
     }
 
-    // CONTENT FILTER: Validate name and description if provided
+    // CONTENT FILTER: Validate updated fields if provided
     const validatedUpdates: any = { ...updates };
+    
     if (updates.name !== undefined) {
       validatedUpdates.name = validateName(updates.name, "Product name");
     }
+    
     if (updates.description !== undefined) {
       validatedUpdates.description = validateDescription(updates.description, "Product description");
+    }
+    
+    if (updates.tags !== undefined) {
+      validatedUpdates.tags = validateTags(updates.tags);
     }
 
     // Production cost should never change after product creation

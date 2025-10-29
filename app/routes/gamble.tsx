@@ -73,14 +73,18 @@ function SlotsGame({ balance }: { balance: number }) {
 
     try {
       const result = await playSlots({ betAmount: betCents });
-      
+
       setTimeout(() => {
         setReels(result.reels);
         setLastResult(result);
         setIsSpinning(false);
 
         if (result.result === "win") {
-          toast.success(`You won $${(result.payout / 100).toFixed(2)}! (${result.multiplier}x)`);
+          toast.success(
+            `You won $${(result.payout / 100).toFixed(2)}! (${
+              result.multiplier
+            }x)`
+          );
         } else {
           toast.error("Better luck next time!");
         }
@@ -120,7 +124,9 @@ function SlotsGame({ balance }: { balance: number }) {
         <div className="space-y-4">
           <div className="flex items-center gap-2">
             <div className="flex-1">
-              <label className="text-sm text-muted-foreground">Bet Amount ($)</label>
+              <label className="text-sm text-muted-foreground">
+                Bet Amount ($)
+              </label>
               <Input
                 type="number"
                 placeholder="10"
@@ -132,7 +138,12 @@ function SlotsGame({ balance }: { balance: number }) {
                 step="0.01"
               />
             </div>
-            <Button onClick={handleSpin} disabled={isSpinning} size="lg" className="mt-6">
+            <Button
+              onClick={handleSpin}
+              disabled={isSpinning}
+              size="lg"
+              className="mt-6"
+            >
               {isSpinning ? "Spinning..." : "Spin"}
             </Button>
           </div>
@@ -163,7 +174,9 @@ function SlotsGame({ balance }: { balance: number }) {
           <div
             className={cn(
               "p-4 rounded-lg border",
-              lastResult.result === "win" ? "bg-green-500/10 border-green-500" : "bg-red-500/10 border-red-500"
+              lastResult.result === "win"
+                ? "bg-green-500/10 border-green-500"
+                : "bg-red-500/10 border-red-500"
             )}
           >
             <p className="font-semibold">
@@ -208,9 +221,11 @@ function BlackjackGame({ balance }: { balance: number }) {
     try {
       const result = await startBlackjack({ betAmount: betCents });
       setGameState(result);
-      
+
       if (result.gameState === "blackjack") {
-        toast.success(`Blackjack! You won $${(result.payout / 100).toFixed(2)}!`);
+        toast.success(
+          `Blackjack! You won $${(result.payout / 100).toFixed(2)}!`
+        );
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to start game");
@@ -224,7 +239,7 @@ function BlackjackGame({ balance }: { balance: number }) {
     try {
       const result = await hitBlackjack({});
       setGameState(result);
-      
+
       if (result.gameState === "player_bust") {
         toast.error("Bust! You went over 21.");
       }
@@ -240,8 +255,11 @@ function BlackjackGame({ balance }: { balance: number }) {
     try {
       const result = await standBlackjack({});
       setGameState(result);
-      
-      if (result.gameState === "dealer_bust" || result.gameState === "player_win") {
+
+      if (
+        result.gameState === "dealer_bust" ||
+        result.gameState === "player_win"
+      ) {
         toast.success(`You won $${(result.payout / 100).toFixed(2)}!`);
       } else if (result.gameState === "push") {
         toast.info("Push! Bet returned.");
@@ -264,7 +282,7 @@ function BlackjackGame({ balance }: { balance: number }) {
 
   const getGameMessage = () => {
     if (!gameState) return "";
-    
+
     switch (gameState.gameState) {
       case "blackjack":
         return "🎉 Blackjack! You win 2.5x!";
@@ -296,7 +314,9 @@ function BlackjackGame({ balance }: { balance: number }) {
           <div className="space-y-4">
             <div className="flex items-center gap-2">
               <div className="flex-1">
-                <label className="text-sm text-muted-foreground">Bet Amount ($)</label>
+                <label className="text-sm text-muted-foreground">
+                  Bet Amount ($)
+                </label>
                 <Input
                   type="number"
                   placeholder="10"
@@ -308,7 +328,12 @@ function BlackjackGame({ balance }: { balance: number }) {
                   step="0.01"
                 />
               </div>
-              <Button onClick={handleStart} disabled={isLoading} size="lg" className="mt-6">
+              <Button
+                onClick={handleStart}
+                disabled={isLoading}
+                size="lg"
+                className="mt-6"
+              >
                 {isLoading ? "Dealing..." : "Deal"}
               </Button>
             </div>
@@ -336,7 +361,9 @@ function BlackjackGame({ balance }: { balance: number }) {
           <div className="space-y-6">
             {/* Dealer Hand */}
             <div className="space-y-2">
-              <p className="text-sm font-semibold">Dealer&apos;s Hand ({gameState.dealerValue})</p>
+              <p className="text-sm font-semibold">
+                Dealer&apos;s Hand ({gameState.dealerValue})
+              </p>
               <div className="flex gap-2">
                 {gameState.dealerHand.map((card: number, i: number) => (
                   <div
@@ -351,7 +378,9 @@ function BlackjackGame({ balance }: { balance: number }) {
 
             {/* Player Hand */}
             <div className="space-y-2">
-              <p className="text-sm font-semibold">Your Hand ({gameState.playerValue})</p>
+              <p className="text-sm font-semibold">
+                Your Hand ({gameState.playerValue})
+              </p>
               <div className="flex gap-2">
                 {gameState.playerHand.map((card: number, i: number) => (
                   <div
@@ -367,10 +396,18 @@ function BlackjackGame({ balance }: { balance: number }) {
             {/* Game Controls */}
             {gameState.gameState === "playing" && (
               <div className="flex gap-2">
-                <Button onClick={handleHit} disabled={isLoading} variant="default">
+                <Button
+                  onClick={handleHit}
+                  disabled={isLoading}
+                  variant="default"
+                >
                   Hit
                 </Button>
-                <Button onClick={handleStand} disabled={isLoading} variant="outline">
+                <Button
+                  onClick={handleStand}
+                  disabled={isLoading}
+                  variant="outline"
+                >
                   Stand
                 </Button>
               </div>
@@ -381,10 +418,10 @@ function BlackjackGame({ balance }: { balance: number }) {
               <div
                 className={cn(
                   "p-4 rounded-lg border",
-                  (gameState.gameState === "blackjack" || 
-                   gameState.gameState === "player_win" || 
-                   gameState.gameState === "dealer_bust" ||
-                   gameState.gameState === "push")
+                  gameState.gameState === "blackjack" ||
+                    gameState.gameState === "player_win" ||
+                    gameState.gameState === "dealer_bust" ||
+                    gameState.gameState === "push"
                     ? "bg-green-500/10 border-green-500"
                     : "bg-red-500/10 border-red-500"
                 )}
@@ -409,7 +446,9 @@ function BlackjackGame({ balance }: { balance: number }) {
 // Dice Game Component
 function DiceGame({ balance }: { balance: number }) {
   const [betAmount, setBetAmount] = useState("10");
-  const [prediction, setPrediction] = useState<"under" | "over" | "seven">("over");
+  const [prediction, setPrediction] = useState<"under" | "over" | "seven">(
+    "over"
+  );
   const [dice, setDice] = useState<[number, number]>([1, 1]);
   const [isRolling, setIsRolling] = useState(false);
   const [lastResult, setLastResult] = useState<any>(null);
@@ -448,14 +487,18 @@ function DiceGame({ balance }: { balance: number }) {
 
     try {
       const result = await playDice({ betAmount: betCents, prediction });
-      
+
       setTimeout(() => {
         setDice([result.die1, result.die2]);
         setLastResult(result);
         setIsRolling(false);
 
         if (result.result === "win") {
-          toast.success(`You won $${(result.payout / 100).toFixed(2)}! (${result.multiplier}x)`);
+          toast.success(
+            `You won $${(result.payout / 100).toFixed(2)}! (${
+              result.multiplier
+            }x)`
+          );
         } else {
           toast.error("Better luck next time!");
         }
@@ -522,7 +565,9 @@ function DiceGame({ balance }: { balance: number }) {
           </div>
 
           <div className="text-sm text-muted-foreground p-3 rounded-lg bg-muted">
-            <p>Under/Over: <strong>2.5x</strong> | Exactly 7: <strong>5x</strong></p>
+            <p>
+              Under/Over: <strong>2.5x</strong> | Exactly 7: <strong>5x</strong>
+            </p>
           </div>
         </div>
 
@@ -530,7 +575,9 @@ function DiceGame({ balance }: { balance: number }) {
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <div className="flex-1">
-              <label className="text-sm text-muted-foreground">Bet Amount ($)</label>
+              <label className="text-sm text-muted-foreground">
+                Bet Amount ($)
+              </label>
               <Input
                 type="number"
                 placeholder="10"
@@ -542,7 +589,12 @@ function DiceGame({ balance }: { balance: number }) {
                 step="0.01"
               />
             </div>
-            <Button onClick={handleRoll} disabled={isRolling} size="lg" className="mt-6">
+            <Button
+              onClick={handleRoll}
+              disabled={isRolling}
+              size="lg"
+              className="mt-6"
+            >
               {isRolling ? "Rolling..." : "Roll"}
             </Button>
           </div>
@@ -566,7 +618,9 @@ function DiceGame({ balance }: { balance: number }) {
           <div
             className={cn(
               "p-4 rounded-lg border",
-              lastResult.result === "win" ? "bg-green-500/10 border-green-500" : "bg-red-500/10 border-red-500"
+              lastResult.result === "win"
+                ? "bg-green-500/10 border-green-500"
+                : "bg-red-500/10 border-red-500"
             )}
           >
             <p className="font-semibold">
@@ -622,14 +676,18 @@ function RouletteGame({ balance }: { balance: number }) {
 
     try {
       const result = await playRoulette({ betAmount: betCents, betType });
-      
+
       setTimeout(() => {
         setNumber(result.number);
         setLastResult(result);
         setIsSpinning(false);
 
         if (result.result === "win") {
-          toast.success(`You won $${(result.payout / 100).toFixed(2)}! (${result.multiplier}x)`);
+          toast.success(
+            `You won $${(result.payout / 100).toFixed(2)}! (${
+              result.multiplier
+            }x)`
+          );
         } else {
           toast.error("Better luck next time!");
         }
@@ -643,7 +701,9 @@ function RouletteGame({ balance }: { balance: number }) {
 
   const getNumberColor = (num: number) => {
     if (num === 0) return "green";
-    const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+    const redNumbers = [
+      1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36,
+    ];
     return redNumbers.includes(num) ? "red" : "black";
   };
 
@@ -662,14 +722,19 @@ function RouletteGame({ balance }: { balance: number }) {
             className={cn(
               "w-32 h-32 flex items-center justify-center text-5xl rounded-full border-4",
               isSpinning && "animate-spin",
-              getNumberColor(number) === "green" && "border-green-500 bg-green-500/10",
-              getNumberColor(number) === "red" && "border-red-500 bg-red-500/10",
-              getNumberColor(number) === "black" && "border-gray-800 bg-gray-800/10"
+              getNumberColor(number) === "green" &&
+                "border-green-500 bg-green-500/10",
+              getNumberColor(number) === "red" &&
+                "border-red-500 bg-red-500/10",
+              getNumberColor(number) === "black" &&
+                "border-gray-800 bg-gray-800/10"
             )}
           >
             {number}
           </div>
-          <Badge variant={getNumberColor(number) === "green" ? "default" : "outline"}>
+          <Badge
+            variant={getNumberColor(number) === "green" ? "default" : "outline"}
+          >
             {getNumberColor(number).toUpperCase()}
           </Badge>
         </div>
@@ -677,7 +742,7 @@ function RouletteGame({ balance }: { balance: number }) {
         {/* Simplified Bet Type Selection */}
         <div className="space-y-4">
           <p className="text-sm font-semibold">Choose your bet:</p>
-          
+
           {/* Row 1: Colors */}
           <div className="grid grid-cols-3 gap-2">
             <Button
@@ -692,7 +757,9 @@ function RouletteGame({ balance }: { balance: number }) {
               variant={betType === "black" ? "default" : "outline"}
               onClick={() => setBetType("black")}
               disabled={isSpinning}
-              className={betType === "black" ? "bg-gray-800 hover:bg-gray-900" : ""}
+              className={
+                betType === "black" ? "bg-gray-800 hover:bg-gray-900" : ""
+              }
             >
               ⚫ Black
             </Button>
@@ -700,7 +767,9 @@ function RouletteGame({ balance }: { balance: number }) {
               variant={betType === "green" ? "default" : "outline"}
               onClick={() => setBetType("green")}
               disabled={isSpinning}
-              className={betType === "green" ? "bg-green-600 hover:bg-green-700" : ""}
+              className={
+                betType === "green" ? "bg-green-600 hover:bg-green-700" : ""
+              }
             >
               🟢 Green (0)
             </Button>
@@ -744,9 +813,15 @@ function RouletteGame({ balance }: { balance: number }) {
 
           {/* Payouts Info */}
           <div className="p-3 rounded-lg bg-muted text-sm text-muted-foreground">
-            <p>💰 <strong>Payouts:</strong></p>
-            <p>Red/Black/Even/Odd/High/Low: <strong>2x</strong> your bet</p>
-            <p>Green (0): <strong>35x</strong> your bet</p>
+            <p>
+              💰 <strong>Payouts:</strong>
+            </p>
+            <p>
+              Red/Black/Even/Odd/High/Low: <strong>2x</strong> your bet
+            </p>
+            <p>
+              Green (0): <strong>35x</strong> your bet
+            </p>
           </div>
         </div>
 
@@ -754,7 +829,9 @@ function RouletteGame({ balance }: { balance: number }) {
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <div className="flex-1">
-              <label className="text-sm text-muted-foreground">Bet Amount ($)</label>
+              <label className="text-sm text-muted-foreground">
+                Bet Amount ($)
+              </label>
               <Input
                 type="number"
                 placeholder="10"
@@ -766,7 +843,12 @@ function RouletteGame({ balance }: { balance: number }) {
                 step="0.01"
               />
             </div>
-            <Button onClick={handleSpin} disabled={isSpinning} size="lg" className="mt-6">
+            <Button
+              onClick={handleSpin}
+              disabled={isSpinning}
+              size="lg"
+              className="mt-6"
+            >
               {isSpinning ? "Spinning..." : "Spin"}
             </Button>
           </div>
@@ -791,7 +873,9 @@ function RouletteGame({ balance }: { balance: number }) {
           <div
             className={cn(
               "p-4 rounded-lg border",
-              lastResult.result === "win" ? "bg-green-500/10 border-green-500" : "bg-red-500/10 border-red-500"
+              lastResult.result === "win"
+                ? "bg-green-500/10 border-green-500"
+                : "bg-red-500/10 border-red-500"
             )}
           >
             <p className="font-semibold">
@@ -843,7 +927,9 @@ export default function GamblePage() {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <DollarSign className="h-5 w-5 text-green-500" />
-                  <span className="text-sm text-muted-foreground">Your Balance</span>
+                  <span className="text-sm text-muted-foreground">
+                    Your Balance
+                  </span>
                 </div>
                 <div className="text-2xl font-bold">
                   ${((balance ?? 0) / 100).toFixed(2)}

@@ -1,8 +1,8 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { validateName, validateDescription } from "./contentFilter";
 import { canCreateContent } from "./moderation";
+import { validateName, validateDescription, validateTicker } from "./contentFilter";
 
 // Mutation: Create cryptocurrency
 export const createCryptocurrency = mutation({
@@ -20,20 +20,24 @@ export const createCryptocurrency = mutation({
       throw new Error("Your account does not have permission to create cryptocurrencies");
     }
 
-    // CONTENT FILTER: Validate cryptocurrency name and description
+    // CONTENT FILTER: Validate name, description, and ticker
     const validatedName = validateName(args.name, "Cryptocurrency name");
     const validatedDescription = validateDescription(args.description, "Cryptocurrency description");
+    const validatedTicker = validateTicker(args.ticker);
     
-    // CONTENT FILTER: Validate ticker (alphanumeric only, 3-6 chars)
-    const tickerUpper = args.ticker.toUpperCase().trim();
-    if (!/^[A-Z0-9]{3,6}$/.test(tickerUpper)) {
-      throw new Error("Ticker must be 3-6 alphanumeric characters");
+    if (!validatedTicker) {
+      throw new Error("Ticker symbol is required");
+    }
+
+    // Additional validation for crypto ticker (3-6 chars)
+    if (validatedTicker.length < 3 || validatedTicker.length > 6) {
+      throw new Error("Ticker must be 3-6 characters");
     }
 
     // Check if ticker is already taken
     const existing = await ctx.db
       .query("cryptocurrencies")
-      .withIndex("by_ticker", (q) => q.eq("ticker", tickerUpper))
+      .withIndex("by_ticker", (q) => q.eq("ticker", validatedTicker))
       .unique();
 
     if (existing) {
@@ -60,7 +64,7 @@ export const createCryptocurrency = mutation({
     const cryptoId = await ctx.db.insert("cryptocurrencies", {
       creatorId: args.creatorId,
       name: validatedName,
-      ticker: tickerUpper,
+      ticker: validatedTicker,
       description: validatedDescription,
       image: args.image,
       price: initialPrice,

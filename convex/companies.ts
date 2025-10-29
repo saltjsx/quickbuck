@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
-import { validateName, validateDescription } from "./contentFilter";
+import { validateName, validateDescription, validateTicker, validateTags } from "./contentFilter";
 import { canCreateContent } from "./moderation";
 
 // Mutation: Create company
@@ -24,16 +24,18 @@ export const createCompany = mutation({
     // CONTENT FILTER: Validate company name and description
     const validatedName = validateName(args.name, "Company name");
     const validatedDescription = validateDescription(args.description, "Company description");
+    const validatedTicker = validateTicker(args.ticker);
+    const validatedTags = validateTags(args.tags);
 
     const now = Date.now();
     
     const companyId = await ctx.db.insert("companies", {
       ownerId: args.ownerId,
       name: validatedName,
-      ticker: args.ticker,
+      ticker: validatedTicker,
       description: validatedDescription,
       logo: args.logo,
-      tags: args.tags,
+      tags: validatedTags,
       balance: 0,
       isPublic: false,
       reputationScore: 0.5, // Start with neutral reputation
@@ -73,7 +75,9 @@ export const updateCompanyInfo = mutation({
       updates.description = validateDescription(args.description, "Company description");
     }
     if (args.logo !== undefined) updates.logo = args.logo;
-    if (args.tags !== undefined) updates.tags = args.tags;
+    if (args.tags !== undefined) {
+      updates.tags = validateTags(args.tags);
+    }
 
     await ctx.db.patch(args.companyId, updates);
 
@@ -126,6 +130,12 @@ export const makeCompanyPublic = mutation({
     totalShares: v.number(), // Only players set the number of shares
   },
   handler: async (ctx, args) => {
+    // CONTENT FILTER: Validate ticker symbol
+    const validatedTicker = validateTicker(args.ticker);
+    if (!validatedTicker) {
+      throw new Error("Ticker symbol is required");
+    }
+
     // EXPLOIT FIX: Validate total shares is positive and safe integer
     if (args.totalShares <= 0) {
       throw new Error("Total shares must be positive");
@@ -157,7 +167,7 @@ export const makeCompanyPublic = mutation({
     // Check if ticker is already taken
     const existingStock = await ctx.db
       .query("stocks")
-      .withIndex("by_ticker", (q) => q.eq("ticker", args.ticker))
+      .withIndex("by_ticker", (q) => q.eq("ticker", validatedTicker))
       .unique();
 
     if (existingStock) {
@@ -184,7 +194,7 @@ export const makeCompanyPublic = mutation({
     // Update company
     await ctx.db.patch(args.companyId, {
       isPublic: true,
-      ticker: args.ticker,
+      ticker: validatedTicker,
       marketCap,
       sharesOutstanding: args.totalShares,
       updatedAt: now,
@@ -193,7 +203,7 @@ export const makeCompanyPublic = mutation({
     // Create stock entry
     const stockId = await ctx.db.insert("stocks", {
       companyId: args.companyId,
-      ticker: args.ticker,
+      ticker: validatedTicker,
       price: initialSharePrice,
       totalShares: args.totalShares,
       marketCap,

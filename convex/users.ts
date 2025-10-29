@@ -1,6 +1,5 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { validateUsername } from "./contentFilter";
 
 export const findUserByToken = query({
   args: { tokenIdentifier: v.string() },
@@ -40,16 +39,6 @@ export const upsertUser = mutation({
       (identity as any)?.profileImageUrl ||
       undefined;
 
-    // CONTENT FILTER: Validate username if provided
-    let validatedUsername: string | undefined = undefined;
-    if (identity.username) {
-      try {
-        validatedUsername = validateUsername(identity.username as string);
-      } catch (error) {
-        throw new Error(`Invalid username: ${error instanceof Error ? error.message : 'contains inappropriate content'}`);
-      }
-    }
-
     // Check if user exists by token
     const existingUser = await ctx.db
       .query("users")
@@ -61,7 +50,6 @@ export const upsertUser = mutation({
       const updatedFields: Parameters<typeof ctx.db.patch>[1] = {
         name: identity.name,
         email: identity.email,
-        clerkUsername: validatedUsername,
         image: clerkImage ?? undefined,
       };
 
@@ -69,7 +57,6 @@ export const upsertUser = mutation({
       const hasChanges = 
         existingUser.name !== updatedFields.name ||
         existingUser.email !== updatedFields.email ||
-        existingUser.clerkUsername !== updatedFields.clerkUsername ||
         existingUser.image !== updatedFields.image;
 
       if (hasChanges) {
@@ -96,7 +83,6 @@ export const upsertUser = mutation({
     const userId = await ctx.db.insert("users", {
       name: identity.name,
       email: identity.email,
-      clerkUsername: validatedUsername,
       image: clerkImage ?? undefined,
       tokenIdentifier: identity.subject,
     });
