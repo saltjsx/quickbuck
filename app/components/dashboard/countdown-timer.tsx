@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -17,19 +17,10 @@ export function CountdownTimer({
   heightPx,
 }: CountdownTimerProps) {
   const [timeRemaining, setTimeRemaining] = useState<number>(0);
-  const lastTickTimeRef = useRef<number | undefined>(lastTickTime);
   const TICK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
   useEffect(() => {
-    // Track when lastTickTime changes
-    if (lastTickTime !== lastTickTimeRef.current) {
-      lastTickTimeRef.current = lastTickTime;
-    }
-  }, [lastTickTime]);
-
-  useEffect(() => {
-    if (!lastTickTimeRef.current) {
-      // If no last tick time, assume next tick in 5 minutes
+    if (!lastTickTime) {
       setTimeRemaining(TICK_INTERVAL_MS);
       return;
     }
@@ -37,14 +28,7 @@ export function CountdownTimer({
     // Helper to update the time
     const updateTime = () => {
       const now = Date.now();
-      const tickTime = lastTickTimeRef.current;
-
-      if (!tickTime || tickTime <= 0) {
-        setTimeRemaining(TICK_INTERVAL_MS);
-        return;
-      }
-
-      const timeSinceLastTick = now - tickTime;
+      const timeSinceLastTick = now - lastTickTime;
 
       // If time since last tick is negative, return full interval
       if (timeSinceLastTick < 0) {
@@ -53,19 +37,9 @@ export function CountdownTimer({
       }
 
       // Calculate time until next tick
-      const moduloTime = timeSinceLastTick % TICK_INTERVAL_MS;
-      const timeUntilNextTick = TICK_INTERVAL_MS - moduloTime;
+      const timeUntilNextTick = TICK_INTERVAL_MS - timeSinceLastTick;
 
-      // If we're very close to 0 or overflow (just completed tick), show full interval
-      // This prevents the frozen timer at 00:00
-      if (
-        timeUntilNextTick <= 500 ||
-        timeUntilNextTick > TICK_INTERVAL_MS - 500
-      ) {
-        setTimeRemaining(TICK_INTERVAL_MS);
-        return;
-      }
-
+      // Never show negative time, and show actual countdown
       setTimeRemaining(Math.max(timeUntilNextTick, 0));
     };
 
@@ -76,7 +50,7 @@ export function CountdownTimer({
     const interval = setInterval(updateTime, 1000);
 
     return () => clearInterval(interval);
-  }, [TICK_INTERVAL_MS]);
+  }, [lastTickTime, TICK_INTERVAL_MS]);
 
   return (
     <motion.div
