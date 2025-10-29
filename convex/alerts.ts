@@ -111,7 +111,7 @@ export const getUnreadAlerts = query({
   },
 });
 
-// Query: Get all global alerts (for admin panel viewing history)
+// Query: Get all global alerts (for mod panel viewing history)
 export const getAllAlerts = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -137,10 +137,10 @@ export const getAllAlerts = query({
       throw new Error("Player not found");
     }
 
-    // Check admin permission
-    const isAdmin = await hasPermission(ctx, currentPlayer._id, "admin");
-    if (!isAdmin) {
-      throw new Error("Only admins can view all alerts");
+    // Check mod permission (allows both mods and admins)
+    const hasModAccess = await hasPermission(ctx, currentPlayer._id, "mod");
+    if (!hasModAccess) {
+      throw new Error("Only mods and admins can view all alerts");
     }
 
     // Get all alerts, ordered newest first
