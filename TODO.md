@@ -534,7 +534,7 @@
   - [x] Cost: $10,000 (deducted from player balance)
   - [x] Initial volume: 100,000,000 tokens
   - [x] Input: Crypto name
-  - [x] Input: Ticker (format: *XXX where X is a letter, max 3 characters total after *)
+  - [x] Input: Ticker (format: 3-6 letters, e.g., BTC, ETH, SOL)
   - [x] Textarea: Description
   - [x] File upload: Image (optional, can add later)
   - [x] Validation for ticker format and uniqueness

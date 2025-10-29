@@ -3,9 +3,9 @@ import { describe, it, expect } from "vitest";
 // Test utilities for cryptocurrency system functionality
 
 describe("Cryptocurrency Creation", () => {
-  it("should validate ticker format *XXX", () => {
-    const validTickers = ["*BTC", "*ETH", "*SOL", "*XRP", "*ADA"];
-    const tickerRegex = /^\*[A-Z]{1,3}$/;
+  it("should validate ticker format 3-6 letters", () => {
+    const validTickers = ["BTC", "ETH", "SOL", "XRP", "ADA", "DOGE"];
+    const tickerRegex = /^[A-Z]{3,6}$/;
     
     validTickers.forEach((ticker) => {
       expect(tickerRegex.test(ticker)).toBe(true);
@@ -13,8 +13,8 @@ describe("Cryptocurrency Creation", () => {
   });
 
   it("should reject invalid ticker formats", () => {
-    const invalidTickers = ["BTC", "*BTCE", "**BTC", "*1BTC", "*btc", "*"];
-    const tickerRegex = /^\*[A-Z]{1,3}$/;
+    const invalidTickers = ["*BTC", "BT", "*BTCE", "**BTC", "*1BTC", "*btc", "*"];
+    const tickerRegex = /^[A-Z]{3,6}$/;
     
     invalidTickers.forEach((ticker) => {
       expect(tickerRegex.test(ticker)).toBe(false);
@@ -57,9 +57,9 @@ describe("Cryptocurrency Creation", () => {
 describe("Crypto Search and Filter", () => {
   it("should search by crypto name", () => {
     const cryptos = [
-      { name: "Bitcoin", ticker: "*BTC" },
-      { name: "Ethereum", ticker: "*ETH" },
-      { name: "Solana", ticker: "*SOL" },
+      { name: "Bitcoin", ticker: "BTC" },
+      { name: "Ethereum", ticker: "ETH" },
+      { name: "Solana", ticker: "SOL" },
     ];
 
     const query = "bit";
@@ -73,18 +73,18 @@ describe("Crypto Search and Filter", () => {
 
   it("should search by ticker", () => {
     const cryptos = [
-      { name: "Bitcoin", ticker: "*BTC" },
-      { name: "Ethereum", ticker: "*ETH" },
-      { name: "Solana", ticker: "*SOL" },
+      { name: "Bitcoin", ticker: "BTC" },
+      { name: "Ethereum", ticker: "ETH" },
+      { name: "Solana", ticker: "SOL" },
     ];
 
-    const query = "*eth";
+    const query = "eth";
     const filtered = cryptos.filter((c) =>
       c.ticker.toLowerCase().includes(query.toLowerCase())
     );
 
     expect(filtered).toHaveLength(1);
-    expect(filtered[0].ticker).toBe("*ETH");
+    expect(filtered[0].ticker).toBe("ETH");
   });
 
   it("should sort by market cap descending", () => {
@@ -298,40 +298,46 @@ describe("Market Cap Calculations", () => {
 });
 
 describe("Ticker Validation Edge Cases", () => {
-  it("should accept single letter after asterisk", () => {
-    const ticker = "*A";
-    const tickerRegex = /^\*[A-Z]{1,3}$/;
+  it("should accept three letter ticker", () => {
+    const ticker = "BTC";
+    const tickerRegex = /^[A-Z]{3,6}$/;
     expect(tickerRegex.test(ticker)).toBe(true);
   });
 
-  it("should accept two letters after asterisk", () => {
-    const ticker = "*AB";
-    const tickerRegex = /^\*[A-Z]{1,3}$/;
+  it("should accept four letter ticker", () => {
+    const ticker = "DOGE";
+    const tickerRegex = /^[A-Z]{3,6}$/;
     expect(tickerRegex.test(ticker)).toBe(true);
   });
 
-  it("should accept three letters after asterisk", () => {
-    const ticker = "*ABC";
-    const tickerRegex = /^\*[A-Z]{1,3}$/;
+  it("should accept six letter ticker", () => {
+    const ticker = "ABCDEF";
+    const tickerRegex = /^[A-Z]{3,6}$/;
     expect(tickerRegex.test(ticker)).toBe(true);
   });
 
-  it("should reject four letters after asterisk", () => {
-    const ticker = "*ABCD";
-    const tickerRegex = /^\*[A-Z]{1,3}$/;
+  it("should reject two letter ticker", () => {
+    const ticker = "AB";
+    const tickerRegex = /^[A-Z]{3,6}$/;
+    expect(tickerRegex.test(ticker)).toBe(false);
+  });
+
+  it("should reject seven letter ticker", () => {
+    const ticker = "ABCDEFG";
+    const tickerRegex = /^[A-Z]{3,6}$/;
     expect(tickerRegex.test(ticker)).toBe(false);
   });
 
   it("should reject lowercase letters", () => {
-    const ticker = "*abc";
-    const tickerRegex = /^\*[A-Z]{1,3}$/;
+    const ticker = "btc";
+    const tickerRegex = /^[A-Z]{3,6}$/;
     expect(tickerRegex.test(ticker)).toBe(false);
   });
 
   it("should convert lowercase to uppercase before validation", () => {
-    const ticker = "*btc";
+    const ticker = "btc";
     const upperTicker = ticker.toUpperCase();
-    const tickerRegex = /^\*[A-Z]{1,3}$/;
+    const tickerRegex = /^[A-Z]{3,6}$/;
     expect(tickerRegex.test(upperTicker)).toBe(true);
   });
 });

@@ -82,9 +82,9 @@ export default function CryptoMarketPage() {
   const [createError, setCreateError] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
-  // Validate ticker format - keep existing UI rules
+  // Validate ticker format - letters only, 3-6 characters
   const validateTicker = (ticker: string): boolean => {
-    const tickerRegex = /^\*[A-Z]{1,3}$/;
+    const tickerRegex = /^[A-Z]{3,6}$/;
     return tickerRegex.test(ticker.toUpperCase());
   };
 
@@ -101,7 +101,7 @@ export default function CryptoMarketPage() {
     // Validate ticker format
     const upperTicker = createForm.ticker.toUpperCase();
     if (!validateTicker(upperTicker)) {
-      setCreateError("Ticker must be in format *XXX (e.g., *BTC, *ETH, *SOL)");
+      setCreateError("Ticker must be 3-6 letters (e.g., BTC, ETH, SOL)");
       return;
     }
 
@@ -234,12 +234,10 @@ export default function CryptoMarketPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="ticker">
-                      Ticker * (format: *XXX, max 3 letters after *)
-                    </Label>
+                    <Label htmlFor="ticker">Ticker * (3-6 letters)</Label>
                     <Input
                       id="ticker"
-                      placeholder="*BTC"
+                      placeholder="BTC"
                       value={createForm.ticker}
                       onChange={(e) =>
                         setCreateForm({
@@ -247,11 +245,11 @@ export default function CryptoMarketPage() {
                           ticker: e.target.value.toUpperCase(),
                         })
                       }
-                      maxLength={4}
+                      maxLength={6}
                       required
                     />
                     <p className="text-xs text-muted-foreground">
-                      Examples: *BTC, *ETH, *SOL
+                      Examples: BTC, ETH, SOL
                     </p>
                   </div>
 
