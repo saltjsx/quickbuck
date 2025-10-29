@@ -73,7 +73,7 @@ export default defineSchema({
     name: v.string(),
     description: v.optional(v.string()),
     price: v.number(), // in cents
-    productionCost: v.number(), // in cents
+    productionCostPercentage: v.number(), // 0-1, percentage of price (e.g., 0.35 = 35%)
     image: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     stock: v.optional(v.number()), // null means unlimited

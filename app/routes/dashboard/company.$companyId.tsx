@@ -319,11 +319,18 @@ export default function CompanyDashboardPage() {
   const totalRevenue =
     products?.reduce((sum, p) => sum + p.totalRevenue, 0) || 0;
   const totalProductionCosts =
-    products?.reduce((sum, p) => sum + p.productionCost * p.totalSold, 0) || 0;
+    products?.reduce(
+      (sum, p) =>
+        sum + Math.floor(p.price * p.productionCostPercentage) * p.totalSold,
+      0
+    ) || 0;
   const totalProfit = totalRevenue - totalProductionCosts;
   const totalStockValue =
-    products?.reduce((sum, p) => sum + (p.stock || 0) * p.productionCost, 0) ||
-    0;
+    products?.reduce(
+      (sum, p) =>
+        sum + (p.stock || 0) * Math.floor(p.price * p.productionCostPercentage),
+      0
+    ) || 0;
 
   if (!company) {
     return (
@@ -658,7 +665,11 @@ export default function CompanyDashboardPage() {
                             {formatCurrency(product.price)}
                           </TableCell>
                           <TableCell className="text-orange-600">
-                            {formatCurrency(product.productionCost)}
+                            {formatCurrency(
+                              Math.floor(
+                                product.price * product.productionCostPercentage
+                              )
+                            )}
                           </TableCell>
                           <TableCell>
                             <span
@@ -874,9 +885,12 @@ export default function CompanyDashboardPage() {
                       if (!product) return null;
 
                       const quantity = parseInt(batchQuantity) || 0;
-                      const totalCost = product.productionCost * quantity;
+                      const productionCost = Math.floor(
+                        product.price * product.productionCostPercentage
+                      );
+                      const totalCost = productionCost * quantity;
                       const profit =
-                        (product.price - product.productionCost) * quantity;
+                        (product.price - productionCost) * quantity;
 
                       return (
                         <>
@@ -894,7 +908,7 @@ export default function CompanyDashboardPage() {
                                 Cost per unit:
                               </span>
                               <span className="font-medium text-orange-600">
-                                {formatCurrency(product.productionCost)}
+                                {formatCurrency(productionCost)}
                               </span>
                             </div>
                             <div className="flex justify-between">
@@ -910,9 +924,7 @@ export default function CompanyDashboardPage() {
                                 Profit per unit:
                               </span>
                               <span className="font-medium text-blue-600">
-                                {formatCurrency(
-                                  product.price - product.productionCost
-                                )}
+                                {formatCurrency(product.price - productionCost)}
                               </span>
                             </div>
                             <div className="flex justify-between">

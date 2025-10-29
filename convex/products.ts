@@ -56,16 +56,17 @@ export const createProduct = mutation({
 
     const now = Date.now();
 
-    // Calculate production cost (35%-67% of selling price)
-    const costPercentage = 0.35 + Math.random() * 0.32;
-    const productionCost = Math.floor(args.price * costPercentage);
+    // EXPLOIT FIX: Store production cost as percentage (35%-67%) instead of absolute value
+    // This prevents the exploit where users create cheap products then increase price
+    // while maintaining the original low production cost
+    const productionCostPercentage = 0.35 + Math.random() * 0.32; // 0.35 to 0.67
 
     const productId = await ctx.db.insert("products", {
       companyId: args.companyId,
       name: validatedName,
       description: validatedDescription,
       price: args.price,
-      productionCost: productionCost,
+      productionCostPercentage: productionCostPercentage,
       image: args.image,
       tags: validatedTags,
       stock: 0, // Start with 0 stock - must order batches
@@ -115,8 +116,12 @@ export const orderProductBatch = mutation({
       throw new Error("Company not found");
     }
 
+    // EXPLOIT FIX: Calculate production cost from percentage and CURRENT price
+    // This prevents the exploit where price is increased after creation
+    const productionCost = Math.floor(product.price * product.productionCostPercentage);
+
     // Calculate total production cost for this batch
-    const totalCost = product.productionCost * args.quantity;
+    const totalCost = productionCost * args.quantity;
 
     // EXPLOIT FIX: Validate total cost is safe
     if (!Number.isSafeInteger(totalCost)) {

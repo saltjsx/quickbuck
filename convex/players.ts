@@ -51,6 +51,18 @@ export async function calculateNetWorth(ctx: any, playerId: Id<"players">) {
     }
   }
 
+  // LOAN IMPACT: Subtract unpaid loans from net worth
+  // This reflects the player's true financial position including debt obligations
+  const activeLoans = await ctx.db
+    .query("loans")
+    .withIndex("by_playerId", (q: any) => q.eq("playerId", playerId))
+    .filter((q: any) => q.eq(q.field("status"), "active"))
+    .collect();
+
+  for (const loan of activeLoans) {
+    netWorth -= loan.remainingBalance;
+  }
+
   return netWorth;
 }
 
