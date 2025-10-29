@@ -474,5 +474,6 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_playerId", ["playerId"]),
+    .index("by_playerId", ["playerId"])
+    .index("by_playerId_updatedAt", ["playerId", "updatedAt"]),
 });

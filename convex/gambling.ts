@@ -81,13 +81,21 @@ export const getActiveBlackjackGame = query({
 
     if (!player) throw new Error("Player not found");
 
-    // Check if there's an active game (within last 30 minutes)
-    const game = await ctx.db
+    // Get the most recent game for this player, ordered by updatedAt descending
+    const games = await ctx.db
       .query("blackjackGames")
-      .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
-      .first();
+      .withIndex("by_playerId_updatedAt", (q) => q.eq("playerId", player._id))
+      .order("desc")
+      .take(1);
     
-    if (game && Date.now() - game.updatedAt < 30 * 60 * 1000 && (game.gameState === "playing" || game.gameState === "dealer_bust" || game.gameState === "player_bust" || game.gameState === "player_win" || game.gameState === "dealer_win" || game.gameState === "push")) {
+    const game = games[0];
+    
+    // Game must be in a playable state and updated within last 30 minutes
+    if (
+      game && 
+      Date.now() - game.updatedAt < 30 * 60 * 1000 && 
+      (game.gameState === "playing")
+    ) {
       return {
         exists: true,
         playerHand: game.playerHand,
@@ -273,11 +281,14 @@ export const startBlackjack = mutation({
     if (args.betAmount > 1000000) throw new Error("Maximum bet is $10,000");
     if (player.balance < args.betAmount) throw new Error("Insufficient balance");
 
-    // Check if there's already an active game
-    const existingGame = await ctx.db
+    // Check if there's already an active game - use most recent game
+    const existingGames = await ctx.db
       .query("blackjackGames")
-      .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
-      .first();
+      .withIndex("by_playerId_updatedAt", (q) => q.eq("playerId", player._id))
+      .order("desc")
+      .take(1);
+    
+    const existingGame = existingGames[0];
     
     if (existingGame && Date.now() - existingGame.updatedAt < 30 * 60 * 1000 && existingGame.gameState === "playing") {
       throw new Error("You already have an active game. Finish it first.");
@@ -387,12 +398,14 @@ export const hitBlackjack = mutation({
 
     if (!player) throw new Error("Player not found");
 
-    // Get active game from database
-    const game = await ctx.db
+    // Get active game from database - fetch most recent game
+    const games = await ctx.db
       .query("blackjackGames")
-      .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
-      .first();
+      .withIndex("by_playerId_updatedAt", (q) => q.eq("playerId", player._id))
+      .order("desc")
+      .take(1);
 
+    const game = games[0];
     if (!game) throw new Error("No active game found");
     if (game.gameState !== "playing") throw new Error("Game is already finished");
     if (game.playerStood) throw new Error("You already stood");
@@ -478,12 +491,14 @@ export const standBlackjack = mutation({
 
     if (!player) throw new Error("Player not found");
 
-    // Get active game from database
-    const game = await ctx.db
+    // Get active game from database - fetch most recent game
+    const games = await ctx.db
       .query("blackjackGames")
-      .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
-      .first();
+      .withIndex("by_playerId_updatedAt", (q) => q.eq("playerId", player._id))
+      .order("desc")
+      .take(1);
 
+    const game = games[0];
     if (!game) throw new Error("No active game found");
     if (game.gameState !== "playing") throw new Error("Game is already finished");
 
