@@ -1,24 +1,24 @@
-import { useQuery, useMutation } from "convex/react";
+"use client";
+
 import { useState } from "react";
-import { useAuth } from "@clerk/react-router";
-import { api } from "../../convex/_generated/api";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "convex/_generated/api";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
-import { Label } from "~/components/ui/label";
+import { Badge } from "~/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
-import { Loader2, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
-import type { Id } from "../../convex/_generated/dataModel";
+import { AnimatedNumber } from "~/components/ui/animated-number";
+import { formatCurrency } from "~/lib/game-utils";
+import { useAuth } from "@clerk/react-router";
+import { Coins, Dice1, Spade, Target, DollarSign } from "lucide-react";
 import { getAuth } from "@clerk/react-router/ssr.server";
 import { redirect } from "react-router";
 import type { Route } from "./+types/gamble";
+import type { Id } from "convex/_generated/dataModel";
+import { toast } from "sonner";
+import { animate } from "motion";
+import { cn } from "~/lib/utils";
 
 export async function loader(args: Route.LoaderArgs) {
   const { userId } = await getAuth(args);
@@ -30,714 +30,855 @@ export async function loader(args: Route.LoaderArgs) {
   return {};
 }
 
+// Slots Game Component
+function SlotsGame({ balance }: { balance: number }) {
+  const [betAmount, setBetAmount] = useState("10");
+  const [reels, setReels] = useState<string[]>(["🍒", "🍋", "🍊"]);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [lastResult, setLastResult] = useState<any>(null);
+  const playSlots = useMutation(api.gambling.playSlots);
+
+  const handleSpin = async () => {
+    const betDollars = parseFloat(betAmount);
+    if (isNaN(betDollars) || betDollars < 1 || betDollars > 10000) {
+      toast.error("Bet must be between $1 and $10,000");
+      return;
+    }
+
+    const betCents = Math.round(betDollars * 100);
+    const balanceCents = balance;
+
+    if (betCents > balanceCents) {
+      toast.error("Insufficient balance");
+      return;
+    }
+
+    setIsSpinning(true);
+    setLastResult(null);
+
+    // Animate spinning
+    const symbols = ["🍒", "🍋", "🍊", "🍇", "💎", "7️⃣"];
+    let spinCount = 0;
+    const spinInterval = setInterval(() => {
+      setReels([
+        symbols[Math.floor(Math.random() * symbols.length)],
+        symbols[Math.floor(Math.random() * symbols.length)],
+        symbols[Math.floor(Math.random() * symbols.length)],
+      ]);
+      spinCount++;
+      if (spinCount >= 20) {
+        clearInterval(spinInterval);
+      }
+    }, 100);
+
+    try {
+      const result = await playSlots({ betAmount: betCents });
+      
+      setTimeout(() => {
+        setReels(result.reels);
+        setLastResult(result);
+        setIsSpinning(false);
+
+        if (result.result === "win") {
+          toast.success(`You won $${(result.payout / 100).toFixed(2)}! (${result.multiplier}x)`);
+        } else {
+          toast.error("Better luck next time!");
+        }
+      }, 2000);
+    } catch (error: any) {
+      clearInterval(spinInterval);
+      setIsSpinning(false);
+      toast.error(error.message || "Failed to spin");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Coins className="h-5 w-5 text-yellow-500" />
+          <CardTitle>Slot Machine</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Reels */}
+        <div className="flex justify-center items-center gap-4 py-8">
+          {reels.map((symbol, i) => (
+            <div
+              key={i}
+              className={cn(
+                "w-24 h-24 flex items-center justify-center text-5xl rounded-lg border-2 border-border bg-muted",
+                isSpinning && "animate-pulse"
+              )}
+            >
+              {symbol}
+            </div>
+          ))}
+        </div>
+
+        {/* Bet Controls */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <label className="text-sm text-muted-foreground">Bet Amount ($)</label>
+              <Input
+                type="number"
+                placeholder="10"
+                value={betAmount}
+                onChange={(e) => setBetAmount(e.target.value)}
+                disabled={isSpinning}
+                min="1"
+                max="10000"
+                step="0.01"
+              />
+            </div>
+            <Button onClick={handleSpin} disabled={isSpinning} size="lg" className="mt-6">
+              {isSpinning ? "Spinning..." : "Spin"}
+            </Button>
+          </div>
+
+          {/* Quick bet buttons in dollars */}
+          <div className="grid grid-cols-4 gap-2">
+            {[1, 5, 10, 50].map((amount) => (
+              <Button
+                key={amount}
+                variant="outline"
+                size="sm"
+                onClick={() => setBetAmount(amount.toString())}
+                disabled={isSpinning}
+              >
+                ${amount}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {/* Payout Info */}
+        <div className="text-sm text-muted-foreground space-y-1 p-3 rounded-lg bg-muted">
+          <p>💎💎💎 = 5x | 7️⃣7️⃣7️⃣ = 10x</p>
+          <p>Three of a kind = 3x | Two of a kind = 1.5x</p>
+        </div>
+
+        {lastResult && !isSpinning && (
+          <div
+            className={cn(
+              "p-4 rounded-lg border",
+              lastResult.result === "win" ? "bg-green-500/10 border-green-500" : "bg-red-500/10 border-red-500"
+            )}
+          >
+            <p className="font-semibold">
+              {lastResult.result === "win"
+                ? `🎉 Won $${(lastResult.payout / 100).toFixed(2)}!`
+                : `😞 Lost $${betAmount}`}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Blackjack Game Component
+function BlackjackGame({ balance }: { balance: number }) {
+  const [betAmount, setBetAmount] = useState("10");
+  const [gameState, setGameState] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  const startBlackjack = useMutation(api.gambling.startBlackjack);
+  const hitBlackjack = useMutation(api.gambling.hitBlackjack);
+  const standBlackjack = useMutation(api.gambling.standBlackjack);
+  const activeGame = useQuery(api.gambling.getActiveBlackjackGame);
+
+  const handleStart = async () => {
+    const betDollars = parseFloat(betAmount);
+    if (isNaN(betDollars) || betDollars < 1 || betDollars > 10000) {
+      toast.error("Bet must be between $1 and $10,000");
+      return;
+    }
+
+    const betCents = Math.round(betDollars * 100);
+    const balanceCents = balance;
+
+    if (betCents > balanceCents) {
+      toast.error("Insufficient balance");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const result = await startBlackjack({ betAmount: betCents });
+      setGameState(result);
+      
+      if (result.gameState === "blackjack") {
+        toast.success(`Blackjack! You won $${(result.payout / 100).toFixed(2)}!`);
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to start game");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleHit = async () => {
+    setIsLoading(true);
+    try {
+      const result = await hitBlackjack({});
+      setGameState(result);
+      
+      if (result.gameState === "player_bust") {
+        toast.error("Bust! You went over 21.");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to hit");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleStand = async () => {
+    setIsLoading(true);
+    try {
+      const result = await standBlackjack({});
+      setGameState(result);
+      
+      if (result.gameState === "dealer_bust" || result.gameState === "player_win") {
+        toast.success(`You won $${(result.payout / 100).toFixed(2)}!`);
+      } else if (result.gameState === "push") {
+        toast.info("Push! Bet returned.");
+      } else {
+        toast.error("Dealer wins.");
+      }
+    } catch (error: any) {
+      toast.error(error.message || "Failed to stand");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renderCard = (value: number) => {
+    if (value === 1) return "A";
+    if (value === 10) return "10";
+    if (value === 11) return "J";
+    return value.toString();
+  };
+
+  const getGameMessage = () => {
+    if (!gameState) return "";
+    
+    switch (gameState.gameState) {
+      case "blackjack":
+        return "🎉 Blackjack! You win 2.5x!";
+      case "player_bust":
+        return "💥 Bust! You went over 21.";
+      case "dealer_bust":
+        return "🎉 Dealer busts! You win!";
+      case "player_win":
+        return "🎉 You win!";
+      case "dealer_win":
+        return "😞 Dealer wins.";
+      case "push":
+        return "🤝 Push! Bet returned.";
+      default:
+        return "";
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Spade className="h-5 w-5 text-foreground" />
+          <CardTitle>Blackjack</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {!gameState ? (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <label className="text-sm text-muted-foreground">Bet Amount ($)</label>
+                <Input
+                  type="number"
+                  placeholder="10"
+                  value={betAmount}
+                  onChange={(e) => setBetAmount(e.target.value)}
+                  disabled={isLoading}
+                  min="1"
+                  max="10000"
+                  step="0.01"
+                />
+              </div>
+              <Button onClick={handleStart} disabled={isLoading} size="lg" className="mt-6">
+                {isLoading ? "Dealing..." : "Deal"}
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              {[1, 5, 10, 50].map((amount) => (
+                <Button
+                  key={amount}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setBetAmount(amount.toString())}
+                  disabled={isLoading}
+                >
+                  ${amount}
+                </Button>
+              ))}
+            </div>
+
+            <div className="text-sm text-muted-foreground p-3 rounded-lg bg-muted">
+              <p>Get 21 or closer than dealer without going over!</p>
+              <p>Blackjack pays 2.5x</p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Dealer Hand */}
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">Dealer&apos;s Hand ({gameState.dealerValue})</p>
+              <div className="flex gap-2">
+                {gameState.dealerHand.map((card: number, i: number) => (
+                  <div
+                    key={i}
+                    className="w-16 h-20 flex items-center justify-center text-2xl rounded border-2 border-border bg-card"
+                  >
+                    {renderCard(card)}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Player Hand */}
+            <div className="space-y-2">
+              <p className="text-sm font-semibold">Your Hand ({gameState.playerValue})</p>
+              <div className="flex gap-2">
+                {gameState.playerHand.map((card: number, i: number) => (
+                  <div
+                    key={i}
+                    className="w-16 h-20 flex items-center justify-center text-2xl rounded border-2 border-primary bg-card"
+                  >
+                    {renderCard(card)}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Game Controls */}
+            {gameState.gameState === "playing" && (
+              <div className="flex gap-2">
+                <Button onClick={handleHit} disabled={isLoading} variant="default">
+                  Hit
+                </Button>
+                <Button onClick={handleStand} disabled={isLoading} variant="outline">
+                  Stand
+                </Button>
+              </div>
+            )}
+
+            {/* Result */}
+            {gameState.gameState !== "playing" && (
+              <div
+                className={cn(
+                  "p-4 rounded-lg border",
+                  (gameState.gameState === "blackjack" || 
+                   gameState.gameState === "player_win" || 
+                   gameState.gameState === "dealer_bust" ||
+                   gameState.gameState === "push")
+                    ? "bg-green-500/10 border-green-500"
+                    : "bg-red-500/10 border-red-500"
+                )}
+              >
+                <p className="font-semibold">{getGameMessage()}</p>
+                <Button
+                  onClick={() => setGameState(null)}
+                  className="mt-4"
+                  variant="outline"
+                >
+                  New Game
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Dice Game Component
+function DiceGame({ balance }: { balance: number }) {
+  const [betAmount, setBetAmount] = useState("10");
+  const [prediction, setPrediction] = useState<"under" | "over" | "seven">("over");
+  const [dice, setDice] = useState<[number, number]>([1, 1]);
+  const [isRolling, setIsRolling] = useState(false);
+  const [lastResult, setLastResult] = useState<any>(null);
+  const playDice = useMutation(api.gambling.playDice);
+
+  const handleRoll = async () => {
+    const betDollars = parseFloat(betAmount);
+    if (isNaN(betDollars) || betDollars < 1 || betDollars > 10000) {
+      toast.error("Bet must be between $1 and $10,000");
+      return;
+    }
+
+    const betCents = Math.round(betDollars * 100);
+    const balanceCents = balance;
+
+    if (betCents > balanceCents) {
+      toast.error("Insufficient balance");
+      return;
+    }
+
+    setIsRolling(true);
+    setLastResult(null);
+
+    // Animate rolling
+    let rollCount = 0;
+    const rollInterval = setInterval(() => {
+      setDice([
+        Math.floor(Math.random() * 6) + 1,
+        Math.floor(Math.random() * 6) + 1,
+      ] as [number, number]);
+      rollCount++;
+      if (rollCount >= 15) {
+        clearInterval(rollInterval);
+      }
+    }, 100);
+
+    try {
+      const result = await playDice({ betAmount: betCents, prediction });
+      
+      setTimeout(() => {
+        setDice([result.die1, result.die2]);
+        setLastResult(result);
+        setIsRolling(false);
+
+        if (result.result === "win") {
+          toast.success(`You won $${(result.payout / 100).toFixed(2)}! (${result.multiplier}x)`);
+        } else {
+          toast.error("Better luck next time!");
+        }
+      }, 1500);
+    } catch (error: any) {
+      clearInterval(rollInterval);
+      setIsRolling(false);
+      toast.error(error.message || "Failed to roll");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Dice1 className="h-5 w-5 text-blue-500" />
+          <CardTitle>Dice Roll</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Dice Display */}
+        <div className="flex justify-center items-center gap-6 py-8">
+          {dice.map((die, i) => (
+            <div
+              key={i}
+              className={cn(
+                "w-20 h-20 flex items-center justify-center text-4xl rounded-lg border-2 border-border bg-muted",
+                isRolling && "animate-bounce"
+              )}
+            >
+              {die}
+            </div>
+          ))}
+          <div className="text-3xl font-bold text-muted-foreground">
+            = {dice[0] + dice[1]}
+          </div>
+        </div>
+
+        {/* Prediction Selection */}
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">Make your prediction:</p>
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              variant={prediction === "under" ? "default" : "outline"}
+              onClick={() => setPrediction("under")}
+              disabled={isRolling}
+            >
+              Under 7
+            </Button>
+            <Button
+              variant={prediction === "seven" ? "default" : "outline"}
+              onClick={() => setPrediction("seven")}
+              disabled={isRolling}
+            >
+              Exactly 7
+            </Button>
+            <Button
+              variant={prediction === "over" ? "default" : "outline"}
+              onClick={() => setPrediction("over")}
+              disabled={isRolling}
+            >
+              Over 7
+            </Button>
+          </div>
+
+          <div className="text-sm text-muted-foreground p-3 rounded-lg bg-muted">
+            <p>Under/Over: <strong>2.5x</strong> | Exactly 7: <strong>5x</strong></p>
+          </div>
+        </div>
+
+        {/* Bet Controls */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <label className="text-sm text-muted-foreground">Bet Amount ($)</label>
+              <Input
+                type="number"
+                placeholder="10"
+                value={betAmount}
+                onChange={(e) => setBetAmount(e.target.value)}
+                disabled={isRolling}
+                min="1"
+                max="10000"
+                step="0.01"
+              />
+            </div>
+            <Button onClick={handleRoll} disabled={isRolling} size="lg" className="mt-6">
+              {isRolling ? "Rolling..." : "Roll"}
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-4 gap-2">
+            {[1, 5, 10, 50].map((amount) => (
+              <Button
+                key={amount}
+                variant="outline"
+                size="sm"
+                onClick={() => setBetAmount(amount.toString())}
+                disabled={isRolling}
+              >
+                ${amount}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {lastResult && !isRolling && (
+          <div
+            className={cn(
+              "p-4 rounded-lg border",
+              lastResult.result === "win" ? "bg-green-500/10 border-green-500" : "bg-red-500/10 border-red-500"
+            )}
+          >
+            <p className="font-semibold">
+              {lastResult.result === "win"
+                ? `🎉 Won $${(lastResult.payout / 100).toFixed(2)}!`
+                : `😞 Lost $${betAmount}`}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Roulette Game Component
+function RouletteGame({ balance }: { balance: number }) {
+  const [betAmount, setBetAmount] = useState("10");
+  const [betType, setBetType] = useState<
+    "red" | "black" | "green" | "even" | "odd" | "low" | "high"
+  >("red");
+  const [number, setNumber] = useState(0);
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [lastResult, setLastResult] = useState<any>(null);
+  const playRoulette = useMutation(api.gambling.playRoulette);
+
+  const handleSpin = async () => {
+    const betDollars = parseFloat(betAmount);
+    if (isNaN(betDollars) || betDollars < 1 || betDollars > 10000) {
+      toast.error("Bet must be between $1 and $10,000");
+      return;
+    }
+
+    const betCents = Math.round(betDollars * 100);
+    const balanceCents = balance;
+
+    if (betCents > balanceCents) {
+      toast.error("Insufficient balance");
+      return;
+    }
+
+    setIsSpinning(true);
+    setLastResult(null);
+
+    // Animate spinning
+    let spinCount = 0;
+    const spinInterval = setInterval(() => {
+      setNumber(Math.floor(Math.random() * 37));
+      spinCount++;
+      if (spinCount >= 25) {
+        clearInterval(spinInterval);
+      }
+    }, 80);
+
+    try {
+      const result = await playRoulette({ betAmount: betCents, betType });
+      
+      setTimeout(() => {
+        setNumber(result.number);
+        setLastResult(result);
+        setIsSpinning(false);
+
+        if (result.result === "win") {
+          toast.success(`You won $${(result.payout / 100).toFixed(2)}! (${result.multiplier}x)`);
+        } else {
+          toast.error("Better luck next time!");
+        }
+      }, 2000);
+    } catch (error: any) {
+      clearInterval(spinInterval);
+      setIsSpinning(false);
+      toast.error(error.message || "Failed to spin");
+    }
+  };
+
+  const getNumberColor = (num: number) => {
+    if (num === 0) return "green";
+    const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+    return redNumbers.includes(num) ? "red" : "black";
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Target className="h-5 w-5 text-purple-500" />
+          <CardTitle>Roulette</CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Roulette Wheel Display */}
+        <div className="flex flex-col items-center gap-4 py-8">
+          <div
+            className={cn(
+              "w-32 h-32 flex items-center justify-center text-5xl rounded-full border-4",
+              isSpinning && "animate-spin",
+              getNumberColor(number) === "green" && "border-green-500 bg-green-500/10",
+              getNumberColor(number) === "red" && "border-red-500 bg-red-500/10",
+              getNumberColor(number) === "black" && "border-gray-800 bg-gray-800/10"
+            )}
+          >
+            {number}
+          </div>
+          <Badge variant={getNumberColor(number) === "green" ? "default" : "outline"}>
+            {getNumberColor(number).toUpperCase()}
+          </Badge>
+        </div>
+
+        {/* Simplified Bet Type Selection */}
+        <div className="space-y-4">
+          <p className="text-sm font-semibold">Choose your bet:</p>
+          
+          {/* Row 1: Colors */}
+          <div className="grid grid-cols-3 gap-2">
+            <Button
+              variant={betType === "red" ? "default" : "outline"}
+              onClick={() => setBetType("red")}
+              disabled={isSpinning}
+              className={betType === "red" ? "bg-red-600 hover:bg-red-700" : ""}
+            >
+              🔴 Red
+            </Button>
+            <Button
+              variant={betType === "black" ? "default" : "outline"}
+              onClick={() => setBetType("black")}
+              disabled={isSpinning}
+              className={betType === "black" ? "bg-gray-800 hover:bg-gray-900" : ""}
+            >
+              ⚫ Black
+            </Button>
+            <Button
+              variant={betType === "green" ? "default" : "outline"}
+              onClick={() => setBetType("green")}
+              disabled={isSpinning}
+              className={betType === "green" ? "bg-green-600 hover:bg-green-700" : ""}
+            >
+              🟢 Green (0)
+            </Button>
+          </div>
+
+          {/* Row 2: Even/Odd */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant={betType === "even" ? "default" : "outline"}
+              onClick={() => setBetType("even")}
+              disabled={isSpinning}
+            >
+              Even Numbers
+            </Button>
+            <Button
+              variant={betType === "odd" ? "default" : "outline"}
+              onClick={() => setBetType("odd")}
+              disabled={isSpinning}
+            >
+              Odd Numbers
+            </Button>
+          </div>
+
+          {/* Row 3: High/Low */}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              variant={betType === "low" ? "default" : "outline"}
+              onClick={() => setBetType("low")}
+              disabled={isSpinning}
+            >
+              Low (1-18)
+            </Button>
+            <Button
+              variant={betType === "high" ? "default" : "outline"}
+              onClick={() => setBetType("high")}
+              disabled={isSpinning}
+            >
+              High (19-36)
+            </Button>
+          </div>
+
+          {/* Payouts Info */}
+          <div className="p-3 rounded-lg bg-muted text-sm text-muted-foreground">
+            <p>💰 <strong>Payouts:</strong></p>
+            <p>Red/Black/Even/Odd/High/Low: <strong>2x</strong> your bet</p>
+            <p>Green (0): <strong>35x</strong> your bet</p>
+          </div>
+        </div>
+
+        {/* Bet Amount Input */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <label className="text-sm text-muted-foreground">Bet Amount ($)</label>
+              <Input
+                type="number"
+                placeholder="10"
+                value={betAmount}
+                onChange={(e) => setBetAmount(e.target.value)}
+                disabled={isSpinning}
+                min="1"
+                max="10000"
+                step="0.01"
+              />
+            </div>
+            <Button onClick={handleSpin} disabled={isSpinning} size="lg" className="mt-6">
+              {isSpinning ? "Spinning..." : "Spin"}
+            </Button>
+          </div>
+
+          {/* Quick bet buttons in dollars */}
+          <div className="grid grid-cols-4 gap-2">
+            {[1, 5, 10, 50].map((amount) => (
+              <Button
+                key={amount}
+                variant="outline"
+                size="sm"
+                onClick={() => setBetAmount(amount.toString())}
+                disabled={isSpinning}
+              >
+                ${amount}
+              </Button>
+            ))}
+          </div>
+        </div>
+
+        {lastResult && !isSpinning && (
+          <div
+            className={cn(
+              "p-4 rounded-lg border",
+              lastResult.result === "win" ? "bg-green-500/10 border-green-500" : "bg-red-500/10 border-red-500"
+            )}
+          >
+            <p className="font-semibold">
+              {lastResult.result === "win"
+                ? `🎉 Won $${(lastResult.payout / 100).toFixed(2)}!`
+                : `😞 Lost $${betAmount}`}
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function GamblePage() {
   const { userId: clerkUserId } = useAuth();
 
+  // Get user and player
   const user = useQuery(
     api.users.findUserByToken,
     clerkUserId ? { tokenIdentifier: clerkUserId } : "skip"
   );
-
   const player = useQuery(
     api.players.getPlayerByUserId,
     user ? { userId: user._id as Id<"users"> } : "skip"
   );
-
-  const gamblingStats = useQuery(api.gambling.getGamblingStats);
-  const gamblingHistory = useQuery(api.gambling.getGamblingHistory, {
-    limit: 10,
-  });
-
-  if (!player || !gamblingStats) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+  const balance = useQuery(
+    api.players.getPlayerBalance,
+    player?._id ? { playerId: player._id } : "skip"
+  );
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Casino</h1>
-        <p className="text-muted-foreground">Try your luck at our games!</p>
-      </div>
-
-      {/* Balance Display */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
-            Your Balance
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-3xl font-bold">
-            ${(player.balance / 100).toFixed(2)}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Bets</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{gamblingStats.totalBets}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Win Rate</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {gamblingStats.winRate.toFixed(1)}%
+    <div className="flex flex-1 flex-col">
+      <div className="@container/main flex flex-1 flex-col gap-2">
+        <div className="flex flex-col gap-4 p-4 md:gap-6 md:p-6">
+          {/* Page Header */}
+          <div className="flex flex-col gap-2">
+            <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+              Casino
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Try your luck with slots, blackjack, dice, and roulette.
             </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Total Wagered</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              ${(gamblingStats.totalWagered / 100).toFixed(2)}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">
-              Net Profit/Loss
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p
-              className={`text-2xl font-bold flex items-center gap-1 ${
-                gamblingStats.netProfit >= 0 ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {gamblingStats.netProfit >= 0 ? (
-                <TrendingUp className="h-5 w-5" />
-              ) : (
-                <TrendingDown className="h-5 w-5" />
-              )}
-              ${(Math.abs(gamblingStats.netProfit) / 100).toFixed(2)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
 
-      {/* Games Tabs */}
-      <Tabs defaultValue="slots" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="slots">Slot Machine</TabsTrigger>
-          <TabsTrigger value="blackjack">Blackjack</TabsTrigger>
-          <TabsTrigger value="dice">Dice Roll</TabsTrigger>
-          <TabsTrigger value="roulette">Roulette</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="slots">
-          <SlotMachine playerBalance={player.balance} />
-        </TabsContent>
-
-        <TabsContent value="blackjack">
-          <Blackjack playerBalance={player.balance} />
-        </TabsContent>
-
-        <TabsContent value="dice">
-          <DiceRoll playerBalance={player.balance} />
-        </TabsContent>
-
-        <TabsContent value="roulette">
-          <Roulette playerBalance={player.balance} />
-        </TabsContent>
-      </Tabs>
-
-      {/* Recent History */}
-      {gamblingHistory && gamblingHistory.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Games</CardTitle>
-            <CardDescription>Your last 10 gambling sessions</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {gamblingHistory.map((game) => (
-                <div
-                  key={game._id}
-                  className="flex items-center justify-between p-3 border rounded"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="font-medium capitalize">
-                      {game.gameType}
-                    </span>
-                    <span
-                      className={`text-sm px-2 py-1 rounded ${
-                        game.result === "win"
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
-                      }`}
-                    >
-                      {game.result === "win" ? "Win" : "Loss"}
-                    </span>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-medium">
-                      Bet: ${(game.betAmount / 100).toFixed(2)}
-                    </p>
-                    {game.payout > 0 && (
-                      <p className="text-sm text-green-600">
-                        Won: ${(game.payout / 100).toFixed(2)}
-                      </p>
-                    )}
-                  </div>
+          {/* Balance Card */}
+          <Card>
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="h-5 w-5 text-green-500" />
+                  <span className="text-sm text-muted-foreground">Your Balance</span>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                <div className="text-2xl font-bold">
+                  ${((balance ?? 0) / 100).toFixed(2)}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Games Tabs */}
+          <Tabs defaultValue="slots" className="w-full">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="slots">Slots</TabsTrigger>
+              <TabsTrigger value="blackjack">Blackjack</TabsTrigger>
+              <TabsTrigger value="dice">Dice</TabsTrigger>
+              <TabsTrigger value="roulette">Roulette</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="slots" className="mt-6">
+              <SlotsGame balance={balance ?? 0} />
+            </TabsContent>
+
+            <TabsContent value="blackjack" className="mt-6">
+              <BlackjackGame balance={balance ?? 0} />
+            </TabsContent>
+
+            <TabsContent value="dice" className="mt-6">
+              <DiceGame balance={balance ?? 0} />
+            </TabsContent>
+
+            <TabsContent value="roulette" className="mt-6">
+              <RouletteGame balance={balance ?? 0} />
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
     </div>
-  );
-}
-
-// Slot Machine Component
-function SlotMachine({ playerBalance }: { playerBalance: number }) {
-  const [betAmount, setBetAmount] = useState("100");
-  const [spinning, setSpinning] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const playSlots = useMutation(api.gambling.playSlots);
-
-  const handleSpin = async () => {
-    const bet = Math.round(parseFloat(betAmount) * 100);
-    if (bet <= 0 || bet > playerBalance) {
-      alert("Invalid bet amount");
-      return;
-    }
-
-    setSpinning(true);
-    setResult(null);
-
-    try {
-      const res = await playSlots({ betAmount: bet });
-      setResult(res);
-    } catch (error: any) {
-      alert(error.message);
-    } finally {
-      setSpinning(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Slot Machine 🎰</CardTitle>
-        <CardDescription>
-          Match 3 symbols to win! Three of a kind pays up to 100x!
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div>
-          <Label>Bet Amount ($)</Label>
-          <Input
-            type="number"
-            value={betAmount}
-            onChange={(e) => setBetAmount(e.target.value)}
-            min="1"
-            max={playerBalance / 100}
-            step="1"
-            disabled={spinning}
-          />
-        </div>
-
-        {result && (
-          <div className="text-center space-y-4">
-            <div className="flex justify-center gap-4 text-6xl">
-              {result.reels.map((symbol: string, i: number) => (
-                <div key={i} className="p-4 border-2 rounded-lg bg-secondary">
-                  {symbol}
-                </div>
-              ))}
-            </div>
-            <div
-              className={`text-2xl font-bold ${
-                result.result === "win" ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {result.result === "win"
-                ? `YOU WON $${(result.payout / 100).toFixed(2)}! (${
-                    result.multiplier
-                  }x)`
-                : "Better luck next time!"}
-            </div>
-          </div>
-        )}
-
-        <Button
-          onClick={handleSpin}
-          disabled={spinning}
-          className="w-full"
-          size="lg"
-        >
-          {spinning ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Spinning...
-            </>
-          ) : (
-            "SPIN"
-          )}
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-// Blackjack Component
-function Blackjack({ playerBalance }: { playerBalance: number }) {
-  const [betAmount, setBetAmount] = useState("100");
-  const [gameState, setGameState] = useState<any>(null);
-  const [playing, setPlaying] = useState(false);
-  const startBlackjack = useMutation(api.gambling.startBlackjack);
-  const blackjackAction = useMutation(api.gambling.blackjackAction);
-
-  const handleStart = async () => {
-    const bet = Math.round(parseFloat(betAmount) * 100);
-    if (bet <= 0 || bet > playerBalance) {
-      alert("Invalid bet amount");
-      return;
-    }
-
-    setPlaying(true);
-    try {
-      const game = await startBlackjack({ betAmount: bet });
-      setGameState(game);
-    } catch (error: any) {
-      alert(error.message);
-      setPlaying(false);
-    }
-  };
-
-  const handleAction = async (action: "hit" | "stand" | "double") => {
-    if (!gameState) return;
-
-    try {
-      const result = await blackjackAction({
-        action,
-        playerCards: gameState.playerCards,
-        dealerCards: [
-          gameState.dealerFirstCard,
-          ...gameState.dealerCards.slice(1),
-        ],
-        betAmount: gameState.betAmount,
-      });
-
-      if (result.gameOver) {
-        setGameState({ ...result, gameOver: true });
-        setPlaying(false);
-      } else {
-        setGameState({ ...gameState, ...result });
-      }
-    } catch (error: any) {
-      alert(error.message);
-    }
-  };
-
-  const handleReset = () => {
-    setGameState(null);
-    setPlaying(false);
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Blackjack 🃏</CardTitle>
-        <CardDescription>
-          Get as close to 21 as possible without going over!
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {!gameState ? (
-          <>
-            <div>
-              <Label>Bet Amount ($)</Label>
-              <Input
-                type="number"
-                value={betAmount}
-                onChange={(e) => setBetAmount(e.target.value)}
-                min="1"
-                max={playerBalance / 100}
-                step="1"
-              />
-            </div>
-            <Button onClick={handleStart} className="w-full" size="lg">
-              Start Game
-            </Button>
-          </>
-        ) : (
-          <>
-            <div className="space-y-4">
-              <div className="p-4 border rounded-lg bg-secondary">
-                <p className="font-medium mb-2">Dealer's Hand</p>
-                <div className="flex gap-2 text-3xl">
-                  {gameState.gameOver ? (
-                    gameState.dealerCards.map((card: number, i: number) => (
-                      <span key={i} className="px-3 py-2 bg-background rounded">
-                        {card}
-                      </span>
-                    ))
-                  ) : (
-                    <>
-                      <span className="px-3 py-2 bg-background rounded">
-                        {gameState.dealerFirstCard}
-                      </span>
-                      <span className="px-3 py-2 bg-background rounded">?</span>
-                    </>
-                  )}
-                </div>
-                {gameState.gameOver && (
-                  <p className="mt-2 font-bold">
-                    Total: {gameState.dealerTotal}
-                  </p>
-                )}
-              </div>
-
-              <div className="p-4 border rounded-lg bg-secondary">
-                <p className="font-medium mb-2">Your Hand</p>
-                <div className="flex gap-2 text-3xl">
-                  {gameState.playerCards.map((card: number, i: number) => (
-                    <span key={i} className="px-3 py-2 bg-background rounded">
-                      {card}
-                    </span>
-                  ))}
-                </div>
-                <p className="mt-2 font-bold">Total: {gameState.playerTotal}</p>
-              </div>
-
-              {gameState.gameOver && (
-                <div
-                  className={`text-center text-2xl font-bold p-4 rounded ${
-                    gameState.result === "win"
-                      ? "bg-green-100 text-green-800"
-                      : "bg-red-100 text-red-800"
-                  }`}
-                >
-                  {gameState.result === "win"
-                    ? `YOU WON $${(gameState.payout / 100).toFixed(2)}!`
-                    : "You Lost!"}
-                </div>
-              )}
-            </div>
-
-            {!gameState.gameOver ? (
-              <div className="grid grid-cols-3 gap-2">
-                <Button onClick={() => handleAction("hit")}>Hit</Button>
-                <Button onClick={() => handleAction("stand")}>Stand</Button>
-                <Button
-                  onClick={() => handleAction("double")}
-                  variant="outline"
-                >
-                  Double Down
-                </Button>
-              </div>
-            ) : (
-              <Button onClick={handleReset} className="w-full">
-                New Game
-              </Button>
-            )}
-          </>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
-
-// Dice Roll Component
-function DiceRoll({ playerBalance }: { playerBalance: number }) {
-  const [betAmount, setBetAmount] = useState("100");
-  const [betType, setBetType] = useState<
-    "odd" | "even" | "under7" | "over7" | "exact7"
-  >("odd");
-  const [rolling, setRolling] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const playDice = useMutation(api.gambling.playDice);
-
-  const handleRoll = async () => {
-    const bet = Math.round(parseFloat(betAmount) * 100);
-    if (bet <= 0 || bet > playerBalance) {
-      alert("Invalid bet amount");
-      return;
-    }
-
-    setRolling(true);
-    setResult(null);
-
-    try {
-      const res = await playDice({ betAmount: bet, betType });
-      setResult(res);
-    } catch (error: any) {
-      alert(error.message);
-    } finally {
-      setRolling(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Dice Roll 🎲</CardTitle>
-        <CardDescription>
-          Roll the dice and predict the outcome!
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div>
-          <Label>Bet Amount ($)</Label>
-          <Input
-            type="number"
-            value={betAmount}
-            onChange={(e) => setBetAmount(e.target.value)}
-            min="1"
-            max={playerBalance / 100}
-            step="1"
-            disabled={rolling}
-          />
-        </div>
-
-        <div>
-          <Label>Bet Type</Label>
-          <RadioGroup value={betType} onValueChange={(v: any) => setBetType(v)}>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="odd" id="odd" disabled={rolling} />
-              <Label htmlFor="odd">Odd (2x)</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="even" id="even" disabled={rolling} />
-              <Label htmlFor="even">Even (2x)</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="under7" id="under7" disabled={rolling} />
-              <Label htmlFor="under7">Under 7 (2x)</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="over7" id="over7" disabled={rolling} />
-              <Label htmlFor="over7">Over 7 (2x)</Label>
-            </div>
-            <div className="flex items-center space-x-2">
-              <RadioGroupItem value="exact7" id="exact7" disabled={rolling} />
-              <Label htmlFor="exact7">Exactly 7 (5x)</Label>
-            </div>
-          </RadioGroup>
-        </div>
-
-        {result && (
-          <div className="text-center space-y-4">
-            <div className="flex justify-center gap-4 text-6xl">
-              <div className="p-4 border-2 rounded-lg bg-secondary">
-                🎲 {result.die1}
-              </div>
-              <div className="p-4 border-2 rounded-lg bg-secondary">
-                🎲 {result.die2}
-              </div>
-            </div>
-            <p className="text-3xl font-bold">Total: {result.total}</p>
-            <div
-              className={`text-2xl font-bold ${
-                result.result === "win" ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {result.result === "win"
-                ? `YOU WON $${(result.payout / 100).toFixed(2)}! (${
-                    result.multiplier
-                  }x)`
-                : "Better luck next time!"}
-            </div>
-          </div>
-        )}
-
-        <Button
-          onClick={handleRoll}
-          disabled={rolling}
-          className="w-full"
-          size="lg"
-        >
-          {rolling ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Rolling...
-            </>
-          ) : (
-            "ROLL DICE"
-          )}
-        </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-// Roulette Component
-function Roulette({ playerBalance }: { playerBalance: number }) {
-  const [betAmount, setBetAmount] = useState("100");
-  const [betType, setBetType] = useState<
-    "red" | "black" | "odd" | "even" | "low" | "high" | "green"
-  >("red");
-  const [spinning, setSpinning] = useState(false);
-  const [result, setResult] = useState<any>(null);
-  const playRoulette = useMutation(api.gambling.playRoulette);
-
-  const handleSpin = async () => {
-    const bet = Math.round(parseFloat(betAmount) * 100);
-    if (bet <= 0 || bet > playerBalance) {
-      alert("Invalid bet amount");
-      return;
-    }
-
-    setSpinning(true);
-    setResult(null);
-
-    try {
-      const res = await playRoulette({ betAmount: bet, betType });
-      setResult(res);
-    } catch (error: any) {
-      alert(error.message);
-    } finally {
-      setSpinning(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Roulette 🎡</CardTitle>
-        <CardDescription>
-          Place your bets and spin the wheel!
-          <details className="mt-2">
-            <summary className="cursor-pointer text-xs">
-              View Number Guide
-            </summary>
-            <div className="mt-2 text-xs space-y-1">
-              <p>
-                <span className="font-bold text-red-600">Red:</span>{" "}
-                1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36
-              </p>
-              <p>
-                <span className="font-bold">Black:</span>{" "}
-                2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35
-              </p>
-              <p>
-                <span className="font-bold text-green-600">Green:</span> 0
-              </p>
-            </div>
-          </details>
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div>
-          <Label>Bet Amount ($)</Label>
-          <Input
-            type="number"
-            value={betAmount}
-            onChange={(e) => setBetAmount(e.target.value)}
-            min="1"
-            max={playerBalance / 100}
-            step="1"
-            disabled={spinning}
-          />
-        </div>
-
-        <div>
-          <Label>Bet Type</Label>
-          <RadioGroup value={betType} onValueChange={(v: any) => setBetType(v)}>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="red" id="red" disabled={spinning} />
-                <Label htmlFor="red">Red (2x)</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="black" id="black" disabled={spinning} />
-                <Label htmlFor="black">Black (2x)</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="odd" id="rodd" disabled={spinning} />
-                <Label htmlFor="rodd">Odd (2x)</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="even" id="reven" disabled={spinning} />
-                <Label htmlFor="reven">Even (2x)</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="low" id="low" disabled={spinning} />
-                <Label htmlFor="low">Low 1-18 (2x)</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="high" id="high" disabled={spinning} />
-                <Label htmlFor="high">High 19-36 (2x)</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="green" id="green" disabled={spinning} />
-                <Label htmlFor="green">Green 0 (36x)</Label>
-              </div>
-            </div>
-          </RadioGroup>
-        </div>
-
-        {result && (
-          <div className="text-center space-y-4">
-            <div
-              className={`text-6xl font-bold p-8 border-4 rounded-full inline-block ${
-                result.color === "green"
-                  ? "border-green-500 text-green-600 bg-green-50"
-                  : result.color === "red"
-                  ? "border-red-500 text-red-600 bg-red-50"
-                  : "border-gray-800 text-gray-800 bg-gray-50"
-              }`}
-            >
-              {result.number}
-            </div>
-            <div className="space-y-1">
-              <p className="text-xl font-bold">{result.color.toUpperCase()}</p>
-              <div className="text-sm text-muted-foreground">
-                {result.isOdd && "ODD"} {result.isEven && "EVEN"}
-                {result.number >= 1 && result.number <= 18 && " • LOW (1-18)"}
-                {result.number >= 19 &&
-                  result.number <= 36 &&
-                  " • HIGH (19-36)"}
-              </div>
-            </div>
-            <div
-              className={`text-2xl font-bold ${
-                result.result === "win" ? "text-green-600" : "text-red-600"
-              }`}
-            >
-              {result.result === "win"
-                ? `YOU WON $${(result.payout / 100).toFixed(2)}! (${
-                    result.multiplier
-                  }x)`
-                : "Better luck next time!"}
-            </div>
-          </div>
-        )}
-
-        <Button
-          onClick={handleSpin}
-          disabled={spinning}
-          className="w-full"
-          size="lg"
-        >
-          {spinning ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Spinning...
-            </>
-          ) : (
-            "SPIN WHEEL"
-          )}
-        </Button>
-      </CardContent>
-    </Card>
   );
 }

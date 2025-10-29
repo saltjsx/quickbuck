@@ -2,393 +2,638 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 
-// Helper to get or create player from token
-async function findPlayerByToken(ctx: any) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    throw new Error("Not authenticated");
+// ===============================
+// BLACKJACK STATE MANAGEMENT
+// ===============================
+
+// Note: Blackjack games are now stored in the database (blackjackGames table)
+// This ensures persistence across server restarts
+
+// Helper: Create a shuffled deck (values 1-11, where 1=Ace, 11=J/Q/K/10)
+function createDeck(): number[] {
+  const deck: number[] = [];
+  // 4 suits × 13 cards = 52 cards
+  // Ace (1), 2-9, 10, Jack (11), Queen (11), King (11)
+  for (let suit = 0; suit < 4; suit++) {
+    for (let value = 1; value <= 13; value++) {
+      if (value === 1) {
+        deck.push(1); // Ace
+      } else if (value >= 2 && value <= 10) {
+        deck.push(value);
+      } else {
+        deck.push(10); // J, Q, K all worth 10
+      }
+    }
   }
-
-  // Find or create the user record
-  let user = await ctx.db
-    .query("users")
-    .withIndex("by_token", (q: any) =>
-      q.eq("tokenIdentifier", identity.subject)
-    )
-    .unique();
-
-  if (!user) {
-    // Create new user if doesn't exist
-    const userId = await ctx.db.insert("users", {
-      name: identity.name ?? "Anonymous",
-      email: identity.email ?? "",
-      tokenIdentifier: identity.subject,
-    });
-    user = await ctx.db.get(userId);
+  // Shuffle
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
   }
-
-  // Find or create the player record
-  let player = await ctx.db
-    .query("players")
-    .withIndex("by_userId", (q: any) => q.eq("userId", user._id))
-    .unique();
-
-  if (!player) {
-    // Create new player if doesn't exist
-    const now = Date.now();
-    const playerId = await ctx.db.insert("players", {
-      userId: user._id,
-      balance: 1000000, // $10,000 in cents
-      netWorth: 1000000,
-      createdAt: now,
-      updatedAt: now,
-    });
-    player = await ctx.db.get(playerId);
-  }
-
-  return player;
+  return deck;
 }
 
-// Slot Machine
-export const playSlots = mutation({
+// Helper: Calculate hand value (Aces count as 11 or 1)
+function calculateHandValue(hand: number[]): number {
+  let value = 0;
+  let aces = 0;
+
+  for (const card of hand) {
+    if (card === 1) {
+      aces++;
+      value += 11; // Initially count Ace as 11
+    } else {
+      value += card;
+    }
+  }
+
+  // Convert Aces from 11 to 1 if needed
+  while (value > 21 && aces > 0) {
+    value -= 10;
+    aces--;
+  }
+
+  return value;
+}
+
+// ===============================
+// QUERIES
+// ===============================
+
+// Get active blackjack game for player
+export const getActiveBlackjackGame = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    if (!player) throw new Error("Player not found");
+
+    // Check if there's an active game (within last 30 minutes)
+    const game = await ctx.db
+      .query("blackjackGames")
+      .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
+      .first();
+    
+    if (game && Date.now() - game.updatedAt < 30 * 60 * 1000 && (game.gameState === "playing" || game.gameState === "dealer_bust" || game.gameState === "player_bust" || game.gameState === "player_win" || game.gameState === "dealer_win" || game.gameState === "push")) {
+      return {
+        exists: true,
+        playerHand: game.playerHand,
+        dealerHand: game.dealerHand,
+        playerValue: calculateHandValue(game.playerHand),
+        dealerValue: calculateHandValue(game.dealerHand),
+        gameState: game.gameState,
+        betAmount: game.betAmount,
+        playerStood: game.playerStood,
+      };
+    }
+
+    return { exists: false };
+  },
+});
+
+// Get gambling history for player
+export const getGamblingHistory = query({
   args: {
-    betAmount: v.number(), // in cents
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const player = await findPlayerByToken(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
 
-    // EXPLOIT FIX: Validate bet amount is positive and safe integer
-    if (args.betAmount <= 0) {
-      throw new Error("Bet amount must be positive");
-    }
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
 
-    if (!Number.isSafeInteger(args.betAmount)) {
-      throw new Error("Bet amount is not a safe integer");
-    }
+    if (!user) throw new Error("User not found");
 
-    // EXPLOIT FIX: Add maximum bet limit
-    if (args.betAmount > 100000000) { // Max $1M bet
-      throw new Error("Bet amount exceeds maximum of $1,000,000");
-    }
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
 
-    if (player.balance < args.betAmount) {
-      throw new Error("Insufficient balance");
-    }
+    if (!player) throw new Error("Player not found");
 
-    // Generate three random symbols (0-6: cherry, lemon, orange, plum, bell, bar, seven)
-    const symbols = ["🍒", "🍋", "🍊", "💎", "🔔", "⭐", "7️⃣"];
-    const reel1 = Math.floor(Math.random() * symbols.length);
-    const reel2 = Math.floor(Math.random() * symbols.length);
-    const reel3 = Math.floor(Math.random() * symbols.length);
+    const history = await ctx.db
+      .query("gamblingHistory")
+      .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
+      .order("desc")
+      .take(args.limit || 50);
 
-    let multiplier = 0;
-    let result: "win" | "loss" = "loss";
+    return history;
+  },
+});
 
-    // Check for matches
-    if (reel1 === reel2 && reel2 === reel3) {
-      // Three of a kind
-      if (reel1 === 6) multiplier = 100; // Three sevens
-      else if (reel1 === 5) multiplier = 50; // Three stars
-      else if (reel1 === 4) multiplier = 25; // Three bells
-      else if (reel1 === 3) multiplier = 15; // Three diamonds
-      else multiplier = 10; // Three fruits
-      result = "win";
-    } else if (reel1 === reel2 || reel2 === reel3 || reel1 === reel3) {
-      // Two of a kind
-      multiplier = 2;
-      result = "win";
-    }
+// ===============================
+// MUTATIONS - SLOTS
+// ===============================
 
-    const payout = args.betAmount * multiplier;
-    const netChange = payout - args.betAmount;
+export const playSlots = mutation({
+  args: {
+    betAmount: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
 
-    // Update player balance
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    if (!player) throw new Error("Player not found");
+
+    // Validate bet
+    if (args.betAmount < 100) throw new Error("Minimum bet is $1");
+    if (args.betAmount > 1000000) throw new Error("Maximum bet is $10,000");
+    if (player.balance < args.betAmount) throw new Error("Insufficient balance");
+
+    // Deduct bet
     await ctx.db.patch(player._id, {
-      balance: player.balance + netChange,
+      balance: player.balance - args.betAmount,
       updatedAt: Date.now(),
     });
 
-    // Record gambling history
+    // Slots symbols: 🍒 🍋 🍊 🍇 💎 7️⃣ 
+    const symbols = ["🍒", "🍋", "🍊", "🍇", "💎", "7️⃣"];
+    const reels = [
+      symbols[Math.floor(Math.random() * symbols.length)],
+      symbols[Math.floor(Math.random() * symbols.length)],
+      symbols[Math.floor(Math.random() * symbols.length)],
+    ];
+
+    let payout = 0;
+    let result: "win" | "loss" = "loss";
+    let multiplier = 0;
+
+    // Check for wins
+    if (reels[0] === reels[1] && reels[1] === reels[2]) {
+      // Three of a kind
+      result = "win";
+      if (reels[0] === "7️⃣") {
+        multiplier = 10; // 10x for three 7s
+      } else if (reels[0] === "💎") {
+        multiplier = 5; // 5x for three diamonds
+      } else {
+        multiplier = 3; // 3x for three of any other symbol
+      }
+      payout = args.betAmount * multiplier;
+    } else if (reels[0] === reels[1] || reels[1] === reels[2] || reels[0] === reels[2]) {
+      // Two of a kind
+      result = "win";
+      multiplier = 1.5;
+      payout = Math.floor(args.betAmount * multiplier);
+    }
+
+    // Award payout
+    if (payout > 0) {
+      const updatedPlayer = await ctx.db.get(player._id);
+      if (updatedPlayer) {
+        await ctx.db.patch(player._id, {
+          balance: updatedPlayer.balance + payout,
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
+    // Record history
     await ctx.db.insert("gamblingHistory", {
       playerId: player._id,
       gameType: "slots",
       betAmount: args.betAmount,
       payout,
       result,
-      details: {
-        reels: [symbols[reel1], symbols[reel2], symbols[reel3]],
-        multiplier,
-      },
+      details: { reels, multiplier },
       timestamp: Date.now(),
     });
 
     return {
-      reels: [symbols[reel1], symbols[reel2], symbols[reel3]],
-      multiplier,
+      reels,
       payout,
-      netChange,
       result,
-      newBalance: player.balance + netChange,
+      multiplier,
+      newBalance: player.balance - args.betAmount + payout,
     };
   },
 });
 
-// Blackjack
+// ===============================
+// MUTATIONS - BLACKJACK
+// ===============================
+
 export const startBlackjack = mutation({
   args: {
     betAmount: v.number(),
   },
   handler: async (ctx, args) => {
-    const player = await findPlayerByToken(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
 
-    // EXPLOIT FIX: Validate bet amount
-    if (args.betAmount <= 0) {
-      throw new Error("Bet amount must be positive");
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    if (!player) throw new Error("Player not found");
+
+    // Validate bet
+    if (args.betAmount < 100) throw new Error("Minimum bet is $1");
+    if (args.betAmount > 1000000) throw new Error("Maximum bet is $10,000");
+    if (player.balance < args.betAmount) throw new Error("Insufficient balance");
+
+    // Check if there's already an active game
+    const existingGame = await ctx.db
+      .query("blackjackGames")
+      .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
+      .first();
+    
+    if (existingGame && Date.now() - existingGame.updatedAt < 30 * 60 * 1000 && existingGame.gameState === "playing") {
+      throw new Error("You already have an active game. Finish it first.");
     }
 
-    if (!Number.isSafeInteger(args.betAmount)) {
-      throw new Error("Bet amount is not a safe integer");
-    }
-
-    if (args.betAmount > 100000000) { // Max $1M bet
-      throw new Error("Bet amount exceeds maximum of $1,000,000");
-    }
-
-    if (player.balance < args.betAmount) {
-      throw new Error("Insufficient balance");
-    }
-
-    // Deduct bet from balance
+    // Deduct bet
     await ctx.db.patch(player._id, {
       balance: player.balance - args.betAmount,
       updatedAt: Date.now(),
     });
 
-    // Deal cards (simplified: just values 1-11)
-    const drawCard = () => Math.min(Math.floor(Math.random() * 13) + 1, 10);
-    
-    const playerCards = [drawCard(), drawCard()];
-    const dealerCards = [drawCard(), drawCard()];
-    
-    let playerTotal = playerCards.reduce((a, b) => a + b, 0);
-    let dealerTotal = dealerCards.reduce((a, b) => a + b, 0);
+    // Create new deck and deal cards
+    const deck = createDeck();
+    const playerHand = [deck.pop()!, deck.pop()!];
+    const dealerHand = [deck.pop()!, deck.pop()!];
 
-    // Handle aces
-    if (playerTotal > 21 && playerCards.includes(1)) {
-      playerTotal -= 10;
+    const playerValue = calculateHandValue(playerHand);
+    const dealerValue = calculateHandValue(dealerHand);
+
+    // Check for instant blackjack
+    let gameState: "playing" | "blackjack" = "playing";
+    let payout = 0;
+
+    if (playerValue === 21) {
+      gameState = "blackjack";
+      payout = Math.floor(args.betAmount * 2.5); // 2.5x for blackjack
+      
+      const updatedPlayer = await ctx.db.get(player._id);
+      if (updatedPlayer) {
+        await ctx.db.patch(player._id, {
+          balance: updatedPlayer.balance + payout,
+          updatedAt: Date.now(),
+        });
+      }
+
+      await ctx.db.insert("gamblingHistory", {
+        playerId: player._id,
+        gameType: "blackjack",
+        betAmount: args.betAmount,
+        payout,
+        result: "win",
+        details: { playerHand, dealerHand, playerValue, dealerValue, outcome: "blackjack" },
+        timestamp: Date.now(),
+      });
+
+      // Don't store game if it's instant blackjack
+      return {
+        playerHand,
+        dealerHand: [dealerHand[0]], // Only show dealer's first card
+        playerValue,
+        dealerValue: calculateHandValue([dealerHand[0]]),
+        gameState,
+        payout,
+        canHit: false,
+        canStand: false,
+      };
     }
 
-    return {
-      playerCards,
-      dealerCards: [dealerCards[0]], // Only show dealer's first card
-      playerTotal,
-      dealerFirstCard: dealerCards[0],
-      gameId: `${player._id}_${Date.now()}`, // Simple game ID
+    // Store game state in database
+    await ctx.db.insert("blackjackGames", {
+      playerId: player._id,
       betAmount: args.betAmount,
-    };
-  },
-});
+      playerHand,
+      dealerHand,
+      deck,
+      gameState,
+      playerStood: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
 
-export const blackjackAction = mutation({
-  args: {
-    action: v.union(v.literal("hit"), v.literal("stand"), v.literal("double")),
-    playerCards: v.array(v.number()),
-    dealerCards: v.array(v.number()),
-    betAmount: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const player = await findPlayerByToken(ctx);
-
-    let playerCards = [...args.playerCards];
-    let dealerCards = [...args.dealerCards];
-    let betAmount = args.betAmount;
-
-    const drawCard = () => Math.min(Math.floor(Math.random() * 13) + 1, 10);
-    const calculateTotal = (cards: number[]) => {
-      let total = cards.reduce((a, b) => a + b, 0);
-      // Simple ace handling
-      if (total > 21 && cards.includes(1)) {
-        total -= 10;
-      }
-      return total;
-    };
-
-    // Handle player action
-    if (args.action === "hit") {
-      playerCards.push(drawCard());
-    } else if (args.action === "double") {
-      if (player.balance < betAmount) {
-        throw new Error("Insufficient balance to double down");
-      }
-      await ctx.db.patch(player._id, {
-        balance: player.balance - betAmount,
-      });
-      betAmount *= 2;
-      playerCards.push(drawCard());
-    }
-
-    let playerTotal = calculateTotal(playerCards);
-
-    // Check if player busted
-    if (playerTotal > 21) {
-      await ctx.db.insert("gamblingHistory", {
-        playerId: player._id,
-        gameType: "blackjack",
-        betAmount,
-        payout: 0,
-        result: "loss",
-        details: { playerCards, dealerCards, playerTotal, dealerTotal: 0 },
-        timestamp: Date.now(),
-      });
-
-      return {
-        playerCards,
-        dealerCards,
-        playerTotal,
-        dealerTotal: calculateTotal(dealerCards),
-        result: "loss",
-        payout: 0,
-        newBalance: player.balance,
-        gameOver: true,
-      };
-    }
-
-    // If player stands or doubles, dealer plays
-    if (args.action === "stand" || args.action === "double") {
-      // Dealer hits on 16, stands on 17+
-      let dealerTotal = calculateTotal(dealerCards);
-      while (dealerTotal < 17) {
-        dealerCards.push(drawCard());
-        dealerTotal = calculateTotal(dealerCards);
-      }
-
-      // Determine winner
-      let result: "win" | "loss" = "loss";
-      let payout = 0;
-
-      if (dealerTotal > 21 || playerTotal > dealerTotal) {
-        result = "win";
-        payout = betAmount * 2; // Return bet + winnings
-      } else if (playerTotal === dealerTotal) {
-        result = "win"; // Push - return bet
-        payout = betAmount;
-      }
-
-      // Update balance
-      await ctx.db.patch(player._id, {
-        balance: player.balance + payout,
-        updatedAt: Date.now(),
-      });
-
-      // Record history
-      await ctx.db.insert("gamblingHistory", {
-        playerId: player._id,
-        gameType: "blackjack",
-        betAmount,
-        payout,
-        result,
-        details: { playerCards, dealerCards, playerTotal, dealerTotal },
-        timestamp: Date.now(),
-      });
-
-      return {
-        playerCards,
-        dealerCards,
-        playerTotal,
-        dealerTotal,
-        result,
-        payout,
-        newBalance: player.balance + payout,
-        gameOver: true,
-      };
-    }
-
-    // Game continues (hit action)
     return {
-      playerCards,
-      dealerCards,
-      playerTotal,
-      dealerTotal: calculateTotal(dealerCards),
-      result: null,
+      playerHand,
+      dealerHand: [dealerHand[0]], // Only show dealer's first card
+      playerValue,
+      dealerValue: calculateHandValue([dealerHand[0]]),
+      gameState,
       payout: 0,
-      newBalance: player.balance,
-      gameOver: false,
+      canHit: true,
+      canStand: true,
     };
   },
 });
 
-// Dice Roll
+export const hitBlackjack = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    if (!player) throw new Error("Player not found");
+
+    // Get active game from database
+    const game = await ctx.db
+      .query("blackjackGames")
+      .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
+      .first();
+
+    if (!game) throw new Error("No active game found");
+    if (game.gameState !== "playing") throw new Error("Game is already finished");
+    if (game.playerStood) throw new Error("You already stood");
+
+    // Draw a card
+    const deck = [...game.deck]; // Copy array
+    const newCard = deck.pop();
+    if (!newCard) throw new Error("Deck is empty");
+
+    const playerHand = [...game.playerHand, newCard];
+    const playerValue = calculateHandValue(playerHand);
+
+    // Check for bust
+    if (playerValue > 21) {
+      await ctx.db.insert("gamblingHistory", {
+        playerId: player._id,
+        gameType: "blackjack",
+        betAmount: game.betAmount,
+        payout: 0,
+        result: "loss",
+        details: {
+          playerHand,
+          dealerHand: game.dealerHand,
+          playerValue,
+          dealerValue: calculateHandValue(game.dealerHand),
+          outcome: "player_bust",
+        },
+        timestamp: Date.now(),
+      });
+
+      // Delete game from database
+      await ctx.db.delete(game._id);
+
+      return {
+        playerHand,
+        dealerHand: game.dealerHand,
+        playerValue,
+        dealerValue: calculateHandValue(game.dealerHand),
+        gameState: "player_bust" as const,
+        payout: 0,
+        canHit: false,
+        canStand: false,
+      };
+    }
+
+    // Update game in database with new card and deck state
+    await ctx.db.patch(game._id, {
+      playerHand,
+      deck,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      playerHand,
+      dealerHand: [game.dealerHand[0]], // Still hide dealer's second card
+      playerValue,
+      dealerValue: calculateHandValue([game.dealerHand[0]]),
+      gameState: "playing" as const,
+      payout: 0,
+      canHit: true,
+      canStand: true,
+    };
+  },
+});
+
+export const standBlackjack = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    if (!player) throw new Error("Player not found");
+
+    // Get active game from database
+    const game = await ctx.db
+      .query("blackjackGames")
+      .withIndex("by_playerId", (q) => q.eq("playerId", player._id))
+      .first();
+
+    if (!game) throw new Error("No active game found");
+    if (game.gameState !== "playing") throw new Error("Game is already finished");
+
+    // Dealer draws until 17 or higher
+    let deck = [...game.deck];
+    let dealerHand = [...game.dealerHand];
+    let dealerValue = calculateHandValue(dealerHand);
+
+    while (dealerValue < 17) {
+      const newCard = deck.pop();
+      if (!newCard) break;
+      dealerHand.push(newCard);
+      dealerValue = calculateHandValue(dealerHand);
+    }
+
+    const playerValue = calculateHandValue(game.playerHand);
+
+    // Determine winner
+    let gameState: "dealer_bust" | "player_win" | "dealer_win" | "push";
+    let payout = 0;
+    let result: "win" | "loss" = "loss";
+
+    if (dealerValue > 21) {
+      gameState = "dealer_bust";
+      payout = game.betAmount * 2; // Win bet amount
+      result = "win";
+    } else if (playerValue > dealerValue) {
+      gameState = "player_win";
+      payout = game.betAmount * 2; // Win bet amount
+      result = "win";
+    } else if (dealerValue > playerValue) {
+      gameState = "dealer_win";
+      payout = 0;
+      result = "loss";
+    } else {
+      gameState = "push";
+      payout = game.betAmount; // Return bet
+      result = "win";
+    }
+
+    // Award payout
+    if (payout > 0) {
+      const updatedPlayer = await ctx.db.get(player._id);
+      if (updatedPlayer) {
+        await ctx.db.patch(player._id, {
+          balance: updatedPlayer.balance + payout,
+          updatedAt: Date.now(),
+        });
+      }
+    }
+
+    // Record history
+    await ctx.db.insert("gamblingHistory", {
+      playerId: player._id,
+      gameType: "blackjack",
+      betAmount: game.betAmount,
+      payout,
+      result,
+      details: {
+        playerHand: game.playerHand,
+        dealerHand,
+        playerValue,
+        dealerValue,
+        outcome: gameState,
+      },
+      timestamp: Date.now(),
+    });
+
+    // Delete game from database
+    await ctx.db.delete(game._id);
+
+    return {
+      playerHand: game.playerHand,
+      dealerHand,
+      playerValue,
+      dealerValue,
+      gameState,
+      payout,
+      canHit: false,
+      canStand: false,
+    };
+  },
+});
+
+// ===============================
+// MUTATIONS - DICE ROLL
+// ===============================
+
 export const playDice = mutation({
   args: {
     betAmount: v.number(),
-    betType: v.union(
-      v.literal("odd"),
-      v.literal("even"),
-      v.literal("under7"),
-      v.literal("over7"),
-      v.literal("exact7")
+    prediction: v.union(
+      v.literal("under"),
+      v.literal("over"),
+      v.literal("seven")
     ),
   },
   handler: async (ctx, args) => {
-    const player = await findPlayerByToken(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
 
-    // EXPLOIT FIX: Validate bet amount
-    if (args.betAmount <= 0) {
-      throw new Error("Bet amount must be positive");
-    }
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
 
-    if (!Number.isSafeInteger(args.betAmount)) {
-      throw new Error("Bet amount is not a safe integer");
-    }
+    if (!user) throw new Error("User not found");
 
-    if (args.betAmount > 100000000) { // Max $1M bet
-      throw new Error("Bet amount exceeds maximum of $1,000,000");
-    }
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
 
-    if (player.balance < args.betAmount) {
-      throw new Error("Insufficient balance");
-    }
+    if (!player) throw new Error("Player not found");
+
+    // Validate bet
+    if (args.betAmount < 100) throw new Error("Minimum bet is $1");
+    if (args.betAmount > 1000000) throw new Error("Maximum bet is $10,000");
+    if (player.balance < args.betAmount) throw new Error("Insufficient balance");
+
+    // Deduct bet
+    await ctx.db.patch(player._id, {
+      balance: player.balance - args.betAmount,
+      updatedAt: Date.now(),
+    });
 
     // Roll two dice
     const die1 = Math.floor(Math.random() * 6) + 1;
     const die2 = Math.floor(Math.random() * 6) + 1;
     const total = die1 + die2;
 
-    let won = false;
+    let payout = 0;
+    let result: "win" | "loss" = "loss";
     let multiplier = 0;
 
-    switch (args.betType) {
-      case "odd":
-        won = total % 2 === 1;
-        multiplier = 2;
-        break;
-      case "even":
-        won = total % 2 === 0;
-        multiplier = 2;
-        break;
-      case "under7":
-        won = total < 7;
-        multiplier = 2;
-        break;
-      case "over7":
-        won = total > 7;
-        multiplier = 2;
-        break;
-      case "exact7":
-        won = total === 7;
-        multiplier = 5;
-        break;
+    // Check prediction
+    if (args.prediction === "under" && total < 7) {
+      result = "win";
+      multiplier = 2.5;
+      payout = Math.floor(args.betAmount * multiplier);
+    } else if (args.prediction === "over" && total > 7) {
+      result = "win";
+      multiplier = 2.5;
+      payout = Math.floor(args.betAmount * multiplier);
+    } else if (args.prediction === "seven" && total === 7) {
+      result = "win";
+      multiplier = 5;
+      payout = Math.floor(args.betAmount * multiplier);
     }
 
-    const result = won ? "win" : "loss";
-    const payout = won ? args.betAmount * multiplier : 0;
-    const netChange = payout - args.betAmount;
-
-    // Update balance
-    await ctx.db.patch(player._id, {
-      balance: player.balance + netChange,
-      updatedAt: Date.now(),
-    });
+    // Award payout
+    if (payout > 0) {
+      const updatedPlayer = await ctx.db.get(player._id);
+      if (updatedPlayer) {
+        await ctx.db.patch(player._id, {
+          balance: updatedPlayer.balance + payout,
+          updatedAt: Date.now(),
+        });
+      }
+    }
 
     // Record history
     await ctx.db.insert("gamblingHistory", {
@@ -397,7 +642,7 @@ export const playDice = mutation({
       betAmount: args.betAmount,
       payout,
       result,
-      details: { die1, die2, total, betType: args.betType, multiplier },
+      details: { die1, die2, total, prediction: args.prediction, multiplier },
       timestamp: Date.now(),
     });
 
@@ -405,126 +650,137 @@ export const playDice = mutation({
       die1,
       die2,
       total,
-      result,
       payout,
-      netChange,
+      result,
       multiplier,
-      newBalance: player.balance + netChange,
+      newBalance: player.balance - args.betAmount + payout,
     };
   },
 });
 
-// Roulette
+// ===============================
+// MUTATIONS - ROULETTE
+// ===============================
+
 export const playRoulette = mutation({
   args: {
     betAmount: v.number(),
     betType: v.union(
       v.literal("red"),
       v.literal("black"),
-      v.literal("odd"),
+      v.literal("green"),
       v.literal("even"),
+      v.literal("odd"),
       v.literal("low"), // 1-18
       v.literal("high"), // 19-36
-      v.literal("green") // 0
+      v.literal("dozen1"), // 1-12
+      v.literal("dozen2"), // 13-24
+      v.literal("dozen3") // 25-36
     ),
-    specificNumber: v.optional(v.number()), // For betting on specific numbers
   },
   handler: async (ctx, args) => {
-    const player = await findPlayerByToken(ctx);
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
 
-    // EXPLOIT FIX: Validate bet amount
-    if (args.betAmount <= 0) {
-      throw new Error("Bet amount must be positive");
-    }
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
 
-    if (!Number.isSafeInteger(args.betAmount)) {
-      throw new Error("Bet amount is not a safe integer");
-    }
+    if (!user) throw new Error("User not found");
 
-    if (args.betAmount > 100000000) { // Max $1M bet
-      throw new Error("Bet amount exceeds maximum of $1,000,000");
-    }
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
 
-    if (player.balance < args.betAmount) {
-      throw new Error("Insufficient balance");
-    }
+    if (!player) throw new Error("Player not found");
 
-    // Spin the wheel (0-36)
-    const number = Math.floor(Math.random() * 37);
-    
-    console.log(`[ROULETTE] Spin result: number=${number}, betType="${args.betType}"`);
-    
-    // American Roulette red/black determination
-    // Official American Roulette layout:
-    // Red: 1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36
-    // Black: 2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35
-    const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
-    
-    // Determine properties of the spun number
-    const isGreen = number === 0;
-    const isRed = redNumbers.includes(number);
-    const isBlack = number !== 0 && !isRed; // All non-zero, non-red numbers are black
-    const isOdd = number > 0 && number % 2 === 1;
-    const isEven = number > 0 && number % 2 === 0;
-    const isLow = number >= 1 && number <= 18;
-    const isHigh = number >= 19 && number <= 36;
+    // Validate bet
+    if (args.betAmount < 100) throw new Error("Minimum bet is $1");
+    if (args.betAmount > 1000000) throw new Error("Maximum bet is $10,000");
+    if (player.balance < args.betAmount) throw new Error("Insufficient balance");
 
-    console.log(`[ROULETTE] Properties: isRed=${isRed}, isBlack=${isBlack}, isOdd=${isOdd}, isEven=${isEven}, isLow=${isLow}, isHigh=${isHigh}`);
-
-    let won = false;
-    let multiplier = 0;
-
-    // Check if bet wins
-    if (args.specificNumber !== undefined) {
-      won = number === args.specificNumber;
-      multiplier = 36;
-    } else {
-      switch (args.betType) {
-        case "red":
-          won = isRed;
-          multiplier = 2;
-          break;
-        case "black":
-          won = isBlack;
-          multiplier = 2;
-          break;
-        case "odd":
-          won = isOdd;
-          multiplier = 2;
-          break;
-        case "even":
-          won = isEven;
-          multiplier = 2;
-          break;
-        case "low":
-          won = isLow;
-          multiplier = 2;
-          break;
-        case "high":
-          won = isHigh;
-          multiplier = 2;
-          break;
-        case "green":
-          won = isGreen;
-          multiplier = 36;
-          break;
-        default:
-          console.error(`[ROULETTE] Unknown bet type: "${args.betType}"`);
-          throw new Error(`Invalid bet type: ${args.betType}`);
-      }
-    }
-
-    const result = won ? "win" : "loss";
-    const payout = won ? args.betAmount * multiplier : 0;
-    const netChange = payout - args.betAmount;
-
-    console.log(`[ROULETTE] Decision: won=${won}, multiplier=${multiplier}, payout=${payout}, result=${result}`);
-
-    // Update balance
+    // Deduct bet
     await ctx.db.patch(player._id, {
-      balance: player.balance + netChange,
+      balance: player.balance - args.betAmount,
       updatedAt: Date.now(),
     });
+
+    // Roulette numbers: 0-36, where 0 is green
+    // Red numbers: 1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36
+    // Black numbers: 2,4,6,8,10,11,13,15,17,20,22,24,26,28,29,31,33,35
+    const redNumbers = [1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36];
+    const blackNumbers = [2, 4, 6, 8, 10, 11, 13, 15, 17, 20, 22, 24, 26, 28, 29, 31, 33, 35];
+
+    const number = Math.floor(Math.random() * 37); // 0-36
+    
+    let color: "red" | "black" | "green";
+    if (number === 0) {
+      color = "green";
+    } else if (redNumbers.includes(number)) {
+      color = "red";
+    } else {
+      color = "black";
+    }
+
+    let payout = 0;
+    let result: "win" | "loss" = "loss";
+    let multiplier = 0;
+
+    // Check bet type
+    if (args.betType === "green" && color === "green") {
+      result = "win";
+      multiplier = 35; // 35x for green/0
+      payout = args.betAmount * multiplier;
+    } else if (args.betType === "red" && color === "red") {
+      result = "win";
+      multiplier = 2;
+      payout = args.betAmount * multiplier;
+    } else if (args.betType === "black" && color === "black") {
+      result = "win";
+      multiplier = 2;
+      payout = args.betAmount * multiplier;
+    } else if (args.betType === "even" && number !== 0 && number % 2 === 0) {
+      result = "win";
+      multiplier = 2;
+      payout = args.betAmount * multiplier;
+    } else if (args.betType === "odd" && number % 2 === 1) {
+      result = "win";
+      multiplier = 2;
+      payout = args.betAmount * multiplier;
+    } else if (args.betType === "low" && number >= 1 && number <= 18) {
+      result = "win";
+      multiplier = 2;
+      payout = args.betAmount * multiplier;
+    } else if (args.betType === "high" && number >= 19 && number <= 36) {
+      result = "win";
+      multiplier = 2;
+      payout = args.betAmount * multiplier;
+    } else if (args.betType === "dozen1" && number >= 1 && number <= 12) {
+      result = "win";
+      multiplier = 3;
+      payout = args.betAmount * multiplier;
+    } else if (args.betType === "dozen2" && number >= 13 && number <= 24) {
+      result = "win";
+      multiplier = 3;
+      payout = args.betAmount * multiplier;
+    } else if (args.betType === "dozen3" && number >= 25 && number <= 36) {
+      result = "win";
+      multiplier = 3;
+      payout = args.betAmount * multiplier;
+    }
+
+    // Award payout
+    if (payout > 0) {
+      const updatedPlayer = await ctx.db.get(player._id);
+      if (updatedPlayer) {
+        await ctx.db.patch(player._id, {
+          balance: updatedPlayer.balance + payout,
+          updatedAt: Date.now(),
+        });
+      }
+    }
 
     // Record history
     await ctx.db.insert("gamblingHistory", {
@@ -533,80 +789,17 @@ export const playRoulette = mutation({
       betAmount: args.betAmount,
       payout,
       result,
-      details: {
-        number,
-        color: isGreen ? "green" : isRed ? "red" : "black",
-        betType: args.betType,
-        specificNumber: args.specificNumber,
-        multiplier,
-        isRed,
-        isBlack,
-        isOdd,
-        isEven,
-      },
+      details: { number, color, betType: args.betType, multiplier },
       timestamp: Date.now(),
     });
 
     return {
       number,
-      color: isGreen ? "green" : isRed ? "red" : "black",
-      result,
+      color,
       payout,
-      netChange,
+      result,
       multiplier,
-      newBalance: player.balance + netChange,
-      isRed,
-      isBlack,
-      isOdd,
-      isEven,
-    };
-  },
-});
-
-// Query gambling history
-export const getGamblingHistory = query({
-  args: {
-    limit: v.optional(v.number()),
-  },
-  handler: async (ctx, args) => {
-    const player = await findPlayerByToken(ctx);
-
-    const history = await ctx.db
-      .query("gamblingHistory")
-      .withIndex("by_playerId", (q: any) => q.eq("playerId", player._id))
-      .order("desc")
-      .take(args.limit || 50);
-
-    return history;
-  },
-});
-
-// Get gambling stats
-export const getGamblingStats = query({
-  handler: async (ctx) => {
-    const player = await findPlayerByToken(ctx);
-
-    const history = await ctx.db
-      .query("gamblingHistory")
-      .withIndex("by_playerId", (q: any) => q.eq("playerId", player._id))
-      .collect();
-
-    const totalBets = history.length;
-    const totalWagered = history.reduce((sum, h) => sum + h.betAmount, 0);
-    const totalPayout = history.reduce((sum, h) => sum + h.payout, 0);
-    const netProfit = totalPayout - totalWagered;
-    const wins = history.filter((h) => h.result === "win").length;
-    const losses = history.filter((h) => h.result === "loss").length;
-    const winRate = totalBets > 0 ? (wins / totalBets) * 100 : 0;
-
-    return {
-      totalBets,
-      totalWagered,
-      totalPayout,
-      netProfit,
-      wins,
-      losses,
-      winRate,
+      newBalance: player.balance - args.betAmount + payout,
     };
   },
 });

@@ -18,6 +18,7 @@ import { GlobalAlertBanner } from "./components/global-alert-banner";
 import * as Sentry from "@sentry/react";
 import { initializeSentryClient } from "./lib/sentry.client";
 import { useEffect } from "react";
+import { Toaster } from "sonner";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 
@@ -137,6 +138,7 @@ function AppContent({ loaderData }: Route.ComponentProps) {
     >
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
         <GlobalAlertBanner />
+        <Toaster />
         <Outlet />
       </ConvexProviderWithClerk>
     </ClerkProvider>

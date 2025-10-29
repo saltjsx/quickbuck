@@ -452,4 +452,26 @@ export default defineSchema({
     createdAt: v.number(),
   })
     .index("by_sentAt", ["sentAt"]),
+
+  // Active blackjack games
+  blackjackGames: defineTable({
+    playerId: v.id("players"),
+    betAmount: v.number(), // in cents
+    playerHand: v.array(v.number()),
+    dealerHand: v.array(v.number()),
+    deck: v.array(v.number()),
+    gameState: v.union(
+      v.literal("playing"),
+      v.literal("player_bust"),
+      v.literal("dealer_bust"),
+      v.literal("player_win"),
+      v.literal("dealer_win"),
+      v.literal("push"),
+      v.literal("blackjack")
+    ),
+    playerStood: v.boolean(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_playerId", ["playerId"]),
 });
