@@ -813,11 +813,8 @@ export const deleteProductAsMod = mutation({
     const product = await ctx.db.get(args.productId);
     if (!product) throw new Error("Product not found");
 
-    await ctx.db.patch(args.productId, {
-      isActive: false,
-      isArchived: true,
-      updatedAt: Date.now(),
-    });
+    // Actually delete the product
+    await ctx.db.delete(args.productId);
 
     return { success: true, message: `Product deleted by moderator. Reason: ${args.reason}` };
   },

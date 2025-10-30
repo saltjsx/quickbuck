@@ -74,6 +74,7 @@ export default defineSchema({
     isActive: v.boolean(),
     isArchived: v.boolean(),
     maxPerOrder: v.optional(v.number()),
+    lastPriceChange: v.optional(v.number()), // timestamp of last price change
     createdAt: v.number(),
     updatedAt: v.number(),
   })

@@ -40,6 +40,7 @@ import {
   History,
   AlertCircle,
   CheckCircle2,
+  Trash2,
 } from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
 import { cn } from "~/lib/utils";
@@ -80,6 +81,7 @@ export default function CompanyDashboardPage() {
   // Mutations
   const createProduct = useMutation(api.products.createProduct);
   const updateProduct = useMutation(api.products.updateProduct);
+  const deleteProduct = useMutation(api.products.deleteProduct);
   const orderBatch = useMutation(api.products.orderProductBatch);
   const updateCompanyInfo = useMutation(api.companies.updateCompanyInfo);
 
@@ -226,6 +228,29 @@ export default function CompanyDashboardPage() {
     }
   };
 
+  // Handle delete product
+  const handleDeleteProduct = async (productId: Id<"products">) => {
+    if (!player || !company) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this product? This action cannot be undone."
+    );
+    if (!confirmed) return;
+
+    setIsSubmitting(true);
+    try {
+      await deleteProduct({
+        productId: productId,
+        ownerId: player._id,
+      });
+      setSuccess("Product deleted successfully!");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete product");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Handle order batch
   const openOrderBatchModal = (productId: Id<"products">) => {
     setOrderProductId(productId);
@@ -321,14 +346,18 @@ export default function CompanyDashboardPage() {
   const totalProductionCosts =
     products?.reduce(
       (sum, p) =>
-        sum + Math.floor(p.price * p.productionCostPercentage) * p.totalSold,
+        sum +
+        Math.floor(p.price * (p.productionCostPercentage ?? 0.35)) *
+          p.totalSold,
       0
     ) || 0;
   const totalProfit = totalRevenue - totalProductionCosts;
   const totalStockValue =
     products?.reduce(
       (sum, p) =>
-        sum + (p.stock || 0) * Math.floor(p.price * p.productionCostPercentage),
+        sum +
+        (p.stock || 0) *
+          Math.floor(p.price * (p.productionCostPercentage ?? 0.35)),
       0
     ) || 0;
 
@@ -667,7 +696,8 @@ export default function CompanyDashboardPage() {
                           <TableCell className="text-orange-600">
                             {formatCurrency(
                               Math.floor(
-                                product.price * product.productionCostPercentage
+                                product.price *
+                                  (product.productionCostPercentage ?? 0.35)
                               )
                             )}
                           </TableCell>
@@ -705,6 +735,13 @@ export default function CompanyDashboardPage() {
                                 onClick={() => openEditModal(product)}
                               >
                                 <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleDeleteProduct(product._id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-600" />
                               </Button>
                             </div>
                           </TableCell>
@@ -886,7 +923,8 @@ export default function CompanyDashboardPage() {
 
                       const quantity = parseInt(batchQuantity) || 0;
                       const productionCost = Math.floor(
-                        product.price * product.productionCostPercentage
+                        product.price *
+                          (product.productionCostPercentage ?? 0.35)
                       );
                       const totalCost = productionCost * quantity;
                       const profit =

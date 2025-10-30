@@ -57,6 +57,8 @@ export default function Panel() {
   const sendGlobalAlert = useMutation(api.alerts?.sendGlobalAlert);
   // @ts-ignore
   const getAllAlerts = useQuery(api.alerts?.getAllAlerts);
+  // @ts-ignore
+  const deleteAlert = useMutation(api.alerts?.deleteAlert);
 
   // Crypto mutations
   const createCrypto = useMutation(api.crypto.createCryptocurrency);
@@ -444,6 +446,19 @@ export default function Panel() {
       showMessage("✗ Error: " + e.message);
     } finally {
       setIsSubmittingAlert(false);
+    }
+  };
+
+  // Delete alert handler
+  const handleDeleteAlert = async (alertId: Id<"globalAlerts">) => {
+    if (!window.confirm("Are you sure you want to delete this alert?")) {
+      return;
+    }
+    try {
+      await deleteAlert({ alertId });
+      showMessage("✓ Alert deleted successfully!");
+    } catch (e: any) {
+      showMessage("✗ Error: " + e.message);
     }
   };
 
@@ -922,9 +937,24 @@ export default function Panel() {
                   >
                     <div className="alert-header">
                       <strong>{alert.title}</strong>
-                      <span className="alert-type">
-                        {alert.type.toUpperCase()}
-                      </span>
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "8px",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span className="alert-type">
+                          {alert.type.toUpperCase()}
+                        </span>
+                        <button
+                          className="retro-button btn-small btn-danger"
+                          onClick={() => handleDeleteAlert(alert._id)}
+                          style={{ padding: "2px 8px", fontSize: "12px" }}
+                        >
+                          🗑️ Delete
+                        </button>
+                      </div>
                     </div>
                     <p className="alert-message">{alert.message}</p>
                     <div className="alert-footer">

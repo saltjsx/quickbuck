@@ -209,6 +209,25 @@ export const updateProduct = mutation({
       validatedUpdates.tags = validateTags(updates.tags);
     }
 
+    // PRICE CHANGE COOLDOWN: Enforce 2-day cooldown between price changes
+    if (updates.price !== undefined && updates.price !== product.price) {
+      const now = Date.now();
+      const twoDaysInMs = 2 * 24 * 60 * 60 * 1000; // 2 days
+      
+      if (product.lastPriceChange) {
+        const timeSinceLastChange = now - product.lastPriceChange;
+        if (timeSinceLastChange < twoDaysInMs) {
+          const hoursRemaining = Math.ceil((twoDaysInMs - timeSinceLastChange) / (60 * 60 * 1000));
+          throw new Error(
+            `You can only change the price once every 2 days. Please wait ${hoursRemaining} more hours.`
+          );
+        }
+      }
+      
+      // Track the price change timestamp
+      validatedUpdates.lastPriceChange = now;
+    }
+
     // Production cost should never change after product creation
     // It represents the fixed cost to manufacture the product
     await ctx.db.patch(productId, {
@@ -242,16 +261,12 @@ export const deleteProduct = mutation({
       throw new Error("Only the company owner can delete products");
     }
 
-    // Archive the product instead of hard delete to preserve historical data
-    await ctx.db.patch(args.productId, {
-      isActive: false,
-      isArchived: true,
-      updatedAt: Date.now(),
-    });
+    // Actually delete the product
+    await ctx.db.delete(args.productId);
 
     return {
       productId: args.productId,
-      message: "Product archived successfully",
+      message: "Product deleted successfully",
     };
   },
 });
