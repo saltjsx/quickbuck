@@ -9,10 +9,10 @@ export const createCompany = mutation({
   args: {
     ownerId: v.id("players"),
     name: v.string(),
-
     description: v.optional(v.string()),
     logo: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
+    ticker: v.optional(v.string()), // Legacy field, now optional
   },
   handler: async (ctx, args) => {
     // ROLE CHECK: Verify player can create companies
@@ -34,6 +34,7 @@ export const createCompany = mutation({
       description: validatedDescription,
       logo: args.logo,
       tags: validatedTags,
+      ticker: args.ticker, // Legacy field, stored if provided
       balance: 0,
       isPublic: false,
       reputationScore: 0.5, // Start with neutral reputation
