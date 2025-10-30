@@ -209,8 +209,7 @@ describe("Content Filter - Normal Words (False Positives Check)", () => {
 
         const stockId = await t.mutation(api.companies.makeCompanyPublic, {
           companyId: companyId,
-          ticker: ticker,
-          totalShares: 1000000,
+          ownerId: playerId,
         });
         
         expect(stockId).toBeDefined();
@@ -381,8 +380,7 @@ describe("Content Filter - Profanity Detection", () => {
 
         await t.mutation(api.companies.makeCompanyPublic, {
           companyId: companyId,
-          ticker: ticker,
-          totalShares: 1000000,
+          ownerId: playerId,
         });
         
         throw new Error(`Profane ticker "${ticker}" was allowed`);
@@ -534,8 +532,7 @@ describe("Content Filter - Edge Cases", () => {
 
       await t.mutation(api.companies.makeCompanyPublic, {
         companyId: companyId,
-        ticker: "TOOLONG",
-        totalShares: 1000000,
+        ownerId: playerId,
       });
       
       throw new Error("Too-long ticker was allowed");
