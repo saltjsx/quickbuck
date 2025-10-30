@@ -35,6 +35,7 @@ import {
   Trash2,
   TrendingUp,
   DollarSign,
+  Store,
 } from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
 
@@ -62,6 +63,7 @@ export default function ManageCompaniesPage() {
   const createCompany = useMutation(api.companies.createCompany);
   const makeCompanyPublic = useMutation(api.companies.makeCompanyPublic);
   const deleteCompany = useMutation(api.companies.deleteCompany);
+  const listCompanyForSale = useMutation(api.companySales.listCompanyForSale);
 
   // State for create modal
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -98,6 +100,12 @@ export default function ManageCompaniesPage() {
   const [editCompanyDescription, setEditCompanyDescription] = useState("");
   const [editCompanyLogo, setEditCompanyLogo] = useState("");
   const [editCompanyTags, setEditCompanyTags] = useState("");
+
+  // State for list for sale modal
+  const [listForSaleModalOpen, setListForSaleModalOpen] = useState(false);
+  const [listForSaleCompanyId, setListForSaleCompanyId] =
+    useState<Id<"companies"> | null>(null);
+  const [askingPrice, setAskingPrice] = useState("");
 
   // Handle create company
   const handleCreateCompany = async (e: React.FormEvent) => {
@@ -211,6 +219,49 @@ export default function ManageCompaniesPage() {
     setDeleteCompanyId(companyId);
     setDeleteCompanyName(name);
     setDeleteModalOpen(true);
+  };
+
+  // Handle list for sale
+  const handleListForSale = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+
+    if (!listForSaleCompanyId) {
+      setError("No company selected");
+      return;
+    }
+
+    const price = parseFloat(askingPrice);
+    if (isNaN(price) || price <= 0) {
+      setError("Invalid asking price");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await listCompanyForSale({
+        companyId: listForSaleCompanyId,
+        askingPrice: Math.round(price * 100), // Convert to cents
+      });
+
+      setListForSaleModalOpen(false);
+      setListForSaleCompanyId(null);
+      setAskingPrice("");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to list company for sale"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Open list for sale modal
+  const openListForSaleModal = (companyId: Id<"companies">) => {
+    setListForSaleCompanyId(companyId);
+    setListForSaleModalOpen(true);
+    setAskingPrice("");
+    setError("");
   };
 
   return (
@@ -470,6 +521,16 @@ export default function ManageCompaniesPage() {
                         go public
                       </p>
                     )}
+
+                    {/* List for Sale Button */}
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => openListForSaleModal(company._id)}
+                    >
+                      <Store className="mr-2 h-4 w-4" />
+                      List for Sale
+                    </Button>
                   </CardContent>
                 </Card>
               ))}
@@ -691,6 +752,79 @@ export default function ManageCompaniesPage() {
                   {isDeleting ? "Deleting..." : "Delete Company"}
                 </Button>
               </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* List for Sale Modal */}
+          <Dialog
+            open={listForSaleModalOpen}
+            onOpenChange={setListForSaleModalOpen}
+          >
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>List Company for Sale</DialogTitle>
+                <DialogDescription>
+                  Set an asking price for your company. Buyers can make offers
+                  that you can accept, reject, or counter.
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleListForSale} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="asking-price">Asking Price ($)</Label>
+                  <div className="relative">
+                    <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="asking-price"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="Enter asking price"
+                      value={askingPrice}
+                      onChange={(e) => setAskingPrice(e.target.value)}
+                      className="pl-9"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-md bg-blue-50 p-3 text-sm">
+                  <p className="text-muted-foreground mb-2">
+                    <strong>How it works:</strong>
+                  </p>
+                  <ul className="space-y-1 text-xs text-muted-foreground list-disc list-inside">
+                    <li>Your company will be listed on the marketplace</li>
+                    <li>Other players can make offers</li>
+                    <li>You'll receive notifications for all offers</li>
+                    <li>You can accept, reject, or make counter offers</li>
+                    <li>
+                      The sale completes when an offer is accepted by both
+                      parties
+                    </li>
+                  </ul>
+                </div>
+
+                {error && (
+                  <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setListForSaleModalOpen(false);
+                      setError("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Listing..." : "List for Sale"}
+                  </Button>
+                </DialogFooter>
+              </form>
             </DialogContent>
           </Dialog>
         </div>

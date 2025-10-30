@@ -87,8 +87,8 @@ const baseNavItems = [
     icon: Building2,
   },
   {
-    title: "Company Sales",
-    url: "/company-sales",
+    title: "Company Marketplace",
+    url: "/company-marketplace",
     icon: Store,
   },
   {

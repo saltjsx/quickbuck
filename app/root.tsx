@@ -15,6 +15,7 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import { Analytics } from "@vercel/analytics/react";
 import { GlobalAlertBanner } from "./components/global-alert-banner";
+import { CompanyOfferNotifications } from "./components/company-offer-notifications";
 import * as Sentry from "@sentry/react";
 import { initializeSentryClient } from "./lib/sentry.client";
 import { useEffect } from "react";
@@ -138,6 +139,7 @@ function AppContent({ loaderData }: Route.ComponentProps) {
     >
       <ConvexProviderWithClerk client={convex} useAuth={useAuth}>
         <GlobalAlertBanner />
+        <CompanyOfferNotifications />
         <Toaster />
         <Outlet />
       </ConvexProviderWithClerk>

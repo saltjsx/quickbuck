@@ -247,7 +247,7 @@ export const getPlayerPendingOffers = query({
     playerId: v.id("players"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const offers = await ctx.db
       .query("companySales")
       .withIndex("by_sellerId", (q) => q.eq("sellerId", args.playerId))
       .filter((q) =>
@@ -257,6 +257,21 @@ export const getPlayerPendingOffers = query({
         )
       )
       .collect();
+
+    // Enrich with company data
+    const enrichedOffers = await Promise.all(
+      offers.map(async (offer) => {
+        const company = await ctx.db.get(offer.companyId);
+        const buyer = offer.buyerId ? await ctx.db.get(offer.buyerId) : null;
+        return {
+          ...offer,
+          company,
+          buyer,
+        };
+      })
+    );
+
+    return enrichedOffers;
   },
 });
 
@@ -266,19 +281,49 @@ export const getPlayerOffersAsBuyer = query({
     playerId: v.id("players"),
   },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const offers = await ctx.db
       .query("companySales")
       .withIndex("by_buyerId", (q) => q.eq("buyerId", args.playerId))
       .collect();
+
+    // Enrich with company data
+    const enrichedOffers = await Promise.all(
+      offers.map(async (offer) => {
+        const company = await ctx.db.get(offer.companyId);
+        const seller = await ctx.db.get(offer.sellerId);
+        return {
+          ...offer,
+          company,
+          seller,
+        };
+      })
+    );
+
+    return enrichedOffers;
   },
 });
 
 // Query: Get all companies for sale
 export const getAllCompaniesForSale = query({
   handler: async (ctx) => {
-    return await ctx.db
+    const sales = await ctx.db
       .query("companySales")
       .withIndex("by_status", (q) => q.eq("status", "listed"))
       .collect();
+
+    // Enrich with company and seller data
+    const enrichedSales = await Promise.all(
+      sales.map(async (sale) => {
+        const company = await ctx.db.get(sale.companyId);
+        const seller = await ctx.db.get(sale.sellerId);
+        return {
+          ...sale,
+          company,
+          seller,
+        };
+      })
+    );
+
+    return enrichedSales.filter((s) => s.company && s.seller);
   },
 });
