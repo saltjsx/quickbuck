@@ -10,7 +10,13 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { PriceChart } from "~/components/price-chart";
 import { OwnershipDistributionChart } from "~/components/ownership-distribution-chart";
 import { formatCurrency } from "~/lib/game-utils";
@@ -101,10 +107,26 @@ export default function CryptoDetailPage() {
 
       if (purchaseMode === "coins") {
         coinsToTrade = parseFloat(amount);
+        if (isNaN(coinsToTrade) || coinsToTrade <= 0) {
+          toast.error("Please enter a valid number of coins");
+          return;
+        }
       } else {
         // Convert dollars to coins
         const dollarAmount = parseFloat(amount);
-        coinsToTrade = dollarAmount / crypto.currentPrice;
+        if (isNaN(dollarAmount) || dollarAmount <= 0) {
+          toast.error("Please enter a valid dollar amount");
+          return;
+        }
+        // Convert dollars to cents, then divide by price per coin in cents
+        const centAmount = dollarAmount * 100;
+        const pricePerCoin = crypto.currentPrice;
+        coinsToTrade = centAmount / pricePerCoin;
+
+        if (coinsToTrade <= 0) {
+          toast.error("Dollar amount too small to buy coins");
+          return;
+        }
       }
 
       if (tradeTab === "buy") {
@@ -138,14 +160,21 @@ export default function CryptoDetailPage() {
   const calculateEstimate = () => {
     if (!amount || parseFloat(amount) <= 0) return null;
 
-    if (purchaseMode === "coins") {
-      const coins = parseFloat(amount);
-      const total = coins * crypto.currentPrice;
-      return { coins, total };
-    } else {
-      const dollars = parseFloat(amount);
-      const coins = dollars / crypto.currentPrice;
-      return { coins, total: dollars };
+    try {
+      if (purchaseMode === "coins") {
+        const coins = parseFloat(amount);
+        if (isNaN(coins)) return null;
+        const total = coins * crypto.currentPrice;
+        return { coins, total };
+      } else {
+        const dollars = parseFloat(amount);
+        if (isNaN(dollars)) return null;
+        const centAmount = dollars * 100;
+        const coins = centAmount / crypto.currentPrice;
+        return { coins, total: dollars * 100 }; // Return in cents for formatCurrency
+      }
+    } catch {
+      return null;
     }
   };
 
@@ -319,48 +348,36 @@ export default function CryptoDetailPage() {
                   <Label className="text-xs text-muted-foreground mb-2">
                     Owner Type
                   </Label>
-                  <RadioGroup
+                  <Select
                     value={ownerType}
                     onValueChange={(v: any) => setOwnerType(v)}
-                    className="flex gap-4"
                   >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="player" id="player" />
-                      <Label htmlFor="player" className="cursor-pointer">
-                        Player
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="company" id="company" />
-                      <Label htmlFor="company" className="cursor-pointer">
-                        Company
-                      </Label>
-                    </div>
-                  </RadioGroup>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="player">Player</SelectItem>
+                      <SelectItem value="company">Company</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
                   <Label className="text-xs text-muted-foreground mb-2">
                     Purchase Mode
                   </Label>
-                  <RadioGroup
+                  <Select
                     value={purchaseMode}
                     onValueChange={(v: any) => setPurchaseMode(v)}
-                    className="flex gap-4"
                   >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="coins" id="coins" />
-                      <Label htmlFor="coins" className="cursor-pointer">
-                        # of Coins
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="dollars" id="dollars" />
-                      <Label htmlFor="dollars" className="cursor-pointer">
-                        $ Amount
-                      </Label>
-                    </div>
-                  </RadioGroup>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="coins"># of Coins</SelectItem>
+                      <SelectItem value="dollars">$ Amount</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>

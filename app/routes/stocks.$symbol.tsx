@@ -9,7 +9,13 @@ import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { RadioGroup, RadioGroupItem } from "~/components/ui/radio-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { PriceChart } from "~/components/price-chart";
 import { OwnershipDistributionChart } from "~/components/ownership-distribution-chart";
 import { formatCurrency } from "~/lib/game-utils";
@@ -113,9 +119,15 @@ export default function StockDetailPage() {
           toast.error("Please enter a valid dollar amount");
           return;
         }
-        shares = Math.floor((dollarAmount * 100) / (stock.currentPrice ?? 1));
+        // Convert dollars to cents, then divide by price per share in cents
+        const centAmount = Math.round(dollarAmount * 100);
+        const pricePerShare = stock.currentPrice ?? 1;
+        shares = Math.floor(centAmount / pricePerShare);
+
         if (shares === 0) {
-          toast.error("Dollar amount too small to buy shares");
+          toast.error(
+            "Dollar amount too small to buy shares. Minimum purchase with current price."
+          );
           return;
         }
       }
@@ -275,51 +287,45 @@ export default function StockDetailPage() {
                 {/* Owner Type */}
                 <div className="space-y-2">
                   <Label>Trade As</Label>
-                  <RadioGroup
+                  <Select
                     value={ownerType}
                     onValueChange={(v: any) => setOwnerType(v)}
                   >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="player" id="player" />
-                      <Label htmlFor="player" className="cursor-pointer">
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="player">
                         <div className="flex items-center">
                           <Wallet className="mr-2 h-4 w-4" />
                           Personal Account
                         </div>
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="company" id="company" />
-                      <Label htmlFor="company" className="cursor-pointer">
+                      </SelectItem>
+                      <SelectItem value="company">
                         <div className="flex items-center">
                           <Building2 className="mr-2 h-4 w-4" />
                           Company (Coming Soon)
                         </div>
-                      </Label>
-                    </div>
-                  </RadioGroup>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Purchase Mode */}
                 <div className="space-y-2">
                   <Label>Purchase By</Label>
-                  <RadioGroup
+                  <Select
                     value={purchaseMode}
                     onValueChange={(v: any) => setPurchaseMode(v)}
                   >
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="shares" id="shares" />
-                      <Label htmlFor="shares" className="cursor-pointer">
-                        Number of Shares
-                      </Label>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <RadioGroupItem value="dollars" id="dollars" />
-                      <Label htmlFor="dollars" className="cursor-pointer">
-                        Dollar Amount
-                      </Label>
-                    </div>
-                  </RadioGroup>
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="shares">Number of Shares</SelectItem>
+                      <SelectItem value="dollars">Dollar Amount</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 {/* Amount Input */}
@@ -339,17 +345,43 @@ export default function StockDetailPage() {
                 </div>
 
                 {/* Estimated Total */}
-                {tradeAmount && purchaseMode === "shares" && (
+                {tradeAmount && (
                   <div className="rounded-lg bg-muted p-3">
-                    <div className="flex justify-between text-sm">
-                      <span>Estimated Total</span>
-                      <span className="font-semibold">
-                        {formatCurrency(
-                          (parseInt(tradeAmount) || 0) *
-                            (stock.currentPrice ?? 0)
-                        )}
-                      </span>
-                    </div>
+                    {purchaseMode === "shares" ? (
+                      <div className="flex justify-between text-sm">
+                        <span>Estimated Total</span>
+                        <span className="font-semibold">
+                          {formatCurrency(
+                            (parseInt(tradeAmount) || 0) *
+                              (stock.currentPrice ?? 0)
+                          )}
+                        </span>
+                      </div>
+                    ) : (
+                      <>
+                        <div className="flex justify-between text-sm mb-2">
+                          <span>Dollar Amount</span>
+                          <span className="font-semibold">
+                            {formatCurrency(
+                              Math.round(parseFloat(tradeAmount) * 100)
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                          <span>Shares to Receive</span>
+                          <span className="font-semibold">
+                            {(() => {
+                              const dollarAmount = parseFloat(tradeAmount);
+                              if (isNaN(dollarAmount) || dollarAmount <= 0)
+                                return 0;
+                              return Math.floor(
+                                (dollarAmount * 100) / (stock.currentPrice ?? 1)
+                              );
+                            })()}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
 
