@@ -21,6 +21,9 @@
       "routes/leaderboard": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/marketplace": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/crypto": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/crypto.$symbol": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/stocks": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/stocks.$symbol": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/portfolio": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/company-sales": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/gamble": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
@@ -140,6 +143,33 @@
         "parentId": "routes/dashboard/layout",
         "file": "app/routes/crypto.tsx",
         "path": "crypto",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/crypto.$symbol": {
+        "id": "routes/crypto.$symbol",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/crypto.$symbol.tsx",
+        "path": "crypto/:symbol",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/stocks": {
+        "id": "routes/stocks",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/stocks.tsx",
+        "path": "stocks",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/stocks.$symbol": {
+        "id": "routes/stocks.$symbol",
+        "parentId": "routes/dashboard/layout",
+        "file": "app/routes/stocks.$symbol.tsx",
+        "path": "stocks/:symbol",
         "config": {
           "runtime": "nodejs"
         }
@@ -323,6 +353,24 @@
         "parentId": "routes/dashboard/layout",
         "file": "routes/crypto.tsx",
         "path": "crypto"
+      },
+      "routes/crypto.$symbol": {
+        "id": "routes/crypto.$symbol",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/crypto.$symbol.tsx",
+        "path": "crypto/:symbol"
+      },
+      "routes/stocks": {
+        "id": "routes/stocks",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/stocks.tsx",
+        "path": "stocks"
+      },
+      "routes/stocks.$symbol": {
+        "id": "routes/stocks.$symbol",
+        "parentId": "routes/dashboard/layout",
+        "file": "routes/stocks.$symbol.tsx",
+        "path": "stocks/:symbol"
       },
       "routes/portfolio": {
         "id": "routes/portfolio",

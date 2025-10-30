@@ -192,7 +192,7 @@ export const createCryptocurrency = mutation({
 
     // Set defaults for player-created cryptos
     const initialSupply = args.initialSupply || 1000000; // Default 1M supply
-    const initialPrice = args.initialPrice || 100; // Default $1.00
+    const initialPrice = args.initialPrice || 10; // Default $0.10 (1M * $0.10 = $10k market cap)
     const liquidity = args.liquidity || initialSupply * 0.1; // 10% of supply
     const baseVolatility = args.baseVolatility || 0.15; // 15% volatility for new crypto
 
@@ -320,6 +320,23 @@ export const buyCrypto = mutation({
     if (args.amount <= 0) throw new Error("Amount must be positive");
     if (args.amount > crypto.circulatingSupply) {
       throw new Error("Cannot buy more than circulating supply");
+    }
+
+    // Check 1M coin limit
+    const existingWalletCheck = await ctx.db
+      .query("playerCryptoWallets")
+      .withIndex("by_player_crypto", (q) =>
+        q.eq("playerId", player._id).eq("cryptoId", args.cryptoId)
+      )
+      .unique();
+
+    const currentCoins = existingWalletCheck?.balance ?? 0;
+    const newTotalCoins = currentCoins + args.amount;
+
+    if (newTotalCoins > 1000000) {
+      throw new Error(
+        `Cannot own more than 1,000,000 coins per cryptocurrency. You currently own ${currentCoins.toLocaleString()} coins.`
+      );
     }
 
     // Calculate price impact

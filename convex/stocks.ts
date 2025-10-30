@@ -514,6 +514,21 @@ export const buyStock = mutation({
     if (!stock) {
       throw new Error("Stock not found");
     }
+
+    // Check existing holdings + new purchase doesn't exceed 1M shares
+    const portfolioCheck = await ctx.db
+      .query("playerStockPortfolios")
+      .withIndex("by_player_stock", (q) =>
+        q.eq("playerId", player._id).eq("stockId", args.stockId)
+      )
+      .first();
+    
+    const currentShares = portfolioCheck?.shares ?? 0;
+    const newTotalShares = currentShares + args.shares;
+    
+    if (newTotalShares > 1000000) {
+      throw new Error(`Cannot own more than 1,000,000 shares per stock. You currently own ${currentShares.toLocaleString()} shares.`);
+    }
     
     // Calculate ask price (buy at slightly higher price)
     const currentPrice = stock.currentPrice ?? 10000;
