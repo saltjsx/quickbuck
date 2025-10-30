@@ -13,7 +13,8 @@ export const createTransaction = mutation({
     assetType: v.union(
       v.literal("cash"),
       v.literal("stock"),
-      v.literal("product")
+      v.literal("product"),
+      v.literal("crypto")
     ),
     assetId: v.optional(v.string()),
     description: v.string(),

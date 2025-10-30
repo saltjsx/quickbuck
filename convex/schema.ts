@@ -146,7 +146,8 @@ export default defineSchema({
     assetType: v.union(
       v.literal("cash"),
       v.literal("stock"),
-      v.literal("product")
+      v.literal("product"),
+      v.literal("crypto")
     ),
     assetId: v.optional(v.string()), // id of stock/crypto/product if applicable
     description: v.string(),
