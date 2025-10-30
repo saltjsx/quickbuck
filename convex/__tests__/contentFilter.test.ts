@@ -213,6 +213,7 @@ describe("Content Filter - Normal Words (False Positives Check)", () => {
           companyId: companyId,
           ownerId: playerId,
           ticker: ticker,
+          sector: "tech",
         });
         
         expect(stockId).toBeDefined();
@@ -388,6 +389,7 @@ describe("Content Filter - Profanity Detection", () => {
           companyId: companyId,
           ownerId: playerId,
           ticker: ticker,
+          sector: "tech",
         });
         
         throw new Error(`Profane ticker "${ticker}" was allowed`);
@@ -548,6 +550,7 @@ describe("Content Filter - Edge Cases", () => {
         companyId: companyId,
         ownerId: playerId,
         ticker: "A".repeat(7),
+        sector: "tech",
       });
       
       throw new Error("Too-long ticker was allowed");
