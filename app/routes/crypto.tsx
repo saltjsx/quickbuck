@@ -43,6 +43,7 @@ import { getAuth } from "@clerk/react-router/ssr.server";
 import { redirect } from "react-router";
 import type { Route } from "./+types/crypto";
 import { toast } from "sonner";
+import { CryptoPriceChart } from "~/components/crypto-price-chart";
 
 export async function loader(args: Route.LoaderArgs) {
   const { userId } = await getAuth(args);
@@ -363,9 +364,15 @@ export default function CryptoPage() {
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                          {/* Preview Chart Placeholder */}
-                          <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center">
-                            <Activity className="h-6 w-6 text-muted-foreground" />
+                          {/* Mini 7-day chart */}
+                          <div className="h-20 rounded-md overflow-hidden">
+                            <CryptoPriceChart
+                              cryptoId={crypto._id}
+                              currentPrice={crypto.currentPrice}
+                              symbol={crypto.symbol}
+                              height={80}
+                              showStats={false}
+                            />
                           </div>
 
                           <div className="space-y-1">

@@ -17,6 +17,7 @@ import { formatCurrency } from "~/lib/game-utils";
 import { TrendingUp, TrendingDown, Search, Building2 } from "lucide-react";
 import { getAuth } from "@clerk/react-router/ssr.server";
 import { redirect, Link } from "react-router";
+import { PriceChart } from "~/components/price-chart";
 
 export async function loader(args: any) {
   const { userId } = await getAuth(args);
@@ -262,17 +263,15 @@ export default function StocksPage() {
                         </Badge>
                       </div>
 
-                      {/* Mini preview graph placeholder */}
-                      <div className="h-20 bg-muted/50 rounded-lg flex items-center justify-center relative overflow-hidden">
-                        {/* Simple visual indicator */}
-                        <div
-                          className={`absolute inset-0 ${
-                            isPositive ? "bg-green-500/5" : "bg-red-500/5"
-                          }`}
+                      {/* Mini 7-day chart */}
+                      <div className="h-20 rounded-lg overflow-hidden">
+                        <PriceChart
+                          currentPrice={stock.currentPrice ?? 0}
+                          symbol={stock.symbol || ""}
+                          height={80}
+                          showStats={false}
+                          days={7}
                         />
-                        <div className="text-xs text-muted-foreground">
-                          7-day chart
-                        </div>
                       </div>
 
                       {/* Market Cap */}
