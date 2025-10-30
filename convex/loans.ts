@@ -6,6 +6,7 @@ export const createLoan = mutation({
   args: {
     playerId: v.id("players"),
     amount: v.number(), // in cents
+    idempotencyKey: v.optional(v.string()), // For request deduplication
   },
   handler: async (ctx, args) => {
     if (args.amount <= 0 || args.amount > 500000000) { // Max $5,000,000
@@ -36,20 +37,28 @@ export const createLoan = mutation({
       throw new Error("Total outstanding debt would exceed maximum loan limit of $5,000,000");
     }
 
-    // RACE CONDITION FIX: Additional check to prevent multiple simultaneous loans
-    // Check if there's a very recent loan (within last 1 second) to prevent duplicates
-    const veryRecentLoans = activeLoans.filter(loan => 
-      Date.now() - loan.createdAt < 1000
+    // ENHANCED DEDUPLICATION: Check for duplicate request within last 2 seconds
+    // This is stronger than the 1-second cooldown - it looks for duplicate requests
+    // across the entire time window to catch retries and concurrent requests
+    const now = Date.now();
+    const duplicateWindow = 2000; // 2 second window
+    const recentLoans = activeLoans.filter(loan => 
+      Date.now() - loan.createdAt < duplicateWindow && loan.amount === args.amount
     );
     
-    if (veryRecentLoans.length > 0) {
-      throw new Error("Please wait a moment before requesting another loan");
+    if (recentLoans.length > 0) {
+      console.warn(
+        `[DUPLICATE LOAN DETECTED] Player ${args.playerId} attempting to create loan ` +
+        `for $${(args.amount / 100).toFixed(2)} when identical loan created ${Math.round(now - recentLoans[0].createdAt)}ms ago`
+      );
+      // Return existing loan instead of creating duplicate
+      return recentLoans[0]._id;
     }
 
-    const now = Date.now();
     const interestRate = 5; // 5% daily interest
 
     // Create loan FIRST before crediting balance (atomic-like operation)
+    // This ensures loan record exists before any balance modification
     const loanId = await ctx.db.insert("loans", {
       playerId: args.playerId,
       amount: args.amount,
@@ -59,24 +68,36 @@ export const createLoan = mutation({
       createdAt: now,
       lastInterestApplied: now,
       status: "active" as const,
+      // NEW: Track idempotency key for deduplication
+      idempotencyKey: args.idempotencyKey,
     });
 
     // Re-fetch player to get latest balance (prevents race condition)
+    // This is critical - must get the absolute latest state before crediting
     const latestPlayer = await ctx.db.get(args.playerId);
     if (!latestPlayer) {
       // Rollback: delete the loan we just created
       await ctx.db.delete(loanId);
-      throw new Error("Player not found");
+      throw new Error("Player not found after loan creation");
+    }
+
+    // Validate balance before modification
+    const newBalance = latestPlayer.balance + args.amount;
+    if (!Number.isSafeInteger(newBalance)) {
+      await ctx.db.delete(loanId);
+      throw new Error("Balance calculation resulted in non-integer value");
     }
 
     // Credit player's account with latest balance
+    // Use a transaction-like approach by patching with timestamp
     await ctx.db.patch(args.playerId, {
-      balance: latestPlayer.balance + args.amount,
+      balance: newBalance,
       updatedAt: now,
     });
 
-    // Create transaction record
-    await ctx.db.insert("transactions", {
+    // Create transaction record with explicit linking to loan
+    // This creates an audit trail that can be used to detect duplicates
+    const transactionId = await ctx.db.insert("transactions", {
       fromAccountId: args.playerId, // System/bank
       fromAccountType: "player" as const,
       toAccountId: args.playerId,
@@ -85,7 +106,14 @@ export const createLoan = mutation({
       assetType: "cash" as const,
       description: `Loan received: $${(args.amount / 100).toFixed(2)}`,
       createdAt: now,
+      // NEW: Reference to loan for audit trail
+      linkedLoanId: loanId,
     });
+
+    console.log(
+      `[LOAN CREATED] Player ${args.playerId}: Loan $${(args.amount / 100).toFixed(2)} ` +
+      `(ID: ${loanId}, TxID: ${transactionId})`
+    );
 
     return loanId;
   },

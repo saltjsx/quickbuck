@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import type { Id, Doc } from "./_generated/dataModel";
 
 // Type definitions for player roles
@@ -1240,5 +1240,386 @@ export const deleteCryptoAsMod = mutation({
     await ctx.db.delete(args.cryptoId);
 
     console.log(`[MODERATION] Crypto ${args.cryptoId} deleted by ${user.name || user.email} (${role}). Reason: ${args.reason}`);
+  },
+});
+
+/**
+ * ADMIN FUNCTION: Detect duplicate loan credits
+ * Identifies cases where a player has multiple loan records created at the same timestamp
+ * or has multiple loan transactions with identical amounts within a short time window
+ */
+export const detectDuplicateLoanCredits = query({
+  args: {
+    playerId: v.id("players"),
+  },
+  handler: async (ctx, args) => {
+    const player = await ctx.db.get(args.playerId);
+    if (!player) {
+      throw new Error("Player not found");
+    }
+
+    // Get all loans for this player
+    const loans = await ctx.db
+      .query("loans")
+      .withIndex("by_playerId", (q) => q.eq("playerId", args.playerId))
+      .collect();
+
+    // Get all transactions for this player related to loans
+    const transactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.playerId))
+      .collect();
+
+    const loanTransactions = transactions.filter(
+      (tx) =>
+        tx.assetType === "cash" &&
+        tx.description.includes("Loan received") &&
+        tx.fromAccountId === args.playerId &&
+        tx.toAccountId === args.playerId
+    );
+
+    // Detection 1: Multiple loans with same amount and timestamp
+    const loansByAmountAndTime = new Map<string, typeof loans>();
+    for (const loan of loans) {
+      const key = `${loan.amount}@${loan.createdAt}`;
+      if (!loansByAmountAndTime.has(key)) {
+        loansByAmountAndTime.set(key, []);
+      }
+      loansByAmountAndTime.get(key)!.push(loan);
+    }
+
+    const duplicateLoansByTimestamp = Array.from(loansByAmountAndTime.entries())
+      .filter(([_, loansInGroup]) => loansInGroup.length > 1)
+      .map(([key, loansInGroup]) => ({
+        key,
+        count: loansInGroup.length,
+        loans: loansInGroup,
+      }));
+
+    // Detection 2: Multiple loan transactions with same amount and timestamp
+    const txByAmountAndTime = new Map<string, typeof loanTransactions>();
+    for (const tx of loanTransactions) {
+      const key = `${tx.amount}@${tx.createdAt}`;
+      if (!txByAmountAndTime.has(key)) {
+        txByAmountAndTime.set(key, []);
+      }
+      txByAmountAndTime.get(key)!.push(tx);
+    }
+
+    const duplicateTransactionsByTimestamp = Array.from(txByAmountAndTime.entries())
+      .filter(([_, txsInGroup]) => txsInGroup.length > 1)
+      .map(([key, txsInGroup]) => ({
+        key,
+        count: txsInGroup.length,
+        transactions: txsInGroup,
+      }));
+
+    // Detection 3: Check for loans without corresponding transactions
+    const transactionLoanIds = new Set<string>();
+    loanTransactions.forEach((tx) => {
+      if (tx.linkedLoanId) {
+        transactionLoanIds.add(tx.linkedLoanId);
+      }
+    });
+
+    const loansWithoutTransactions = loans.filter(
+      (loan) => !transactionLoanIds.has(loan._id)
+    );
+
+    return {
+      playerId: args.playerId,
+      totalLoans: loans.length,
+      totalLoanTransactions: loanTransactions.length,
+      duplicateLoansByTimestamp,
+      duplicateTransactionsByTimestamp,
+      loansWithoutTransactions,
+      hasIssues:
+        duplicateLoansByTimestamp.length > 0 ||
+        duplicateTransactionsByTimestamp.length > 0 ||
+        loansWithoutTransactions.length > 0,
+    };
+  },
+});
+
+/**
+ * ADMIN FUNCTION: Repair duplicate loan credits
+ * Removes duplicate transaction records that occurred within the same millisecond
+ * Returns the details of what was cleaned up
+ */
+export const repairDuplicateLoanTransactions = mutation({
+  args: {
+    playerId: v.id("players"),
+    loanAmount: v.number(), // The amount that was duplicated
+    reason: v.string(), // Admin reason for repair
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const currentPlayer = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+    if (!currentPlayer) throw new Error("Player not found");
+
+    const isAdmin = await hasPermission(ctx, currentPlayer._id, "admin");
+    if (!isAdmin) {
+      throw new Error("Admin access required");
+    }
+
+    // Get all loan transactions for this player with the specified amount
+    const transactions = await ctx.db
+      .query("transactions")
+      .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.playerId))
+      .collect();
+
+    const duplicateTransactions = transactions.filter(
+      (tx) =>
+        tx.assetType === "cash" &&
+        tx.description.includes("Loan received") &&
+        tx.amount === args.loanAmount &&
+        tx.fromAccountId === args.playerId &&
+        tx.toAccountId === args.playerId
+    );
+
+    // Group by timestamp
+    const txByTimestamp = new Map<number, typeof duplicateTransactions>();
+    for (const tx of duplicateTransactions) {
+      if (!txByTimestamp.has(tx.createdAt)) {
+        txByTimestamp.set(tx.createdAt, []);
+      }
+      txByTimestamp.get(tx.createdAt)!.push(tx);
+    }
+
+    // Find duplicates (same timestamp, same amount)
+    const toDelete: typeof duplicateTransactions = [];
+    const report = {
+      totalDuplicates: 0,
+      deletedTransactionIds: [] as string[],
+      groupsProcessed: 0,
+    };
+
+    for (const [timestamp, txsAtTime] of Array.from(txByTimestamp.entries())) {
+      if (txsAtTime.length > 1) {
+        report.groupsProcessed++;
+        // Keep the first, delete the rest
+        const toDeleteGroup = txsAtTime.slice(1);
+        report.totalDuplicates += toDeleteGroup.length;
+
+        for (const tx of toDeleteGroup) {
+          await ctx.db.delete(tx._id);
+          report.deletedTransactionIds.push(tx._id);
+        }
+      }
+    }
+
+    // Create audit log
+    await ctx.db.insert("transactions", {
+      fromAccountId: currentPlayer._id,
+      fromAccountType: "player" as const,
+      toAccountId: args.playerId,
+      toAccountType: "player" as const,
+      amount: 0,
+      assetType: "cash" as const,
+      description: `[ADMIN AUDIT] Cleaned up ${report.totalDuplicates} duplicate loan transactions. Reason: ${args.reason}`,
+      createdAt: Date.now(),
+    });
+
+    console.log(
+      `[ADMIN REPAIR] Removed ${report.totalDuplicates} duplicate loan transactions for player ` +
+        `${args.playerId} (amount: $${(args.loanAmount / 100).toFixed(2)}). ` +
+        `Reason: ${args.reason}`
+    );
+
+    return report;
+  },
+});
+
+/**
+ * INTERNAL: Cron job to check for negative balances and report issues
+ * Runs hourly to detect financial anomalies
+ */
+export const checkAndReportNegativeBalances = internalMutation({
+  handler: async (ctx) => {
+    const players = await ctx.db.query("players").collect();
+    
+    const negativeBalancePlayers = [];
+    const playersWithIssues = [];
+
+    for (const player of players) {
+      // Check for negative balance
+      if (player.balance < 0) {
+        negativeBalancePlayers.push({
+          playerId: player._id,
+          balance: player.balance,
+          netWorth: player.netWorth,
+        });
+      }
+
+      // Run full audit to check for other issues
+      const audit = await auditPlayerBalanceInternal(ctx, player._id);
+
+      if (audit.hasIssues) {
+        playersWithIssues.push({
+          playerId: player._id,
+          issues: audit.issues,
+          balance: audit.currentBalance,
+          expectedBalance: audit.expectedBalance,
+          difference: audit.balanceDifference,
+        });
+      }
+    }
+
+    // Log results
+    if (negativeBalancePlayers.length > 0) {
+      console.warn(
+        `[NEGATIVE BALANCE ALERT] Found ${negativeBalancePlayers.length} players with negative balances:`
+      );
+      negativeBalancePlayers.forEach((p) => {
+        console.warn(
+          `  - Player ${p.playerId}: $${(p.balance / 100).toFixed(2)} (Net Worth: $${(p.netWorth / 100).toFixed(2)})`
+        );
+      });
+    }
+
+    if (playersWithIssues.length > 0) {
+      console.warn(
+        `[FINANCIAL AUDIT] Found ${playersWithIssues.length} players with issues:`
+      );
+      playersWithIssues.forEach((p) => {
+        console.warn(`  - Player ${p.playerId}:`);
+        p.issues.forEach((issue) => {
+          console.warn(`    [${issue.severity}] ${issue.type}: ${issue.message}`);
+        });
+      });
+    }
+
+    return {
+      timestamp: Date.now(),
+      negativeBalanceCount: negativeBalancePlayers.length,
+      issuesCount: playersWithIssues.length,
+      negativeBalancePlayers,
+      playersWithIssues,
+    };
+  },
+});
+
+// Helper function (used by both query and mutation)
+async function auditPlayerBalanceInternal(ctx: any, playerId: Id<"players">) {
+  const player = await ctx.db.get(playerId);
+  if (!player) {
+    throw new Error("Player not found");
+  }
+
+  // Get all transactions
+  const sentTransactions = await ctx.db
+    .query("transactions")
+    .withIndex("by_fromAccountId", (q: any) => q.eq("fromAccountId", playerId))
+    .collect();
+
+  const receivedTransactions = await ctx.db
+    .query("transactions")
+    .withIndex("by_toAccountId", (q: any) => q.eq("toAccountId", playerId))
+    .collect();
+
+  // Get all loans
+  const loans = await ctx.db
+    .query("loans")
+    .withIndex("by_playerId", (q: any) => q.eq("playerId", playerId))
+    .collect();
+
+  // Calculate expected balance
+  const totalReceived = receivedTransactions
+    .filter((tx: any) => tx.assetType === "cash")
+    .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+
+  const totalSent = sentTransactions
+    .filter((tx: any) => tx.assetType === "cash")
+    .reduce((sum: number, tx: any) => sum + tx.amount, 0);
+
+  const expectedBalance = 1000000 + totalReceived - totalSent; // Default starting balance
+  const actualBalance = player.balance;
+  const balanceDifference = actualBalance - expectedBalance;
+
+  // Identify issues
+  const issues = [];
+
+  if (Math.abs(balanceDifference) > 100) {
+    // More than $1 difference
+    issues.push({
+      type: "BALANCE_MISMATCH",
+      severity: "HIGH",
+      message: `Balance mismatch of $${(balanceDifference / 100).toFixed(2)}. Expected: $${(expectedBalance / 100).toFixed(2)}, Actual: $${(actualBalance / 100).toFixed(2)}`,
+    });
+  }
+
+  if (actualBalance < 0) {
+    issues.push({
+      type: "NEGATIVE_BALANCE",
+      severity: "MEDIUM",
+      message: `Player has negative balance of $${(actualBalance / 100).toFixed(2)}`,
+    });
+  }
+
+  // Check for duplicate loan transactions
+  const loanTransactions = receivedTransactions.filter(
+    (tx: any) => tx.description.includes("Loan received")
+  );
+  const txByTimestamp = new Map<number, typeof loanTransactions>();
+  for (const tx of loanTransactions) {
+    if (!txByTimestamp.has(tx.createdAt)) {
+      txByTimestamp.set(tx.createdAt, []);
+    }
+    txByTimestamp.get(tx.createdAt)!.push(tx);
+  }
+
+  for (const [_, txsAtTime] of Array.from(txByTimestamp.entries())) {
+    if (txsAtTime.length > 1) {
+      issues.push({
+        type: "DUPLICATE_LOAN_TRANSACTIONS",
+        severity: "HIGH",
+        message: `Found ${txsAtTime.length} loan transactions at the same timestamp`,
+      });
+    }
+  }
+
+  return {
+    playerId,
+    currentBalance: actualBalance,
+    expectedBalance,
+    balanceDifference,
+    transactionSummary: {
+      totalReceived,
+      totalSent,
+      netFlowPositive: totalReceived - totalSent,
+    },
+    loans: {
+      total: loans.length,
+      active: loans.filter((l: any) => l.status === "active").length,
+      totalDebt: loans
+        .filter((l: any) => l.status === "active")
+        .reduce((sum: number, l: any) => sum + l.remainingBalance, 0),
+    },
+    issues,
+    hasIssues: issues.length > 0,
+  };
+}
+
+/**
+ * ADMIN FUNCTION: Audit player's balance and transactions
+ * Provides comprehensive report of financial state with potential issues flagged
+ */
+export const auditPlayerBalance = query({
+  args: {
+    playerId: v.id("players"),
+  },
+  handler: async (ctx, args) => {
+    return await auditPlayerBalanceInternal(ctx, args.playerId);
   },
 });

@@ -10,7 +10,7 @@ if (!CONVEX_URL) {
 
 const client = new ConvexHttpClient(CONVEX_URL);
 
-const PLAYER_ID = "nh7742zwcgv0h908dmzvspv0yh7tckf7" as Id<"players">;
+const PLAYER_ID = "nh7bpj2xf1b9qw7x3gx803gr7h7tfqk7" as Id<"players">;
 
 async function investigatePlayer() {
   console.log("=".repeat(80));

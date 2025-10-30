@@ -11,6 +11,12 @@ crons.interval(
   internal.tick.executeTick
 );
 
+crons.interval(
+  "check negative balances",
+  { hours: 1 },
+  internal.moderation.checkAndReportNegativeBalances
+);
+
 console.log("[CRONS] ✅ Cron jobs registered successfully");
 
 export default crons;

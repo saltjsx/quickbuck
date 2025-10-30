@@ -113,12 +113,14 @@ export default defineSchema({
       v.literal("crypto")
     ),
     assetId: v.optional(v.string()), // id of stock/crypto/product if applicable
+    linkedLoanId: v.optional(v.id("loans")), // For audit trail and duplicate detection
     description: v.string(),
     createdAt: v.number(),
   })
     .index("by_fromAccountId", ["fromAccountId"])
     .index("by_toAccountId", ["toAccountId"])
-    .index("by_createdAt", ["createdAt"]),
+    .index("by_createdAt", ["createdAt"])
+    .index("by_linkedLoanId", ["linkedLoanId"]),
 
   loans: defineTable({
     playerId: v.id("players"),
@@ -130,9 +132,11 @@ export default defineSchema({
     dueDate: v.optional(v.number()),
     lastInterestApplied: v.number(),
     status: v.union(v.literal("active"), v.literal("paid"), v.literal("defaulted")),
+    idempotencyKey: v.optional(v.string()), // For duplicate request detection
   })
     .index("by_playerId", ["playerId"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    .index("by_playerId_createdAt", ["playerId", "createdAt"]),
 
   marketplaceListings: defineTable({
     productId: v.id("products"),
