@@ -900,3 +900,40 @@ export const getPlayerCryptoValue = query({
     return totalValue;
   },
 });
+
+// Query: Get crypto ownership distribution
+export const getCryptoOwnership = query({
+  args: {
+    cryptoId: v.id("cryptocurrencies"),
+  },
+  handler: async (ctx, args) => {
+    // Get all wallets for this crypto
+    const wallets = await ctx.db
+      .query("playerCryptoWallets")
+      .withIndex("by_cryptoId", (q) => q.eq("cryptoId", args.cryptoId))
+      .collect();
+
+    // Get player and user names
+    const ownershipData = await Promise.all(
+      wallets.map(async (wallet) => {
+        const player = await ctx.db.get(wallet.playerId);
+        if (!player) return null;
+        
+        const user = await ctx.db.get(player.userId);
+        const playerName = user?.name || user?.clerkUsername || `Player ${wallet.playerId.slice(-4)}`;
+        
+        return {
+          playerId: wallet.playerId,
+          playerName,
+          balance: wallet.balance,
+        };
+      })
+    );
+
+    // Filter out nulls and sort by balance descending
+    const validData = ownershipData.filter((d): d is NonNullable<typeof d> => d !== null);
+    validData.sort((a, b) => b.balance - a.balance);
+
+    return validData;
+  },
+});

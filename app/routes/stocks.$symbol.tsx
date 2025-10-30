@@ -61,10 +61,25 @@ export default function StockDetailPage() {
   const allStocks = useQuery(api.stocks.getAllStocks);
   const myPortfolio = useQuery(api.stocks.getPlayerPortfolio);
   const currentPlayer = useQuery(api.moderation.getCurrentPlayer);
+  const myCompanies = useQuery(
+    api.companies.getPlayerCompanies,
+    currentPlayer?._id ? { playerId: currentPlayer._id } : "skip"
+  );
+
+  // Find the stock first to get its ID
+  const stock = allStocks?.find((s) => s.symbol === symbol);
+
+  // Query ownership data for this stock
+  const ownershipData = useQuery(
+    api.stocks.getStockOwnership,
+    stock?._id ? { stockId: stock._id } : "skip"
+  );
 
   // Mutations
   const buyStock = useMutation(api.stocks.buyStock);
   const sellStock = useMutation(api.stocks.sellStock);
+  const buyStockForCompany = useMutation(api.stocks.buyStockForCompany);
+  const sellStockForCompany = useMutation(api.stocks.sellStockForCompany);
 
   // State
   const [tradeType, setTradeType] = useState<"buy" | "sell">("buy");
@@ -75,8 +90,7 @@ export default function StockDetailPage() {
   const [tradeAmount, setTradeAmount] = useState("");
   const [selectedCompany, setSelectedCompany] = useState<string>("");
 
-  // Find the stock
-  const stock = allStocks?.find((s) => s.symbol === symbol);
+  // Find holding for current player
   const holding = myPortfolio?.find((p) => p.stock?.symbol === symbol);
 
   if (!stock) {
@@ -102,6 +116,12 @@ export default function StockDetailPage() {
 
   const handleTrade = async () => {
     if (!tradeAmount || !stock) return;
+
+    // Validate company selection if trading as company
+    if (ownerType === "company" && !selectedCompany) {
+      toast.error("Please select a company");
+      return;
+    }
 
     try {
       let shares = 0;
@@ -132,18 +152,38 @@ export default function StockDetailPage() {
         }
       }
 
-      if (tradeType === "buy") {
-        await buyStock({
-          stockId: stock._id,
-          shares,
-        });
-        toast.success(`Bought ${shares} shares of ${stock.symbol}`);
+      if (ownerType === "company") {
+        // Trading as company
+        if (tradeType === "buy") {
+          await buyStockForCompany({
+            companyId: selectedCompany as any,
+            stockId: stock._id,
+            shares,
+          });
+          toast.success(`Company bought ${shares} shares of ${stock.symbol}`);
+        } else {
+          await sellStockForCompany({
+            companyId: selectedCompany as any,
+            stockId: stock._id,
+            shares,
+          });
+          toast.success(`Company sold ${shares} shares of ${stock.symbol}`);
+        }
       } else {
-        await sellStock({
-          stockId: stock._id,
-          shares,
-        });
-        toast.success(`Sold ${shares} shares of ${stock.symbol}`);
+        // Trading as player
+        if (tradeType === "buy") {
+          await buyStock({
+            stockId: stock._id,
+            shares,
+          });
+          toast.success(`Bought ${shares} shares of ${stock.symbol}`);
+        } else {
+          await sellStock({
+            stockId: stock._id,
+            shares,
+          });
+          toast.success(`Sold ${shares} shares of ${stock.symbol}`);
+        }
       }
 
       setTradeAmount("");
@@ -289,7 +329,12 @@ export default function StockDetailPage() {
                   <Label>Trade As</Label>
                   <Select
                     value={ownerType}
-                    onValueChange={(v: any) => setOwnerType(v)}
+                    onValueChange={(v: any) => {
+                      setOwnerType(v);
+                      if (v === "company") {
+                        setSelectedCompany("");
+                      }
+                    }}
                   >
                     <SelectTrigger className="w-full">
                       <SelectValue />
@@ -304,12 +349,39 @@ export default function StockDetailPage() {
                       <SelectItem value="company">
                         <div className="flex items-center">
                           <Building2 className="mr-2 h-4 w-4" />
-                          Company (Coming Soon)
+                          Company
                         </div>
                       </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
+                {/* Company Selector (if trading as company) */}
+                {ownerType === "company" && (
+                  <div className="space-y-2">
+                    <Label>Select Company</Label>
+                    <Select
+                      value={selectedCompany}
+                      onValueChange={(v: any) => setSelectedCompany(v)}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Choose a company..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {myCompanies?.map((company) => (
+                          <SelectItem key={company._id} value={company._id}>
+                            <div className="flex items-center justify-between w-full">
+                              <span>{company.name}</span>
+                              <span className="text-xs text-muted-foreground ml-2">
+                                {formatCurrency(company.balance)}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 {/* Purchase Mode */}
                 <div className="space-y-2">
@@ -401,7 +473,10 @@ export default function StockDetailPage() {
                 <Button
                   className="w-full"
                   onClick={handleTrade}
-                  disabled={!tradeAmount || ownerType === "company"}
+                  disabled={
+                    !tradeAmount ||
+                    (ownerType === "company" && !selectedCompany)
+                  }
                 >
                   {tradeType === "buy" ? "Buy" : "Sell"} {stock.symbol}
                 </Button>
@@ -413,7 +488,7 @@ export default function StockDetailPage() {
             </Card>
           </div>
 
-          {/* Ownership Distribution Placeholder */}
+          {/* Ownership Distribution */}
           <Card>
             <CardHeader>
               <CardTitle>
@@ -422,7 +497,12 @@ export default function StockDetailPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <OwnershipDistributionChart height={280} />
+              <OwnershipDistributionChart
+                data={ownershipData}
+                currentPlayerId={currentPlayer?._id}
+                height={280}
+                type="shares"
+              />
             </CardContent>
           </Card>
         </div>

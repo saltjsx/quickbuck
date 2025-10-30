@@ -475,4 +475,32 @@ export default defineSchema({
     .index("by_stockId", ["stockId"])
     .index("by_timestamp", ["timestamp"])
     .index("by_player_stock_time", ["playerId", "stockId", "timestamp"]),
+
+  companyStockPortfolios: defineTable({
+    companyId: v.id("companies"),
+    stockId: v.id("stocks"),
+    shares: v.number(),
+    averageCost: v.number(), // in cents per share
+    totalInvested: v.number(), // in cents
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_company_stock", ["companyId", "stockId"])
+    .index("by_companyId", ["companyId"])
+    .index("by_stockId", ["stockId"]),
+
+  companyStockTransactions: defineTable({
+    companyId: v.id("companies"),
+    stockId: v.id("stocks"),
+    type: v.union(v.literal("buy"), v.literal("sell")),
+    shares: v.number(),
+    pricePerShare: v.number(), // in cents
+    totalValue: v.number(), // in cents
+    priceImpact: v.number(), // percentage
+    timestamp: v.number(),
+  })
+    .index("by_companyId", ["companyId"])
+    .index("by_stockId", ["stockId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_company_stock_time", ["companyId", "stockId", "timestamp"]),
 });

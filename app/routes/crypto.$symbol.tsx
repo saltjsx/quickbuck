@@ -55,6 +55,12 @@ export default function CryptoDetailPage() {
     (c) => c.symbol.toUpperCase() === symbol?.toUpperCase()
   );
 
+  // Query ownership data for this crypto
+  const ownershipData = useQuery(
+    api.crypto.getCryptoOwnership,
+    crypto?._id ? { cryptoId: crypto._id } : "skip"
+  );
+
   // Mutations
   const buyCrypto = useMutation(api.crypto.buyCrypto);
   const sellCrypto = useMutation(api.crypto.sellCrypto);
@@ -486,7 +492,12 @@ export default function CryptoDetailPage() {
                   <CardTitle>Coin Distribution</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <OwnershipDistributionChart height={280} />
+                  <OwnershipDistributionChart
+                    data={ownershipData}
+                    currentPlayerId={currentPlayer?._id}
+                    height={280}
+                    type="balance"
+                  />
                 </CardContent>
               </Card>
             </div>

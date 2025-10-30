@@ -462,7 +462,7 @@ export const updateStockPrices = internalMutation({
 // ============================================================================
 
 /**
- * Buy stock shares
+ * Buy stock shares (for players)
  */
 export const buyStock = mutation({
   args: {
@@ -479,20 +479,20 @@ export const buyStock = mutation({
     // Get user and player
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .first();
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
     
     if (!user) {
-      throw new Error("User not found");
+      throw new Error("User not found. Please refresh the page and try again.");
     }
     
     const player = await ctx.db
       .query("players")
       .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .first();
+      .unique();
     
     if (!player) {
-      throw new Error("Player not found");
+      throw new Error("Player not found. Please complete your profile setup.");
     }
     
     // Check player role
@@ -634,7 +634,7 @@ export const buyStock = mutation({
 });
 
 /**
- * Sell stock shares
+ * Sell stock shares (for players)
  */
 export const sellStock = mutation({
   args: {
@@ -651,20 +651,20 @@ export const sellStock = mutation({
     // Get user and player
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .first();
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
     
     if (!user) {
-      throw new Error("User not found");
+      throw new Error("User not found. Please refresh the page and try again.");
     }
     
     const player = await ctx.db
       .query("players")
       .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .first();
+      .unique();
     
     if (!player) {
-      throw new Error("Player not found");
+      throw new Error("Player not found. Please complete your profile setup.");
     }
     
     // Check player role
@@ -796,6 +796,311 @@ export const sellStock = mutation({
 export const getAllStocks = query({
   handler: async (ctx) => {
     return await ctx.db.query("stocks").collect();
+  },
+});
+
+// ============================================================================
+// COMPANY TRADING ACTIONS
+// ============================================================================
+
+/**
+ * Buy stock shares for a company
+ */
+export const buyStockForCompany = mutation({
+  args: {
+    companyId: v.id("companies"),
+    stockId: v.id("stocks"),
+    shares: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Get authenticated user
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    
+    // Get user and player
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+    
+    if (!user) {
+      throw new Error("User not found. Please refresh the page and try again.");
+    }
+    
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+    
+    if (!player) {
+      throw new Error("Player not found. Please complete your profile setup.");
+    }
+    
+    // Get company and verify ownership
+    const company = await ctx.db.get(args.companyId);
+    if (!company) {
+      throw new Error("Company not found");
+    }
+    
+    if (company.ownerId !== player._id) {
+      throw new Error("You don't own this company");
+    }
+    
+    // Validate shares
+    if (args.shares <= 0 || !Number.isInteger(args.shares)) {
+      throw new Error("Shares must be a positive integer");
+    }
+    
+    // Get stock
+    const stock = await ctx.db.get(args.stockId);
+    if (!stock) {
+      throw new Error("Stock not found");
+    }
+
+    // Check existing holdings + new purchase doesn't exceed 1M shares
+    const portfolioCheck = await ctx.db
+      .query("companyStockPortfolios")
+      .withIndex("by_company_stock", (q) =>
+        q.eq("companyId", args.companyId).eq("stockId", args.stockId)
+      )
+      .first();
+    
+    const currentShares = portfolioCheck?.shares ?? 0;
+    const newTotalShares = currentShares + args.shares;
+    
+    if (newTotalShares > 1000000) {
+      throw new Error(`Cannot own more than 1,000,000 shares per stock. Company currently owns ${currentShares.toLocaleString()} shares.`);
+    }
+    
+    // Calculate ask price (buy at slightly higher price)
+    const currentPrice = stock.currentPrice ?? 10000;
+    const askPrice = Math.round(currentPrice * (1 + BID_ASK_SPREAD));
+    
+    // Calculate total cost
+    const totalCost = askPrice * args.shares;
+    
+    // Check company has enough balance
+    if (company.balance < totalCost) {
+      throw new Error(`Insufficient company balance. Required: $${(totalCost / 100).toFixed(2)}, Available: $${(company.balance / 100).toFixed(2)}`);
+    }
+    
+    // Calculate price impact (positive for buying)
+    const liquidity = stock.liquidity ?? 1000000;
+    const impact = calculatePriceImpact(args.shares, liquidity, 1);
+    const newPrice = Math.round(currentPrice * (1 + impact));
+    
+    const now = Date.now();
+    
+    // Update stock price and market cap
+    await ctx.db.patch(args.stockId, {
+      currentPrice: newPrice,
+      marketCap: newPrice * (stock.outstandingShares ?? 1000000),
+      lastPriceChange: impact,
+      lastUpdated: now,
+    });
+    
+    // Deduct from company balance
+    await ctx.db.patch(args.companyId, {
+      balance: company.balance - totalCost,
+      updatedAt: now,
+    });
+    
+    // Update or create portfolio entry
+    const existingPortfolio = await ctx.db
+      .query("companyStockPortfolios")
+      .withIndex("by_company_stock", (q) =>
+        q.eq("companyId", args.companyId).eq("stockId", args.stockId)
+      )
+      .first();
+    
+    if (existingPortfolio) {
+      // Update existing portfolio
+      const newTotalShares = existingPortfolio.shares + args.shares;
+      const newTotalInvested = existingPortfolio.totalInvested + totalCost;
+      const newAverageCost = Math.round(newTotalInvested / newTotalShares);
+      
+      await ctx.db.patch(existingPortfolio._id, {
+        shares: newTotalShares,
+        averageCost: newAverageCost,
+        totalInvested: newTotalInvested,
+        updatedAt: now,
+      });
+    } else {
+      // Create new portfolio entry
+      await ctx.db.insert("companyStockPortfolios", {
+        companyId: args.companyId,
+        stockId: args.stockId,
+        shares: args.shares,
+        averageCost: askPrice,
+        totalInvested: totalCost,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
+    
+    // Record transaction
+    await ctx.db.insert("companyStockTransactions", {
+      companyId: args.companyId,
+      stockId: args.stockId,
+      type: "buy",
+      shares: args.shares,
+      pricePerShare: askPrice,
+      totalValue: totalCost,
+      priceImpact: impact,
+      timestamp: now,
+    });
+    
+    return {
+      success: true,
+      shares: args.shares,
+      pricePerShare: askPrice,
+      totalCost,
+      newPrice,
+      impact,
+    };
+  },
+});
+
+/**
+ * Sell stock shares for a company
+ */
+export const sellStockForCompany = mutation({
+  args: {
+    companyId: v.id("companies"),
+    stockId: v.id("stocks"),
+    shares: v.number(),
+  },
+  handler: async (ctx, args) => {
+    // Get authenticated user
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+    
+    // Get user and player
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+    
+    if (!user) {
+      throw new Error("User not found. Please refresh the page and try again.");
+    }
+    
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+    
+    if (!player) {
+      throw new Error("Player not found. Please complete your profile setup.");
+    }
+    
+    // Get company and verify ownership
+    const company = await ctx.db.get(args.companyId);
+    if (!company) {
+      throw new Error("Company not found");
+    }
+    
+    if (company.ownerId !== player._id) {
+      throw new Error("You don't own this company");
+    }
+    
+    // Validate shares
+    if (args.shares <= 0 || !Number.isInteger(args.shares)) {
+      throw new Error("Shares must be a positive integer");
+    }
+    
+    // Get stock
+    const stock = await ctx.db.get(args.stockId);
+    if (!stock) {
+      throw new Error("Stock not found");
+    }
+    
+    // Get company's portfolio
+    const portfolio = await ctx.db
+      .query("companyStockPortfolios")
+      .withIndex("by_company_stock", (q) =>
+        q.eq("companyId", args.companyId).eq("stockId", args.stockId)
+      )
+      .first();
+    
+    if (!portfolio) {
+      throw new Error("Company doesn't own any shares of this stock");
+    }
+    
+    if (portfolio.shares < args.shares) {
+      throw new Error(`Insufficient shares. Company owns ${portfolio.shares} shares`);
+    }
+    
+    // Calculate bid price (sell at slightly lower price)
+    const currentPrice = stock.currentPrice ?? 10000;
+    const bidPrice = Math.round(currentPrice * (1 - BID_ASK_SPREAD));
+    
+    // Calculate total proceeds
+    const totalProceeds = bidPrice * args.shares;
+    
+    // Calculate price impact (negative for selling)
+    const liquidity = stock.liquidity ?? 1000000;
+    const impact = calculatePriceImpact(args.shares, liquidity, -1);
+    const newPrice = Math.round(currentPrice * (1 + impact));
+    
+    const now = Date.now();
+    
+    // Update stock price and market cap
+    await ctx.db.patch(args.stockId, {
+      currentPrice: newPrice,
+      marketCap: newPrice * (stock.outstandingShares ?? 1000000),
+      lastPriceChange: impact,
+      lastUpdated: now,
+    });
+    
+    // Add to company balance
+    await ctx.db.patch(args.companyId, {
+      balance: company.balance + totalProceeds,
+      updatedAt: now,
+    });
+    
+    // Update portfolio
+    const newShares = portfolio.shares - args.shares;
+    const proportionSold = args.shares / portfolio.shares;
+    const newTotalInvested = Math.round(portfolio.totalInvested * (1 - proportionSold));
+    
+    if (newShares === 0) {
+      // Delete portfolio entry if no shares remaining
+      await ctx.db.delete(portfolio._id);
+    } else {
+      const newAverageCost = Math.round(newTotalInvested / newShares);
+      await ctx.db.patch(portfolio._id, {
+        shares: newShares,
+        averageCost: newAverageCost,
+        totalInvested: newTotalInvested,
+        updatedAt: now,
+      });
+    }
+    
+    // Record transaction
+    await ctx.db.insert("companyStockTransactions", {
+      companyId: args.companyId,
+      stockId: args.stockId,
+      type: "sell",
+      shares: args.shares,
+      pricePerShare: bidPrice,
+      totalValue: totalProceeds,
+      priceImpact: impact,
+      timestamp: now,
+    });
+    
+    return {
+      success: true,
+      shares: args.shares,
+      pricePerShare: bidPrice,
+      totalProceeds,
+      newPrice,
+      impact,
+    };
   },
 });
 
@@ -1077,5 +1382,42 @@ export const getStockStats = query({
       priceChange24h,
       priceChangePercent24h,
     };
+  },
+});
+
+// Query: Get stock ownership distribution
+export const getStockOwnership = query({
+  args: {
+    stockId: v.id("stocks"),
+  },
+  handler: async (ctx, args) => {
+    // Get all portfolios for this stock
+    const portfolios = await ctx.db
+      .query("playerStockPortfolios")
+      .withIndex("by_stockId", (q) => q.eq("stockId", args.stockId))
+      .collect();
+
+    // Get player and user names
+    const ownershipData = await Promise.all(
+      portfolios.map(async (portfolio) => {
+        const player = await ctx.db.get(portfolio.playerId);
+        if (!player) return null;
+        
+        const user = await ctx.db.get(player.userId);
+        const playerName = user?.name || user?.clerkUsername || `Player ${portfolio.playerId.slice(-4)}`;
+        
+        return {
+          playerId: portfolio.playerId,
+          playerName,
+          shares: portfolio.shares,
+        };
+      })
+    );
+
+    // Filter out nulls and sort by shares descending
+    const validData = ownershipData.filter((d): d is NonNullable<typeof d> => d !== null);
+    validData.sort((a, b) => b.shares - a.shares);
+
+    return validData;
   },
 });
