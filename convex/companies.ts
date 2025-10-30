@@ -12,7 +12,7 @@ export const createCompany = mutation({
     description: v.optional(v.string()),
     logo: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
-    ticker: v.optional(v.string()), // Legacy field, now optional
+    ticker: v.string(), // Now required
   },
   handler: async (ctx, args) => {
     // ROLE CHECK: Verify player can create companies
@@ -25,6 +25,12 @@ export const createCompany = mutation({
     const validatedName = validateName(args.name, "Company name");
     const validatedDescription = validateDescription(args.description, "Company description");
     const validatedTags = validateTags(args.tags);
+    const validatedTicker = validateTicker(args.ticker);
+
+    // Validate ticker format
+    if (!validatedTicker) {
+      throw new Error("Invalid ticker format");
+    }
 
     const now = Date.now();
     
@@ -34,7 +40,7 @@ export const createCompany = mutation({
       description: validatedDescription,
       logo: args.logo,
       tags: validatedTags,
-      ticker: args.ticker, // Legacy field, stored if provided
+      ticker: validatedTicker, // Store the ticker
       balance: 0,
       isPublic: false,
       reputationScore: 0.5, // Start with neutral reputation
@@ -130,6 +136,7 @@ export const makeCompanyPublic = mutation({
   args: {
     companyId: v.id("companies"),
     ownerId: v.id("players"),
+    ticker: v.string(), // User-chosen ticker for the stock
   },
   handler: async (ctx, args) => {
     const company = await ctx.db.get(args.companyId);
@@ -152,6 +159,22 @@ export const makeCompanyPublic = mutation({
       throw new Error("Company must have at least $100 in balance to go public");
     }
 
+    // Validate and clean the ticker
+    const validatedTicker = validateTicker(args.ticker);
+    if (!validatedTicker) {
+      throw new Error("Invalid ticker format");
+    }
+
+    // Check for ticker uniqueness across all stocks
+    const existingStocks = await ctx.db.query("stocks").collect();
+    const tickerExists = existingStocks.some(
+      (stock) => stock.symbol && stock.symbol.toUpperCase() === validatedTicker.toUpperCase()
+    );
+
+    if (tickerExists) {
+      throw new Error(`Ticker "${validatedTicker}" is already in use. Please choose a different ticker.`);
+    }
+
     // Calculate valuation: 5x company balance
     const valuation = company.balance * 5; // in cents
     
@@ -163,13 +186,7 @@ export const makeCompanyPublic = mutation({
     const stockId = await ctx.db.insert("stocks", {
       companyId: args.companyId,
       name: company.name,
-      symbol: company.name
-        .split(" ")
-        .slice(0, 2)
-        .map((word) => word[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 4), // Create ticker from company name (e.g., "Acme Corp" -> "AC")
+      symbol: validatedTicker,
       outstandingShares,
       currentPrice: pricePerShare,
       marketCap: valuation,
@@ -193,17 +210,11 @@ export const makeCompanyPublic = mutation({
     return {
       companyId: args.companyId,
       stockId,
-      symbol: company.name
-        .split(" ")
-        .slice(0, 2)
-        .map((word) => word[0])
-        .join("")
-        .toUpperCase()
-        .slice(0, 4),
+      symbol: validatedTicker,
       valuation: valuation / 100, // in dollars for display
       pricePerShare: pricePerShare / 100, // in dollars for display
       outstandingShares,
-      message: `${company.name} went public! Valuation: $${(valuation / 100).toFixed(2)}, Share Price: $${(pricePerShare / 100).toFixed(2)}`,
+      message: `${company.name} went public with ticker "${validatedTicker}"! Valuation: $${(valuation / 100).toFixed(2)}, Share Price: $${(pricePerShare / 100).toFixed(2)}`,
     };
   },
 });

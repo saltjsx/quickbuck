@@ -58,6 +58,7 @@ describe("Content Filter - Normal Words (False Positives Check)", () => {
         const companyId = await t.mutation(api.companies.createCompany, {
           ownerId: playerId,
           name: name,
+          ticker: "TST",
         });
         expect(companyId).toBeDefined();
       } catch (error: any) {
@@ -154,6 +155,7 @@ describe("Content Filter - Normal Words (False Positives Check)", () => {
           ownerId: playerId,
           name: "Test Company",
           description: description,
+          ticker: "TST",
         });
         expect(companyId).toBeDefined();
       } catch (error: any) {
@@ -210,6 +212,7 @@ describe("Content Filter - Normal Words (False Positives Check)", () => {
         const stockId = await t.mutation(api.companies.makeCompanyPublic, {
           companyId: companyId,
           ownerId: playerId,
+          ticker: ticker,
         });
         
         expect(stockId).toBeDefined();
@@ -249,6 +252,7 @@ describe("Content Filter - Profanity Detection", () => {
         await t.mutation(api.companies.createCompany, {
           ownerId: playerId,
           name: name,
+          ticker: "TST",
         });
         // If we get here, the test should fail
         throw new Error(`Profane company name "${name}" was allowed`);
@@ -335,6 +339,7 @@ describe("Content Filter - Profanity Detection", () => {
           ownerId: playerId,
           name: "Test Company",
           description: description,
+          ticker: "TST",
         });
         throw new Error(`Profane description was allowed`);
       } catch (error: any) {
@@ -370,6 +375,7 @@ describe("Content Filter - Profanity Detection", () => {
         const companyId = await t.mutation(api.companies.createCompany, {
           ownerId: playerId,
           name: `Test Company ${ticker}`,
+          ticker: ticker,
         });
         
         await t.run(async (ctx) => {
@@ -381,6 +387,7 @@ describe("Content Filter - Profanity Detection", () => {
         await t.mutation(api.companies.makeCompanyPublic, {
           companyId: companyId,
           ownerId: playerId,
+          ticker: ticker,
         });
         
         throw new Error(`Profane ticker "${ticker}" was allowed`);
@@ -414,6 +421,7 @@ describe("Content Filter - Profanity Detection", () => {
         ownerId: playerId,
         name: "Test Company",
         tags: ["tech", "innovation", "damn"],
+        ticker: "TST",
       });
       throw new Error("Profane tag was allowed");
     } catch (error: any) {
@@ -445,6 +453,7 @@ describe("Content Filter - Edge Cases", () => {
       await t.mutation(api.companies.createCompany, {
         ownerId: playerId,
         name: "   ",
+        ticker: "TST",
       });
       throw new Error("Empty name was allowed");
     } catch (error: any) {
@@ -456,6 +465,7 @@ describe("Content Filter - Edge Cases", () => {
       ownerId: playerId,
       name: "Valid Company",
       description: "   ",
+      ticker: "TST",
     });
     
     const company = await t.run(async (ctx) => {
@@ -487,6 +497,7 @@ describe("Content Filter - Edge Cases", () => {
       await t.mutation(api.companies.createCompany, {
         ownerId: playerId,
         name: "A".repeat(101),
+        ticker: "TST",
       });
       throw new Error("Too-long name was allowed");
     } catch (error: any) {
@@ -499,6 +510,7 @@ describe("Content Filter - Edge Cases", () => {
         ownerId: playerId,
         name: "Valid Company",
         description: "A".repeat(1001),
+        ticker: "TST",
       });
       throw new Error("Too-long description was allowed");
     } catch (error: any) {
@@ -511,6 +523,7 @@ describe("Content Filter - Edge Cases", () => {
         ownerId: playerId,
         name: "Valid Company",
         tags: ["A".repeat(31)],
+        ticker: "TST",
       });
       throw new Error("Too-long tag was allowed");
     } catch (error: any) {
@@ -522,6 +535,7 @@ describe("Content Filter - Edge Cases", () => {
       const companyId = await t.mutation(api.companies.createCompany, {
         ownerId: playerId,
         name: "Valid Company",
+        ticker: "TST",
       });
       
       await t.run(async (ctx) => {
@@ -533,6 +547,7 @@ describe("Content Filter - Edge Cases", () => {
       await t.mutation(api.companies.makeCompanyPublic, {
         companyId: companyId,
         ownerId: playerId,
+        ticker: "A".repeat(7),
       });
       
       throw new Error("Too-long ticker was allowed");
@@ -562,6 +577,7 @@ describe("Content Filter - Edge Cases", () => {
       ownerId: playerId,
       name: "  Test Company  ",
       description: "  A great company  ",
+      ticker: "TST",
     });
 
     const company = await t.run(async (ctx) => {

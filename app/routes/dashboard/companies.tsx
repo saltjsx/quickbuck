@@ -80,6 +80,7 @@ export default function ManageCompaniesPage() {
   const [publicModalOpen, setPublicModalOpen] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] =
     useState<Id<"companies"> | null>(null);
+  const [publicCompanyTicker, setPublicCompanyTicker] = useState("");
 
   // Mutations for edit
   const updateCompanyInfo = useMutation(api.companies.updateCompanyInfo);
@@ -122,12 +123,17 @@ export default function ManageCompaniesPage() {
       return;
     }
 
+    if (!companyTicker.trim()) {
+      setError("Ticker symbol is required");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await createCompany({
         ownerId: player._id,
         name: companyName.trim(),
-        ticker: companyTicker.trim() || undefined,
+        ticker: companyTicker.trim(),
         description: companyDescription.trim() || undefined,
         logo: companyLogo.trim() || undefined,
         tags: companyTags.trim()
@@ -164,16 +170,23 @@ export default function ManageCompaniesPage() {
       return;
     }
 
+    if (!publicCompanyTicker.trim()) {
+      setError("Ticker symbol is required");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await makeCompanyPublic({
         companyId: selectedCompanyId,
         ownerId: player._id,
+        ticker: publicCompanyTicker.trim(),
       });
 
       // Reset form and close modal
       setPublicModalOpen(false);
       setSelectedCompanyId(null);
+      setPublicCompanyTicker("");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to make company public"
@@ -186,6 +199,8 @@ export default function ManageCompaniesPage() {
   // Open make public modal
   const openMakePublicModal = (companyId: Id<"companies">) => {
     setSelectedCompanyId(companyId);
+    setPublicCompanyTicker("");
+    setError("");
     setPublicModalOpen(true);
   };
 
@@ -307,9 +322,7 @@ export default function ManageCompaniesPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="company-ticker">
-                      Ticker Symbol (optional)
-                    </Label>
+                    <Label htmlFor="company-ticker">Ticker Symbol *</Label>
                     <Input
                       id="company-ticker"
                       placeholder="e.g., TECH"
@@ -318,7 +331,11 @@ export default function ManageCompaniesPage() {
                         setCompanyTicker(e.target.value.toUpperCase())
                       }
                       maxLength={6}
+                      required
                     />
+                    <p className="text-xs text-muted-foreground">
+                      2-6 characters. Must be unique.
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -543,12 +560,28 @@ export default function ManageCompaniesPage() {
               <DialogHeader>
                 <DialogTitle>Make Company Public (IPO)</DialogTitle>
                 <DialogDescription>
-                  Your company will be listed on the stock market. A stock
-                  ticker and initial share price will be calculated
-                  automatically based on your company balance.
+                  Your company will be listed on the stock market. Choose a
+                  unique ticker symbol for your stock.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleMakePublic} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="public-ticker">Ticker Symbol *</Label>
+                  <Input
+                    id="public-ticker"
+                    placeholder="e.g., TECH"
+                    value={publicCompanyTicker}
+                    onChange={(e) =>
+                      setPublicCompanyTicker(e.target.value.toUpperCase())
+                    }
+                    maxLength={6}
+                    required
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    2-6 characters. Must be unique.
+                  </p>
+                </div>
+
                 <div className="rounded-md bg-blue-50 p-3 text-sm">
                   <p className="text-muted-foreground mb-2">
                     <strong>How it works:</strong>
@@ -557,7 +590,6 @@ export default function ManageCompaniesPage() {
                     <li>Market Cap = Your company balance × 5</li>
                     <li>1,000,000 shares will be issued</li>
                     <li>Share Price = Market Cap ÷ 1,000,000</li>
-                    <li>Ticker will be auto-generated from company name</li>
                     <li>Requires minimum $100 company balance</li>
                   </ul>
                 </div>
