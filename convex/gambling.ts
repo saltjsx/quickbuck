@@ -90,10 +90,10 @@ export const getActiveBlackjackGame = query({
     
     const game = games[0];
     
-    // Game must be in a playable state and updated within last 30 minutes
+    // Game must be in a playable state and updated within last 5 minutes (not abandoned)
     if (
       game && 
-      Date.now() - game.updatedAt < 30 * 60 * 1000 && 
+      Date.now() - game.updatedAt < 5 * 60 * 1000 && 
       (game.gameState === "playing")
     ) {
       return {
@@ -290,8 +290,26 @@ export const startBlackjack = mutation({
     
     const existingGame = existingGames[0];
     
-    if (existingGame && Date.now() - existingGame.updatedAt < 30 * 60 * 1000 && existingGame.gameState === "playing") {
-      throw new Error("You already have an active game. Finish it first.");
+    // If there's ANY existing game in "playing" state, automatically clean it up
+    // This handles cases where player navigated away, switched tabs, or refreshed
+    if (existingGame && existingGame.gameState === "playing") {
+      // Record the abandoned game in history
+      await ctx.db.insert("gamblingHistory", {
+        playerId: player._id,
+        gameType: "blackjack",
+        betAmount: existingGame.betAmount,
+        payout: 0,
+        result: "loss",
+        details: {
+          playerHand: existingGame.playerHand,
+          dealerHand: existingGame.dealerHand,
+          outcome: "auto-abandoned",
+        },
+        timestamp: Date.now(),
+      });
+      
+      // Delete the abandoned game
+      await ctx.db.delete(existingGame._id);
     }
 
     // RACE CONDITION FIX: Re-fetch player to get latest balance before deduction
@@ -580,6 +598,61 @@ export const standBlackjack = mutation({
       canHit: false,
       canStand: false,
     };
+  },
+});
+
+// Abandon/leave an active blackjack game (forfeits the bet)
+export const abandonBlackjack = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    if (!player) throw new Error("Player not found");
+
+    // Get active game from database - fetch most recent game
+    const games = await ctx.db
+      .query("blackjackGames")
+      .withIndex("by_playerId_updatedAt", (q) => q.eq("playerId", player._id))
+      .order("desc")
+      .take(1);
+
+    const game = games[0];
+    
+    // If there's an active game, abandon it
+    if (game && game.gameState === "playing") {
+      // Record as a loss in history
+      await ctx.db.insert("gamblingHistory", {
+        playerId: player._id,
+        gameType: "blackjack",
+        betAmount: game.betAmount,
+        payout: 0,
+        result: "loss",
+        details: {
+          playerHand: game.playerHand,
+          dealerHand: game.dealerHand,
+          outcome: "abandoned",
+        },
+        timestamp: Date.now(),
+      });
+
+      // Delete the game from database
+      await ctx.db.delete(game._id);
+    }
+
+    return { success: true };
   },
 });
 

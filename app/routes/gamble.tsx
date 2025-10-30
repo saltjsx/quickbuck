@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "convex/_generated/api";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
@@ -11,7 +11,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { AnimatedNumber } from "~/components/ui/animated-number";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
-import { Coins, Dice1, Spade, Target, DollarSign } from "lucide-react";
+import {
+  Coins,
+  Dice1,
+  Spade,
+  Target,
+  DollarSign,
+  AlertTriangle,
+} from "lucide-react";
 import { getAuth } from "@clerk/react-router/ssr.server";
 import { redirect } from "react-router";
 import type { Route } from "./+types/gamble";
@@ -196,11 +203,45 @@ function BlackjackGame({ balance }: { balance: number }) {
   const [betAmount, setBetAmount] = useState("10");
   const [gameState, setGameState] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [gameStartTime, setGameStartTime] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<number>(0);
 
   const startBlackjack = useMutation(api.gambling.startBlackjack);
   const hitBlackjack = useMutation(api.gambling.hitBlackjack);
   const standBlackjack = useMutation(api.gambling.standBlackjack);
+  const abandonBlackjack = useMutation(api.gambling.abandonBlackjack);
   const activeGame = useQuery(api.gambling.getActiveBlackjackGame);
+
+  // Timer effect: track game duration and warn when close to timeout
+  useEffect(() => {
+    if (!gameStartTime || gameState?.gameState !== "playing") {
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - gameStartTime;
+      const maxTime = 5 * 60 * 1000; // 5 minutes in milliseconds
+      const remaining = Math.max(0, maxTime - elapsed);
+      setTimeRemaining(remaining);
+
+      // Show warning when under 1 minute remaining
+      if (remaining < 60 * 1000 && remaining > 0 && remaining % 10000 < 1000) {
+        toast.warning(
+          `⏰ Game expires in ${Math.ceil(remaining / 1000)} seconds!`
+        );
+      }
+
+      // Auto-abandon if time runs out
+      if (remaining === 0) {
+        clearInterval(interval);
+        toast.error("⏰ Game session expired! Your game has been abandoned.");
+        setGameState(null);
+        setGameStartTime(null);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [gameStartTime, gameState?.gameState]);
 
   const handleStart = async () => {
     const betDollars = parseFloat(betAmount);
@@ -221,6 +262,8 @@ function BlackjackGame({ balance }: { balance: number }) {
     try {
       const result = await startBlackjack({ betAmount: betCents });
       setGameState(result);
+      setGameStartTime(Date.now());
+      setTimeRemaining(5 * 60 * 1000); // 5 minutes
 
       if (result.gameState === "blackjack") {
         toast.success(
@@ -239,9 +282,11 @@ function BlackjackGame({ balance }: { balance: number }) {
     try {
       const result = await hitBlackjack({});
       setGameState(result);
+      setGameStartTime(Date.now()); // Reset timer on each action
 
       if (result.gameState === "player_bust") {
         toast.error("Bust! You went over 21.");
+        setGameStartTime(null); // Clear timer when game ends
       }
     } catch (error: any) {
       toast.error(error.message || "Failed to hit");
@@ -255,6 +300,7 @@ function BlackjackGame({ balance }: { balance: number }) {
     try {
       const result = await standBlackjack({});
       setGameState(result);
+      setGameStartTime(null); // Clear timer when game ends
 
       if (
         result.gameState === "dealer_bust" ||
@@ -393,6 +439,24 @@ function BlackjackGame({ balance }: { balance: number }) {
               </div>
             </div>
 
+            {/* Timer Warning - Show when close to timeout */}
+            {gameState.gameState === "playing" &&
+              timeRemaining < 60 * 1000 &&
+              timeRemaining > 0 && (
+                <div className="p-3 rounded-lg bg-yellow-500/10 border border-yellow-500 flex items-center gap-2">
+                  <AlertTriangle className="h-5 w-5 text-yellow-600" />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-yellow-700">
+                      ⏰ Game expires in {Math.ceil(timeRemaining / 1000)}{" "}
+                      seconds
+                    </p>
+                    <p className="text-xs text-yellow-600">
+                      Complete your game or use Leave Game button
+                    </p>
+                  </div>
+                </div>
+              )}
+
             {/* Game Controls */}
             {gameState.gameState === "playing" && (
               <div className="flex gap-2">
@@ -433,6 +497,34 @@ function BlackjackGame({ balance }: { balance: number }) {
                   variant="outline"
                 >
                   New Game
+                </Button>
+              </div>
+            )}
+
+            {/* Option to abandon active game if still playing */}
+            {gameState.gameState === "playing" && (
+              <div className="flex gap-2 justify-end pt-2">
+                <Button
+                  onClick={async () => {
+                    setIsLoading(true);
+                    try {
+                      await abandonBlackjack({});
+                      setGameState(null);
+                      setGameStartTime(null);
+                      setTimeRemaining(0);
+                      toast.info("Game abandoned. Bet forfeited.");
+                    } catch (error: any) {
+                      toast.error(error.message || "Failed to abandon game");
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }}
+                  disabled={isLoading}
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground"
+                >
+                  Leave Game
                 </Button>
               </div>
             )}
@@ -906,6 +998,17 @@ export default function GamblePage() {
     api.players.getPlayerBalance,
     player?._id ? { playerId: player._id } : "skip"
   );
+  const abandonBlackjack = useMutation(api.gambling.abandonBlackjack);
+
+  // Cleanup: Abandon any active blackjack game when leaving the page or switching tabs
+  useEffect(() => {
+    return () => {
+      // When component unmounts (user navigates away), abandon any active game
+      abandonBlackjack({}).catch(() => {
+        // Silently fail - user is leaving anyway
+      });
+    };
+  }, [abandonBlackjack]);
 
   return (
     <div className="flex flex-1 flex-col">
