@@ -345,46 +345,6 @@ export const banPlayer = mutation({
       await ctx.db.delete(holding._id);
     }
 
-    // Delete all user crypto holdings
-    const cryptoHoldings = await ctx.db
-      .query("userCryptoHoldings")
-      .withIndex("by_userId", (q) => q.eq("userId", args.targetPlayerId))
-      .collect();
-
-    for (const holding of cryptoHoldings) {
-      await ctx.db.delete(holding._id);
-    }
-
-    // Delete all cryptocurrencies created by user
-    const cryptos = await ctx.db
-      .query("cryptocurrencies")
-      .withIndex("by_creatorId", (q) => q.eq("creatorId", args.targetPlayerId))
-      .collect();
-
-    for (const crypto of cryptos) {
-      // Delete all trades for this crypto
-      const trades = await ctx.db
-        .query("cryptoTrades")
-        .withIndex("by_cryptoId", (q) => q.eq("cryptoId", crypto._id))
-        .collect();
-
-      for (const trade of trades) {
-        await ctx.db.delete(trade._id);
-      }
-
-      // Delete price history
-      const priceHistory = await ctx.db
-        .query("cryptoPriceHistory")
-        .withIndex("by_cryptoId", (q) => q.eq("cryptoId", crypto._id))
-        .collect();
-
-      for (const history of priceHistory) {
-        await ctx.db.delete(history._id);
-      }
-
-      await ctx.db.delete(crypto._id);
-    }
-
     // Delete user cart and cart items
     const cart = await ctx.db
       .query("carts")
@@ -895,44 +855,6 @@ export const deleteProductAsMod = mutation({
   },
 });
 
-// Mutation: Delete crypto (mod action)
-export const deleteCryptoAsMod = mutation({
-  args: {
-    cryptoId: v.id("cryptocurrencies"),
-    reason: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
-      .unique();
-
-    if (!user) throw new Error("User not found");
-
-    const currentPlayer = await ctx.db
-      .query("players")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .unique();
-
-    if (!currentPlayer) throw new Error("Player not found");
-
-    const hasAccess = await hasPermission(ctx, currentPlayer._id, "mod");
-    if (!hasAccess) {
-      throw new Error("Insufficient permissions - mod or admin required");
-    }
-
-    const crypto = await ctx.db.get(args.cryptoId);
-    if (!crypto) throw new Error("Cryptocurrency not found");
-
-    await ctx.db.delete(args.cryptoId);
-
-    return { success: true, message: `Cryptocurrency deleted by moderator. Reason: ${args.reason}` };
-  },
-});
-
 // Mutation: Set player balance (admin only)
 export const setPlayerBalance = mutation({
   args: {
@@ -1106,49 +1028,6 @@ export const getAllCompaniesForModeration = query({
     );
 
     return enrichedCompanies;
-  },
-});
-
-// Query: Get all cryptocurrencies for moderation
-export const getAllCryptosForModeration = query({
-  handler: async (ctx) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
-      .unique();
-
-    if (!user) throw new Error("User not found");
-
-    const currentPlayer = await ctx.db
-      .query("players")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .unique();
-
-    if (!currentPlayer) throw new Error("Player not found");
-
-    const hasAccess = await hasPermission(ctx, currentPlayer._id, "mod");
-    if (!hasAccess) {
-      throw new Error("Insufficient permissions");
-    }
-
-    const cryptos = await ctx.db.query("cryptocurrencies").collect();
-
-    // Enrich with creator data
-    const enrichedCryptos = await Promise.all(
-      cryptos.map(async (crypto) => {
-        const creator = await ctx.db.get(crypto.creatorId);
-        const creatorUser = creator ? await ctx.db.get(creator.userId) : null;
-        return {
-          ...crypto,
-          creatorName: creatorUser?.name || "Unknown",
-        };
-      })
-    );
-
-    return enrichedCryptos;
   },
 });
 

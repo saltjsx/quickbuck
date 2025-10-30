@@ -13,7 +13,6 @@ export const createTransaction = mutation({
     assetType: v.union(
       v.literal("cash"),
       v.literal("stock"),
-      v.literal("crypto"),
       v.literal("product")
     ),
     assetId: v.optional(v.string()),
@@ -183,90 +182,6 @@ export const transferCash = mutation({
       amount: args.amount,
       assetType: "cash" as const,
       description: args.description || "Cash transfer",
-      createdAt: Date.now(),
-    });
-
-    return transactionId;
-  },
-});
-
-// Mutation: Transfer crypto between accounts
-export const transferCrypto = mutation({
-  args: {
-    fromPlayerId: v.id("players"),
-    toAccountId: v.union(v.id("players"), v.id("companies")),
-    toAccountType: v.union(v.literal("player"), v.literal("company")),
-    cryptoId: v.id("cryptocurrencies"),
-    amount: v.number(),
-    description: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    if (args.amount <= 0) {
-      throw new Error("Amount must be positive");
-    }
-
-    // Get sender's crypto holding
-    const holding = await ctx.db
-      .query("userCryptoHoldings")
-      .withIndex("by_userId_cryptoId", (q) =>
-        q.eq("userId", args.fromPlayerId).eq("cryptoId", args.cryptoId)
-      )
-      .unique();
-
-    if (!holding || holding.amount < args.amount) {
-      throw new Error("Insufficient crypto holdings");
-    }
-
-    // Deduct from sender
-    if (holding.amount === args.amount) {
-      // Delete the holding if amount matches
-      await ctx.db.delete(holding._id);
-    } else {
-      await ctx.db.patch(holding._id, {
-        amount: holding.amount - args.amount,
-      });
-    }
-
-    // Add to receiver (only players can receive crypto holdings)
-    if (args.toAccountType === "player") {
-      const recipientHolding = await ctx.db
-        .query("userCryptoHoldings")
-        .withIndex("by_userId_cryptoId", (q) =>
-          q.eq("userId", args.toAccountId as Id<"players">).eq("cryptoId", args.cryptoId)
-        )
-        .unique();
-
-      if (recipientHolding) {
-        // Add to existing holding
-        await ctx.db.patch(recipientHolding._id, {
-          amount: recipientHolding.amount + args.amount,
-        });
-      } else {
-        // Create new holding
-        const crypto = await ctx.db.get(args.cryptoId);
-        if (!crypto) throw new Error("Crypto not found");
-        await ctx.db.insert("userCryptoHoldings", {
-          userId: args.toAccountId as Id<"players">,
-          cryptoId: args.cryptoId,
-          amount: args.amount,
-          averagePurchasePrice: holding.averagePurchasePrice,
-          boughtAt: Date.now(),
-        });
-      }
-    } else {
-      throw new Error("Companies cannot receive crypto holdings");
-    }
-
-    // Create transaction record
-    const transactionId = await ctx.db.insert("transactions", {
-      fromAccountId: args.fromPlayerId,
-      fromAccountType: "player" as const,
-      toAccountId: args.toAccountId,
-      toAccountType: args.toAccountType,
-      amount: args.amount,
-      assetType: "crypto" as const,
-      assetId: args.cryptoId,
-      description: args.description || "Crypto transfer",
       createdAt: Date.now(),
     });
 

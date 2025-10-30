@@ -119,35 +119,8 @@ async function investigatePlayer() {
     console.log(`\nTotal Stock Value: $${(totalStockValue / 100).toFixed(2)}`);
     console.log();
 
-    // 5. Get crypto holdings
-    console.log("5. CRYPTO HOLDINGS");
-    console.log("-".repeat(80));
-    const cryptoHoldings = await client.query(api.crypto.getPlayerCryptoHoldings, {
-      playerId: PLAYER_ID,
-    });
-    console.log(`Total Crypto Holdings: ${cryptoHoldings.length}`);
-    
-    let totalCryptoValue = 0;
-    for (const holding of cryptoHoldings) {
-      try {
-        const crypto = await client.query(api.crypto.getCryptocurrency, { cryptoId: holding.cryptoId });
-        const value = holding.amount * (crypto?.price || 0);
-        totalCryptoValue += value;
-        
-        console.log(`\n  Crypto: ${crypto?.ticker || "Unknown"}`);
-        console.log(`    Amount: ${holding.amount}`);
-        console.log(`    Current Price: $${((crypto?.price || 0) / 100).toFixed(2)}`);
-        console.log(`    Total Value: $${(value / 100).toFixed(2)}`);
-        console.log(`    Avg Purchase Price: $${(holding.averagePurchasePrice / 100).toFixed(2)}`);
-      } catch (e) {
-        console.log(`\n  Crypto ID: ${holding.cryptoId} - ERROR: ${e}`);
-      }
-    }
-    console.log(`\nTotal Crypto Value: $${(totalCryptoValue / 100).toFixed(2)}`);
-    console.log();
-
-    // 6. Get companies
-    console.log("6. OWNED COMPANIES");
+    // 5. Get companies
+    console.log("5. OWNED COMPANIES");
     console.log("-".repeat(80));
     const companies = await client.query(api.companies.getPlayerCompanies, {
       playerId: PLAYER_ID,
@@ -186,7 +159,7 @@ async function investigatePlayer() {
     console.log("=".repeat(80));
     
     const calculatedBalance = player.balance;
-    const calculatedNetWorth = calculatedBalance + totalStockValue + totalCryptoValue + totalCompanyValue - totalDebt;
+    const calculatedNetWorth = calculatedBalance + totalStockValue + totalCompanyValue - totalDebt;
     
     console.log(`Current Balance: $${(player.balance / 100).toFixed(2)}`);
     console.log(`Calculated Net Worth: $${(calculatedNetWorth / 100).toFixed(2)}`);
@@ -195,7 +168,6 @@ async function investigatePlayer() {
     console.log("Components:");
     console.log(`  + Cash Balance: $${(calculatedBalance / 100).toFixed(2)}`);
     console.log(`  + Stock Value: $${(totalStockValue / 100).toFixed(2)}`);
-    console.log(`  + Crypto Value: $${(totalCryptoValue / 100).toFixed(2)}`);
     console.log(`  + Company Value: $${(totalCompanyValue / 100).toFixed(2)}`);
     console.log(`  - Active Debt: $${(totalDebt / 100).toFixed(2)}`);
     console.log();

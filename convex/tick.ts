@@ -30,9 +30,6 @@ async function executeTickLogic(ctx: any) {
   // Step 2: Update stock prices based on algorithm
   const stockPriceUpdates = await updateStockPrices(ctx);
   
-  // Step 3: Update crypto prices based on algorithm
-  const cryptoPriceUpdates = await updateCryptoPrices(ctx);
-  
   // Step 4: Apply loan interest
   await applyLoanInterest(ctx);
   
@@ -42,7 +39,6 @@ async function executeTickLogic(ctx: any) {
     timestamp: now,
     botPurchases,
     stockPriceUpdates,
-    cryptoPriceUpdates,
     totalBudgetSpent: botPurchases.reduce((sum, p) => sum + p.totalPrice, 0),
   });
   
@@ -53,7 +49,6 @@ async function executeTickLogic(ctx: any) {
     tickId,
     botPurchases: botPurchases.length,
     stockUpdates: stockPriceUpdates?.length || 0,
-    cryptoUpdates: cryptoPriceUpdates?.length || 0,
   };
 }
 
@@ -353,130 +348,6 @@ async function updateStockPrices(ctx: any) {
     } catch (error) {
       console.error(`Error updating stock price for ${stock._id}:`, error);
       continue; // Skip this stock and move to the next one
-    }
-  }
-  
-  return updates;
-}
-
-// Update crypto prices based on CRYPTO_MARKET_ALGO.md
-async function updateCryptoPrices(ctx: any) {
-  const cryptos = await ctx.db.query("cryptocurrencies").collect();
-  
-  const updates: Array<{
-    cryptoId: any;
-    oldPrice: number;
-    newPrice: number;
-  }> = [];
-  
-  for (const crypto of cryptos) {
-    try {
-      // Validate crypto data
-      const currentPrice = crypto.price;
-      if (!Number.isFinite(currentPrice) || currentPrice <= 0) {
-        console.warn(`Skipping crypto ${crypto._id}: invalid price`);
-        continue;
-      }
-      
-      // Initialize missing fields for existing cryptos (backward compatibility)
-      if (crypto.sentiment === undefined || crypto.newsScore === undefined || crypto.volatilityEst === undefined) {
-        console.log(`Initializing missing fields for crypto ${crypto._id}`);
-        await ctx.db.patch(crypto._id, {
-          sentiment: crypto.sentiment ?? 0,
-          newsScore: crypto.newsScore ?? 0,
-          volatilityEst: crypto.volatilityEst ?? 2.5,
-        });
-        // Re-fetch with updated fields
-        const updatedCrypto = await ctx.db.get(crypto._id);
-        if (updatedCrypto) {
-          Object.assign(crypto, updatedCrypto);
-        }
-      }
-      
-      // HIGHLY VOLATILE crypto price movement (much more than stocks)
-      // Cryptos should swing wildly every tick
-      const baseVolatility = crypto.volatilityEst || 2.5; // Much higher default than stocks
-      
-      // Add sentiment and random factors
-      const sentiment = crypto.sentiment || 0; // -1 to 1
-      const newsScore = crypto.newsScore || 0; // -0.2 to 0.2
-      
-      // Random walk with high variance
-      const randomFactor = (Math.random() - 0.5) * 2; // -1 to 1
-      
-      // Combine factors for very volatile movement
-      // Can swing ±15% per tick on average, up to ±40% in extreme cases
-      const sentimentBias = sentiment * 0.05; // ±5% from sentiment
-      const newsBias = newsScore; // ±20% from news
-      const volatilityFactor = baseVolatility * 0.08; // 20% of volatility as base movement
-      
-      const totalChange = sentimentBias + newsBias + (randomFactor * volatilityFactor);
-      
-      // Apply change with wide bounds
-      const changePercent = Math.max(-0.4, Math.min(0.4, totalChange)); // -40% to +40%
-      let newPrice = Math.floor(currentPrice * (1 + changePercent));
-      
-      // Validate newPrice
-      if (!Number.isFinite(newPrice)) {
-        console.warn(`Skipping crypto ${crypto._id}: calculated price is NaN`);
-        continue;
-      }
-      
-      // Ensure minimum price
-      newPrice = Math.max(1, newPrice); // Min $0.01
-      
-      // Add occasional "pump or dump" events (5% chance of extreme move)
-      if (Math.random() < 0.05) {
-        const pumpOrDump = Math.random() < 0.5 ? 1.5 : 0.6; // +50% or -40%
-        newPrice = Math.floor(newPrice * pumpOrDump);
-        newPrice = Math.max(1, newPrice);
-      }
-      
-      // Final validation
-      if (!Number.isFinite(newPrice) || newPrice <= 0) {
-        console.warn(`Skipping crypto ${crypto._id}: final price is invalid: ${newPrice}`);
-        continue;
-      }
-      
-      if (newPrice !== currentPrice) {
-        // Guard against division by zero
-        const circulatingSupply = Math.max(1, crypto.circulatingSupply);
-        const newMarketCap = Math.floor(newPrice * circulatingSupply);
-        
-        if (!Number.isFinite(newMarketCap) || newMarketCap < 0) {
-          console.warn(`Skipping crypto ${crypto._id}: invalid marketCap: ${newMarketCap}`);
-          continue;
-        }
-        
-        // Update sentiment and news randomly for next tick
-        const newSentiment = Math.max(-1, Math.min(1, sentiment + (Math.random() - 0.5) * 0.3));
-        const newNewsScore = (Math.random() - 0.5) * 0.4; // New random news each tick
-        
-        await ctx.db.patch(crypto._id, {
-          previousPrice: currentPrice,
-          price: newPrice,
-          marketCap: newMarketCap,
-          sentiment: newSentiment,
-          newsScore: newNewsScore,
-          updatedAt: Date.now(),
-        });
-        
-        // Record price history for charting
-        await ctx.db.insert("cryptoPriceHistory", {
-          cryptoId: crypto._id,
-          price: newPrice,
-          timestamp: Date.now(),
-        });
-        
-        updates.push({
-          cryptoId: crypto._id,
-          oldPrice: currentPrice,
-          newPrice: newPrice,
-        });
-      }
-    } catch (error) {
-      console.error(`Error updating crypto price for ${crypto._id}:`, error);
-      continue; // Skip this crypto and move to the next one
     }
   }
   

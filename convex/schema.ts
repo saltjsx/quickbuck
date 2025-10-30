@@ -120,46 +120,6 @@ export default defineSchema({
     .index("by_companyId", ["companyId"])
     .index("by_userId_companyId", ["userId", "companyId"]),
 
-  cryptocurrencies: defineTable({
-    creatorId: v.id("players"),
-    name: v.string(),
-    ticker: v.string(),
-    description: v.optional(v.string()),
-    image: v.optional(v.string()),
-    price: v.number(), // in cents (per token)
-    marketCap: v.number(), // in cents
-    volume: v.number(), // 24h volume in cents
-    previousPrice: v.optional(v.number()),
-    // Crypto algorithm fields
-    totalSupply: v.number(),
-    circulatingSupply: v.number(),
-    lockedSupply: v.optional(v.number()),
-    inflationRate: v.optional(v.number()), // annual %
-    stakingRate: v.optional(v.number()), // fraction staked
-    burnRate: v.optional(v.number()),
-    tvl: v.optional(v.number()), // Total Value Locked for DeFi tokens
-    onchainTxVolume5min: v.optional(v.number()),
-    activeAddresses24h: v.optional(v.number()),
-    sentiment: v.optional(v.number()), // -1 to 1
-    newsScore: v.optional(v.number()),
-    volatilityEst: v.optional(v.number()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_creatorId", ["creatorId"])
-    .index("by_ticker", ["ticker"]),
-
-  userCryptoHoldings: defineTable({
-    userId: v.id("players"),
-    cryptoId: v.id("cryptocurrencies"),
-    amount: v.number(),
-    averagePurchasePrice: v.number(), // in cents per token
-    boughtAt: v.number(),
-  })
-    .index("by_userId", ["userId"])
-    .index("by_cryptoId", ["cryptoId"])
-    .index("by_userId_cryptoId", ["userId", "cryptoId"]),
-
   carts: defineTable({
     userId: v.id("players"),
     totalPrice: v.number(), // in cents
@@ -186,7 +146,6 @@ export default defineSchema({
     assetType: v.union(
       v.literal("cash"),
       v.literal("stock"),
-      v.literal("crypto"),
       v.literal("product")
     ),
     assetId: v.optional(v.string()), // id of stock/crypto/product if applicable
@@ -329,32 +288,6 @@ export default defineSchema({
   })
     .index("by_stockId", ["stockId"])
     .index("by_stockId_timestamp", ["stockId", "timestamp"])
-    .index("by_timestamp", ["timestamp"]),
-
-  cryptoPriceHistory: defineTable({
-    cryptoId: v.id("cryptocurrencies"),
-    price: v.number(), // in cents
-    timestamp: v.number(),
-    open: v.optional(v.number()),
-    high: v.optional(v.number()),
-    low: v.optional(v.number()),
-    close: v.optional(v.number()),
-    volume: v.optional(v.number()),
-  })
-    .index("by_cryptoId", ["cryptoId"])
-    .index("by_cryptoId_timestamp", ["cryptoId", "timestamp"])
-    .index("by_timestamp", ["timestamp"]),
-
-  cryptoTrades: defineTable({
-    cryptoId: v.id("cryptocurrencies"),
-    amount: v.number(), // number of tokens
-    pricePerToken: v.number(), // in cents
-    totalValue: v.number(), // in cents
-    tradeType: v.union(v.literal("buy"), v.literal("sell")),
-    timestamp: v.number(),
-  })
-    .index("by_cryptoId", ["cryptoId"])
-    .index("by_cryptoId_timestamp", ["cryptoId", "timestamp"])
     .index("by_timestamp", ["timestamp"]),
 
   // Upgrades system
