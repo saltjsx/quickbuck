@@ -73,8 +73,8 @@ export default function PortfolioPage() {
 
   // Get crypto holdings
   const cryptoHoldings = useQuery(
-    api.crypto.getPlayerCryptoHoldings,
-    player?._id ? { playerId: player._id } : "skip"
+    api.portfolio.getUserCryptoHoldings,
+    player?._id ? { userId: player._id } : "skip"
   );
 
   // Get player inventory (marketplace items)
@@ -102,9 +102,6 @@ export default function PortfolioPage() {
   // Get all stocks at once to avoid hooks issues
   const allStocks = useQuery(api.stocks.getAllStocks, {});
 
-  // Get all cryptos at once to avoid hooks issues
-  const allCryptos = useQuery(api.crypto.getAllCryptocurrencies, {});
-
   // Build stock details by matching holdings with stock data
   const stocksWithDetails =
     stockHoldings && allStocks
@@ -116,16 +113,13 @@ export default function PortfolioPage() {
           .filter((item) => item.stock)
       : [];
 
-  // Build crypto details by matching holdings with crypto data
-  const cryptoWithDetails =
-    cryptoHoldings && allCryptos
-      ? cryptoHoldings
-          .map((holding) => {
-            const crypto = allCryptos.find((c) => c._id === holding.cryptoId);
-            return { holding, crypto };
-          })
-          .filter((item) => item.crypto)
-      : [];
+  // Build crypto details - already enriched from getUserCryptoHoldings
+  const cryptoWithDetails = cryptoHoldings
+    ? cryptoHoldings.map((holding) => ({
+        holding,
+        crypto: holding.crypto,
+      }))
+    : [];
 
   // Calculate totals
   const totalStocksValue =
@@ -139,7 +133,9 @@ export default function PortfolioPage() {
     cryptoWithDetails.reduce(
       (sum, item) =>
         sum +
-        (item.crypto ? Math.floor(item.holding.amount * item.crypto.price) : 0),
+        (item.crypto
+          ? Math.floor(item.holding.balance * item.crypto.currentPrice)
+          : 0),
       0
     ) || 0;
 
@@ -180,11 +176,15 @@ export default function PortfolioPage() {
       switch (cryptoSort.field) {
         case "value":
           comparison =
-            (a.crypto ? Math.floor(a.holding.amount * a.crypto.price) : 0) -
-            (b.crypto ? Math.floor(b.holding.amount * b.crypto.price) : 0);
+            (a.crypto
+              ? Math.floor(a.holding.balance * a.crypto.currentPrice)
+              : 0) -
+            (b.crypto
+              ? Math.floor(b.holding.balance * b.crypto.currentPrice)
+              : 0);
           break;
         case "amount":
-          comparison = a.holding.amount - b.holding.amount;
+          comparison = a.holding.balance - b.holding.balance;
           break;
         case "name":
           comparison = (a.crypto?.name || "").localeCompare(
@@ -214,10 +214,10 @@ export default function PortfolioPage() {
   const cryptoRows = useMemo(() => {
     return sortedCrypto.map((item) => {
       const value = item.crypto
-        ? Math.floor(item.holding.amount * item.crypto.price)
+        ? Math.floor(item.holding.balance * item.crypto.currentPrice)
         : 0;
       const cost = Math.floor(
-        item.holding.amount * (item.holding.averagePurchasePrice || 0)
+        item.holding.balance * (item.holding.averagePurchasePrice || 0)
       );
       const pnl = value - cost;
       const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0;
@@ -452,23 +452,16 @@ export default function PortfolioPage() {
                         >
                           <TableCell className="font-medium">
                             <div className="flex items-center gap-2">
-                              {item.crypto?.image && (
-                                <img
-                                  src={item.crypto.image}
-                                  alt={item.crypto.name}
-                                  className="h-8 w-8 rounded"
-                                />
-                              )}
                               <div className="flex items-center gap-2">
                                 <span>{item.crypto?.name}</span>
                                 <Badge variant="outline" className="font-mono">
-                                  {item.crypto?.ticker}
+                                  {item.crypto?.symbol}
                                 </Badge>
                               </div>
                             </div>
                           </TableCell>
                           <TableCell>
-                            {item.holding.amount.toLocaleString()}
+                            {item.holding.balance.toLocaleString()}
                           </TableCell>
                           <TableCell className="text-muted-foreground">
                             {formatCurrency(

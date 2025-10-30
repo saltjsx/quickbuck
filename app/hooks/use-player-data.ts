@@ -57,8 +57,8 @@ export function usePlayerData(clerkUserId: string | null) {
 
   // Get crypto holdings for net worth breakdown
   const cryptoHoldings = useQuery(
-    api.crypto.getPlayerCryptoHoldings,
-    player ? { playerId: player._id } : "skip"
+    api.portfolio.getUserCryptoHoldings,
+    player ? { userId: player._id } : "skip"
   );
 
   // Get player's companies for net worth breakdown
@@ -71,7 +71,7 @@ export function usePlayerData(clerkUserId: string | null) {
   const allStocks = useQuery(api.stocks.getAllStocks, {});
 
   // Get all cryptos to calculate values
-  const allCryptos = useQuery(api.crypto.getAllCryptocurrencies, {});
+  const allCryptos = useQuery(api.crypto.getAllCryptos, {});
 
   // Get recent transactions
   const transactions = useQuery(
@@ -91,9 +91,9 @@ export function usePlayerData(clerkUserId: string | null) {
   // Calculate crypto value
   const cryptoValue =
     cryptoHoldings && allCryptos
-      ? cryptoHoldings.reduce((sum, holding) => {
-          const crypto = allCryptos.find((c) => c._id === holding.cryptoId);
-          return sum + (crypto ? Math.floor(holding.amount * crypto.price) : 0);
+      ? cryptoHoldings.reduce((sum: number, holding: any) => {
+          const crypto = allCryptos.find((c: any) => c._id === holding.cryptoId);
+          return sum + (crypto ? Math.floor(holding.balance * crypto.currentPrice) : 0);
         }, 0)
       : 0;
 
