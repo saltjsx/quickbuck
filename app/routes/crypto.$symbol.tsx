@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import { PriceChart } from "~/components/price-chart";
+import { CryptoPriceChart } from "~/components/crypto-price-chart";
 import { OwnershipDistributionChart } from "~/components/ownership-distribution-chart";
 import { formatCurrency } from "~/lib/game-utils";
 import {
@@ -49,14 +50,14 @@ export default function CryptoDetailPage() {
   const myWallet = useQuery(api.crypto.getMyPortfolio);
   const currentPlayer = useQuery(api.moderation.getCurrentPlayer);
 
-  // Mutations
-  const buyCrypto = useMutation(api.crypto.buyCrypto);
-  const sellCrypto = useMutation(api.crypto.sellCrypto);
-
-  // Find the specific crypto
+  // Find the specific crypto first
   const crypto = allCryptos?.find(
     (c) => c.symbol.toUpperCase() === symbol?.toUpperCase()
   );
+
+  // Mutations
+  const buyCrypto = useMutation(api.crypto.buyCrypto);
+  const sellCrypto = useMutation(api.crypto.sellCrypto);
 
   // Find wallet balance
   const walletBalance = myWallet?.find((w) => w.cryptoId === crypto?._id);
@@ -470,12 +471,12 @@ export default function CryptoDetailPage() {
                   <CardTitle>Price History</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <PriceChart
+                  <CryptoPriceChart
+                    cryptoId={crypto._id}
                     currentPrice={crypto.currentPrice}
                     symbol={crypto.symbol}
                     height={320}
                     showStats={true}
-                    days={7}
                   />
                 </CardContent>
               </Card>
