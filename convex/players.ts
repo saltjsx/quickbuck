@@ -10,19 +10,6 @@ export async function calculateNetWorth(ctx: any, playerId: Id<"players">) {
 
   let netWorth = player.balance;
 
-  // Add stock holdings value
-  const stockHoldings = await ctx.db
-    .query("userStockHoldings")
-    .withIndex("by_userId", (q: any) => q.eq("userId", playerId))
-    .collect();
-
-  for (const holding of stockHoldings) {
-    const stock = await ctx.db.get(holding.stockId);
-    if (stock) {
-      netWorth += holding.shares * stock.price;
-    }
-  }
-
   // Add cryptocurrency holdings value
   const cryptoHoldings = await ctx.db
     .query("playerCryptoWallets")

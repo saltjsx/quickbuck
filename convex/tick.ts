@@ -1,3 +1,14 @@
+/**
+ * TICK SYSTEM
+ * 
+ * Central coordinating system that runs every 5 minutes to:
+ * 1. Execute bot purchases from marketplace
+ * 2. Update stock prices (via realistic stock market engine)
+ * 3. Update cryptocurrency prices
+ * 4. Apply loan interest
+ * 5. Record tick history
+ */
+
 import { v } from "convex/values";
 import { mutation, internalMutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -28,21 +39,17 @@ async function executeTickLogic(ctx: any) {
   // Step 1: Bot purchases from marketplace
   const botPurchases = await executeBotPurchases(ctx, botBudget);
   
-  // Step 2: Update stock prices based on algorithm
-  const stockPriceUpdates = await updateStockPrices(ctx);
-  
-  // Step 3: Update cryptocurrency prices
+  // Step 2: Update cryptocurrency prices
   const cryptoPriceUpdates: any = await ctx.runMutation(internal.crypto.updateCryptoPrices);
   
-  // Step 4: Apply loan interest
+  // Step 3: Apply loan interest
   await applyLoanInterest(ctx);
   
-  // Step 5: Record tick history
+  // Step 4: Record tick history
   const tickId = await ctx.db.insert("tickHistory", {
     tickNumber,
     timestamp: now,
     botPurchases,
-    stockPriceUpdates,
     cryptoPriceUpdates,
     totalBudgetSpent: botPurchases.reduce((sum, p) => sum + p.totalPrice, 0),
   });
@@ -53,7 +60,6 @@ async function executeTickLogic(ctx: any) {
     tickNumber,
     tickId,
     botPurchases: botPurchases.length,
-    stockUpdates: stockPriceUpdates?.length || 0,
     cryptoUpdates: cryptoPriceUpdates?.length || 0,
   };
 }
@@ -242,123 +248,7 @@ async function executeBotPurchases(ctx: any, totalBudget: number) {
   return purchases;
 }
 
-// Update stock prices based on STOCK_MARKET_ALGO.md
-async function updateStockPrices(ctx: any) {
-  const stocks = await ctx.db.query("stocks").collect();
-  
-  const updates: Array<{
-    stockId: any;
-    oldPrice: number;
-    newPrice: number;
-  }> = [];
-  
-  for (const stock of stocks) {
-    const company = await ctx.db.get(stock.companyId);
-    if (!company || !company.isPublic) continue;
-    
-    // Validate stock data
-    const currentPrice = stock.price;
-    if (!Number.isFinite(currentPrice) || currentPrice <= 0 || stock.totalShares <= 0) {
-      console.warn(`Skipping stock ${stock._id}: invalid price or totalShares`);
-      continue;
-    }
-    
-    try {
-      // Calculate fundamental price based on company metrics
-      const revenueAnnual = Math.max(0, company.revenueAnnual || company.balance * 4); // Estimate if not set
-      const baseMultiple = Math.max(0.1, company.fundamentalMultiple || 6.67);
-      const growthFactor = Math.max(-0.5, Math.min(0.5, (company.growthRate || 0) * 0.5 / 100)); // Clamp to -50% to 50%
-      const sentimentFactor = Math.max(-0.5, Math.min(0.5, (company.sentiment || 0) * 0.2)); // Clamp to -50% to 50%
-      
-      const multiple = baseMultiple * (1 + growthFactor + sentimentFactor);
-      const fundamentalMarketCap = Math.floor(revenueAnnual * multiple);
-      const fundamentalPrice = Math.max(100, Math.floor(fundamentalMarketCap / stock.totalShares)); // Min $1.00
-      
-      const volatility = Math.max(0, company.volatilityEst || 0.6);
-      const tickVolatility = volatility / Math.sqrt(105120); // 5-min ticks, 24/7
-      
-      // Generate more realistic price movements with ups and downs
-      // Use a combination of random walk and Perlin-like noise for smoother transitions
-      const random1 = Math.random() * 2 - 1; // -1 to 1
-      const random2 = Math.random() * 2 - 1; // -1 to 1
-      
-      // Combine multiple noise sources for more natural movement
-      const shortTermNoise = random1 * tickVolatility;
-      const mediumTermNoise = random2 * tickVolatility * 0.5;
-      const combinedNoise = shortTermNoise + mediumTermNoise;
-      
-      // Add trend bias that can shift over time
-      // Convert last 4 chars of ID to a number for consistent seeding
-      const idSeed = parseInt(stock._id.slice(-4), 36) || 0;
-      const trendSeed = (Date.now() / 3600000 + idSeed) % 100; // Changes hourly
-      const trendBias = Math.sin(trendSeed * 0.1) * tickVolatility * 0.3;
-      
-      // Random walk component (can go up or down)
-      const randomFactor = 1 + combinedNoise + trendBias;
-      
-      // Mean reversion toward fundamental (weaker than before for more volatility)
-      const alpha = 0.03; // Reduced mean reversion for more natural movement
-      const targetPrice = currentPrice * randomFactor;
-      const newPrice = Math.floor(
-        targetPrice * (1 - alpha) + fundamentalPrice * alpha
-      );
-      
-      // Validate newPrice before clamping
-      if (!Number.isFinite(newPrice)) {
-        console.warn(`Skipping stock ${stock._id}: calculated price is NaN`);
-        continue;
-      }
-      
-      // Allow wider price swings per tick (up to 30% instead of 20%)
-      const clampedPrice = Math.max(
-        Math.floor(currentPrice * 0.7),
-        Math.min(Math.floor(currentPrice * 1.3), newPrice)
-      );
-      
-      const finalPrice = Math.max(100, clampedPrice); // Min $1.00
-      
-      // Final validation
-      if (!Number.isFinite(finalPrice) || finalPrice <= 0) {
-        console.warn(`Skipping stock ${stock._id}: final price is invalid: ${finalPrice}`);
-        continue;
-      }
-      
-      if (finalPrice !== currentPrice) {
-        const newMarketCap = finalPrice * stock.totalShares;
-        
-        await ctx.db.patch(stock._id, {
-          previousPrice: currentPrice,
-          price: finalPrice,
-          marketCap: newMarketCap,
-          updatedAt: Date.now(),
-        });
-        
-        await ctx.db.patch(stock.companyId, {
-          marketCap: newMarketCap,
-          updatedAt: Date.now(),
-        });
-        
-        // Record price history for charting
-        await ctx.db.insert("stockPriceHistory", {
-          stockId: stock._id,
-          price: finalPrice,
-          timestamp: Date.now(),
-        });
-        
-        updates.push({
-          stockId: stock._id,
-          oldPrice: currentPrice,
-          newPrice: finalPrice,
-        });
-      }
-    } catch (error) {
-      console.error(`Error updating stock price for ${stock._id}:`, error);
-      continue; // Skip this stock and move to the next one
-    }
-  }
-  
-  return updates;
-}
+// Stock market functionality has been removed
 
 // Apply daily loan interest
 async function applyLoanInterest(ctx: any) {

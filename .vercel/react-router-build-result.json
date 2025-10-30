@@ -14,13 +14,13 @@
       "routes/sign-in": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/sign-up": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/success": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/maintenance": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/panel": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/admin/maintenance": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard/index": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/leaderboard": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/marketplace": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/stocks": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/stock.$companyId": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/crypto": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/crypto.$cryptoId": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/portfolio": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/company-sales": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/gamble": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
@@ -75,6 +75,33 @@
           "runtime": "nodejs"
         }
       },
+      "routes/maintenance": {
+        "id": "routes/maintenance",
+        "parentId": "root",
+        "file": "app/routes/maintenance.tsx",
+        "path": "maintenance",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/panel": {
+        "id": "routes/panel",
+        "parentId": "root",
+        "file": "app/routes/panel.tsx",
+        "path": "panel",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
+      "routes/admin/maintenance": {
+        "id": "routes/admin/maintenance",
+        "parentId": "root",
+        "file": "app/routes/admin/maintenance.tsx",
+        "path": "admin/maintenance",
+        "config": {
+          "runtime": "nodejs"
+        }
+      },
       "routes/dashboard/layout": {
         "id": "routes/dashboard/layout",
         "parentId": "root",
@@ -108,38 +135,11 @@
           "runtime": "nodejs"
         }
       },
-      "routes/stocks": {
-        "id": "routes/stocks",
-        "parentId": "routes/dashboard/layout",
-        "file": "app/routes/stocks.tsx",
-        "path": "stocks",
-        "config": {
-          "runtime": "nodejs"
-        }
-      },
-      "routes/stock.$companyId": {
-        "id": "routes/stock.$companyId",
-        "parentId": "routes/dashboard/layout",
-        "file": "app/routes/stock.$companyId.tsx",
-        "path": "stock/:companyId",
-        "config": {
-          "runtime": "nodejs"
-        }
-      },
       "routes/crypto": {
         "id": "routes/crypto",
         "parentId": "routes/dashboard/layout",
         "file": "app/routes/crypto.tsx",
         "path": "crypto",
-        "config": {
-          "runtime": "nodejs"
-        }
-      },
-      "routes/crypto.$cryptoId": {
-        "id": "routes/crypto.$cryptoId",
-        "parentId": "routes/dashboard/layout",
-        "file": "app/routes/crypto.$cryptoId.tsx",
-        "path": "crypto/:cryptoId",
         "config": {
           "runtime": "nodejs"
         }
@@ -277,6 +277,24 @@
         "file": "routes/success.tsx",
         "path": "success"
       },
+      "routes/maintenance": {
+        "id": "routes/maintenance",
+        "parentId": "root",
+        "file": "routes/maintenance.tsx",
+        "path": "maintenance"
+      },
+      "routes/panel": {
+        "id": "routes/panel",
+        "parentId": "root",
+        "file": "routes/panel.tsx",
+        "path": "panel"
+      },
+      "routes/admin/maintenance": {
+        "id": "routes/admin/maintenance",
+        "parentId": "root",
+        "file": "routes/admin/maintenance.tsx",
+        "path": "admin/maintenance"
+      },
       "routes/dashboard/layout": {
         "id": "routes/dashboard/layout",
         "parentId": "root",
@@ -300,29 +318,11 @@
         "file": "routes/marketplace.tsx",
         "path": "marketplace"
       },
-      "routes/stocks": {
-        "id": "routes/stocks",
-        "parentId": "routes/dashboard/layout",
-        "file": "routes/stocks.tsx",
-        "path": "stocks"
-      },
-      "routes/stock.$companyId": {
-        "id": "routes/stock.$companyId",
-        "parentId": "routes/dashboard/layout",
-        "file": "routes/stock.$companyId.tsx",
-        "path": "stock/:companyId"
-      },
       "routes/crypto": {
         "id": "routes/crypto",
         "parentId": "routes/dashboard/layout",
         "file": "routes/crypto.tsx",
         "path": "crypto"
-      },
-      "routes/crypto.$cryptoId": {
-        "id": "routes/crypto.$cryptoId",
-        "parentId": "routes/dashboard/layout",
-        "file": "routes/crypto.$cryptoId.tsx",
-        "path": "crypto/:cryptoId"
       },
       "routes/portfolio": {
         "id": "routes/portfolio",

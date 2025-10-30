@@ -40,33 +40,18 @@ export default defineSchema({
   companies: defineTable({
     ownerId: v.id("players"),
     name: v.string(),
-    ticker: v.optional(v.string()), // only for public companies
     description: v.optional(v.string()),
     logo: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
     balance: v.number(), // in cents
-    marketCap: v.optional(v.number()), // in cents, for public companies
     isPublic: v.boolean(),
-    // Stock market algorithm fields
-    revenueAnnual: v.optional(v.number()), // in cents
-    ebitdaAnnual: v.optional(v.number()), // in cents
-    profitMargin: v.optional(v.number()), // percentage (0-100)
-    growthRate: v.optional(v.number()), // annualized percentage
-    sector: v.optional(v.string()), // "growth" or "value"
-    fundamentalMultiple: v.optional(v.number()),
-    sharesOutstanding: v.optional(v.number()),
-    liquidityScore: v.optional(v.number()), // 0-1
-    volatilityEst: v.optional(v.number()), // annualized
-    sentiment: v.optional(v.number()), // -1 to 1
-    newsScore: v.optional(v.number()), // short-term modifier
     reputationScore: v.number(), // 0-1
     flaggedStatus: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("by_ownerId", ["ownerId"])
-    .index("by_isPublic", ["isPublic"])
-    .index("by_ticker", ["ticker"]),
+    .index("by_isPublic", ["isPublic"]),
 
   products: defineTable({
     companyId: v.id("companies"),
@@ -92,33 +77,7 @@ export default defineSchema({
     .index("by_isActive", ["isActive"])
     .index("by_price", ["price"]),
 
-  stocks: defineTable({
-    companyId: v.id("companies"),
-    ticker: v.string(),
-    price: v.number(), // in cents, current price
-    previousPrice: v.optional(v.number()), // in cents
-    totalShares: v.number(),
-    marketCap: v.number(), // in cents
-    volume5min: v.optional(v.number()),
-    high52w: v.optional(v.number()),
-    low52w: v.optional(v.number()),
-    createdAt: v.number(),
-    updatedAt: v.number(),
-  })
-    .index("by_companyId", ["companyId"])
-    .index("by_ticker", ["ticker"]),
 
-  userStockHoldings: defineTable({
-    userId: v.id("players"),
-    companyId: v.id("companies"),
-    stockId: v.id("stocks"),
-    shares: v.number(),
-    averagePurchasePrice: v.number(), // in cents
-    boughtAt: v.number(),
-  })
-    .index("by_userId", ["userId"])
-    .index("by_companyId", ["companyId"])
-    .index("by_userId_companyId", ["userId", "companyId"]),
 
   carts: defineTable({
     userId: v.id("players"),
@@ -241,15 +200,6 @@ export default defineSchema({
         totalPrice: v.number(),
       })
     ),
-    stockPriceUpdates: v.optional(
-      v.array(
-        v.object({
-          stockId: v.id("stocks"),
-          oldPrice: v.number(),
-          newPrice: v.number(),
-        })
-      )
-    ),
     cryptoPriceUpdates: v.optional(
       v.array(
         v.object({
@@ -264,32 +214,7 @@ export default defineSchema({
     .index("by_timestamp", ["timestamp"])
     .index("by_tickNumber", ["tickNumber"]),
 
-  stockPriceHistory: defineTable({
-    stockId: v.id("stocks"),
-    price: v.number(), // in cents
-    timestamp: v.number(),
-    open: v.optional(v.number()), // for candlestick
-    high: v.optional(v.number()),
-    low: v.optional(v.number()),
-    close: v.optional(v.number()),
-    volume: v.optional(v.number()),
-  })
-    .index("by_stockId", ["stockId"])
-    .index("by_stockId_timestamp", ["stockId", "timestamp"])
-    .index("by_timestamp", ["timestamp"]),
 
-  stockTrades: defineTable({
-    stockId: v.id("stocks"),
-    companyId: v.id("companies"),
-    shares: v.number(),
-    pricePerShare: v.number(), // in cents
-    totalValue: v.number(), // in cents
-    tradeType: v.union(v.literal("buy"), v.literal("sell")),
-    timestamp: v.number(),
-  })
-    .index("by_stockId", ["stockId"])
-    .index("by_stockId_timestamp", ["stockId", "timestamp"])
-    .index("by_timestamp", ["timestamp"]),
 
   // Upgrades system
   upgrades: defineTable({

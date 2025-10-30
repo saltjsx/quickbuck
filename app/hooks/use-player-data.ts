@@ -49,12 +49,6 @@ export function usePlayerData(clerkUserId: string | null) {
     player ? { playerId: player._id } : "skip"
   );
 
-  // Get stock holdings for net worth breakdown
-  const stockHoldings = useQuery(
-    api.stocks.getPlayerStockHoldings,
-    player ? { playerId: player._id } : "skip"
-  );
-
   // Get crypto holdings for net worth breakdown
   const cryptoHoldings = useQuery(
     api.portfolio.getUserCryptoHoldings,
@@ -67,9 +61,6 @@ export function usePlayerData(clerkUserId: string | null) {
     player ? { playerId: player._id } : "skip"
   );
 
-  // Get all stocks to calculate values
-  const allStocks = useQuery(api.stocks.getAllStocks, {});
-
   // Get all cryptos to calculate values
   const allCryptos = useQuery(api.crypto.getAllCryptos, {});
 
@@ -78,15 +69,6 @@ export function usePlayerData(clerkUserId: string | null) {
     api.transactions.getPlayerTransactionHistory,
     player ? { playerId: player._id } : "skip"
   );
-
-  // Calculate stocks value
-  const stocksValue =
-    stockHoldings && allStocks
-      ? stockHoldings.reduce((sum, holding) => {
-          const stock = allStocks.find((s) => s._id === holding.stockId);
-          return sum + (stock ? holding.shares * stock.price : 0);
-        }, 0)
-      : 0;
 
   // Calculate crypto value
   const cryptoValue =
@@ -97,10 +79,10 @@ export function usePlayerData(clerkUserId: string | null) {
         }, 0)
       : 0;
 
-  // Calculate company equity (sum of all owned companies' balances and market caps)
+  // Calculate company equity (sum of all owned companies' balances)
   const companyEquity = playerCompanies
     ? playerCompanies.reduce((sum, company) => {
-        return sum + (company.balance + (company.marketCap ?? 0));
+        return sum + company.balance;
       }, 0)
     : 0;
 
@@ -108,7 +90,7 @@ export function usePlayerData(clerkUserId: string | null) {
     player,
     balance: balance ?? 0,
     netWorth: netWorth ?? 0,
-    stocksValue,
+    stocksValue: 0,
     cryptoValue,
     companyEquity,
     transactions: transactions ?? [],

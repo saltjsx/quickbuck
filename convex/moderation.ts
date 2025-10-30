@@ -301,17 +301,7 @@ export const banPlayer = mutation({
         await ctx.db.delete(product._id);
       }
 
-      // Delete stock if it exists
-      const stock = await ctx.db
-        .query("stocks")
-        .withIndex("by_companyId", (q) => q.eq("companyId", company._id))
-        .unique();
-
-      if (stock) {
-        await ctx.db.delete(stock._id);
-      }
-
-      // Delete marketplace listings
+      // Marketplace listings
       const listings = await ctx.db
         .query("marketplaceListings")
         .withIndex("by_sellerCompanyId", (q) => q.eq("sellerCompanyId", company._id))
@@ -333,16 +323,6 @@ export const banPlayer = mutation({
 
       // Delete the company
       await ctx.db.delete(company._id);
-    }
-
-    // Delete all user stock holdings
-    const stockHoldings = await ctx.db
-      .query("userStockHoldings")
-      .withIndex("by_userId", (q) => q.eq("userId", args.targetPlayerId))
-      .collect();
-
-    for (const holding of stockHoldings) {
-      await ctx.db.delete(holding._id);
     }
 
     // Delete user cart and cart items
@@ -794,18 +774,6 @@ export const deleteCompanyAsMod = mutation({
       });
     }
 
-    // Delete stock if public
-    if (company.isPublic) {
-      const stock = await ctx.db
-        .query("stocks")
-        .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
-        .unique();
-
-      if (stock) {
-        await ctx.db.delete(stock._id);
-      }
-    }
-
     // Delete the company
     await ctx.db.delete(args.companyId);
 
@@ -936,55 +904,6 @@ export const setCompanyBalance = mutation({
     });
 
     return { success: true, message: `Company balance set to $${(args.newBalance / 100).toFixed(2)}` };
-  },
-});
-
-// Mutation: Set stock price (admin only)
-export const setStockPrice = mutation({
-  args: {
-    stockId: v.id("stocks"),
-    newPrice: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) throw new Error("Not authenticated");
-
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
-      .unique();
-
-    if (!user) throw new Error("User not found");
-
-    const currentPlayer = await ctx.db
-      .query("players")
-      .withIndex("by_userId", (q) => q.eq("userId", user._id))
-      .unique();
-
-    if (!currentPlayer) throw new Error("Player not found");
-
-    const isAdmin = await hasPermission(ctx, currentPlayer._id, "admin");
-    if (!isAdmin) {
-      throw new Error("Insufficient permissions - admin required");
-    }
-
-    if (args.newPrice <= 0 || !Number.isSafeInteger(args.newPrice)) {
-      throw new Error("Invalid price value");
-    }
-
-    const stock = await ctx.db.get(args.stockId);
-    if (!stock) throw new Error("Stock not found");
-
-    const newMarketCap = args.newPrice * stock.totalShares;
-
-    await ctx.db.patch(args.stockId, {
-      previousPrice: stock.price,
-      price: args.newPrice,
-      marketCap: newMarketCap,
-      updatedAt: Date.now(),
-    });
-
-    return { success: true, message: `Stock price set to $${(args.newPrice / 100).toFixed(2)}` };
   },
 });
 

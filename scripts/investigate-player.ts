@@ -92,31 +92,11 @@ async function investigatePlayer() {
     console.log(`\nTotal Active Debt: $${(totalDebt / 100).toFixed(2)}`);
     console.log();
 
-    // 4. Get stock holdings
-    console.log("4. STOCK HOLDINGS");
+    // 4. Stock holdings removed
+    console.log("4. STOCK HOLDINGS (REMOVED)");
     console.log("-".repeat(80));
-    const stockHoldings = await client.query(api.stocks.getPlayerStockHoldings, {
-      playerId: PLAYER_ID,
-    });
-    console.log(`Total Stock Holdings: ${stockHoldings.length}`);
-    
-    let totalStockValue = 0;
-    for (const holding of stockHoldings) {
-      try {
-        const stock = await client.query(api.stocks.getStock, { stockId: holding.stockId });
-        const value = holding.shares * (stock?.price || 0);
-        totalStockValue += value;
-        
-        console.log(`\n  Stock: ${stock?.ticker || "Unknown"}`);
-        console.log(`    Shares: ${holding.shares}`);
-        console.log(`    Current Price: $${((stock?.price || 0) / 100).toFixed(2)}`);
-        console.log(`    Total Value: $${(value / 100).toFixed(2)}`);
-        console.log(`    Avg Purchase Price: $${(holding.averagePurchasePrice / 100).toFixed(2)}`);
-      } catch (e) {
-        console.log(`\n  Stock ID: ${holding.stockId} - ERROR: ${e}`);
-      }
-    }
-    console.log(`\nTotal Stock Value: $${(totalStockValue / 100).toFixed(2)}`);
+    console.log("Stock market functionality has been removed.");
+    const totalStockValue = 0;
     console.log();
 
     // 5. Get companies
@@ -129,12 +109,11 @@ async function investigatePlayer() {
     
     let totalCompanyValue = 0;
     companies.forEach((company, i) => {
-      const companyValue = company.balance + (company.marketCap || 0);
+      const companyValue = company.balance;
       totalCompanyValue += companyValue;
       
       console.log(`\n  Company ${i + 1}: ${company.name}`);
       console.log(`    Balance: $${(company.balance / 100).toFixed(2)}`);
-      console.log(`    Market Cap: $${((company.marketCap || 0) / 100).toFixed(2)}`);
       console.log(`    Total Value: $${(companyValue / 100).toFixed(2)}`);
       console.log(`    Public: ${company.isPublic}`);
     });

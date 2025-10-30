@@ -15,8 +15,6 @@ export const resetAllData = mutation({
     // List of tables to clear. Keep in sync with convex/schema.ts
     const tables = [
       "tickHistory",
-      "stockPriceHistory",
-      "stockTrades",
       "marketplaceSales",
       "marketplaceListings",
       "companySales",
@@ -24,12 +22,10 @@ export const resetAllData = mutation({
       "transactions",
       "carts",
       "cartItems",
-      "userStockHoldings",
       "players",
       "users",
       "companies",
       "products",
-      "stocks",
       "loans",
       "upgrades",
       "gamblingHistory",
