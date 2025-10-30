@@ -72,20 +72,15 @@ export default function ManageCompaniesPage() {
   const [companyTags, setCompanyTags] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
   // State for make public modal
   const [publicModalOpen, setPublicModalOpen] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] =
     useState<Id<"companies"> | null>(null);
 
-  // State for edit modal
-  const [editModalOpen, setEditModalOpen] = useState(false);
-  const [editCompanyId, setEditCompanyId] = useState<Id<"companies"> | null>(
-    null
-  );
-  const [editName, setEditName] = useState("");
-  const [editTicker, setEditTicker] = useState("");
-  const [editDescription, setEditDescription] = useState("");
+  // Mutations for edit
+  const updateCompanyInfo = useMutation(api.companies.updateCompanyInfo);
 
   // State for delete confirmation
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -93,6 +88,16 @@ export default function ManageCompaniesPage() {
     useState<Id<"companies"> | null>(null);
   const [deleteCompanyName, setDeleteCompanyName] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // State for edit company modal
+  const [editCompanyOpen, setEditCompanyOpen] = useState(false);
+  const [editCompanyId, setEditCompanyId] = useState<Id<"companies"> | null>(
+    null
+  );
+  const [editCompanyName, setEditCompanyName] = useState("");
+  const [editCompanyDescription, setEditCompanyDescription] = useState("");
+  const [editCompanyLogo, setEditCompanyLogo] = useState("");
+  const [editCompanyTags, setEditCompanyTags] = useState("");
 
   // Handle create company
   const handleCreateCompany = async (e: React.FormEvent) => {
@@ -417,16 +422,35 @@ export default function ManageCompaniesPage() {
                         <Building2 className="mr-2 h-3 w-3" />
                         Dashboard
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() =>
-                          openDeleteModal(company._id, company.name)
-                        }
-                      >
-                        <Trash2 className="mr-2 h-3 w-3" />
-                        Delete
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setEditCompanyId(company._id);
+                            setEditCompanyName(company.name);
+                            setEditCompanyDescription(
+                              company.description || ""
+                            );
+                            setEditCompanyLogo(company.logo || "");
+                            setEditCompanyTags(company.tags?.join(", ") || "");
+                            setEditCompanyOpen(true);
+                          }}
+                          className="flex-1"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() =>
+                            openDeleteModal(company._id, company.name)
+                          }
+                          className="flex-1"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
 
                     {/* Make Public Button */}
@@ -496,6 +520,121 @@ export default function ManageCompaniesPage() {
                   </Button>
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? "Processing..." : "Go Public"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Edit Company Modal */}
+          <Dialog open={editCompanyOpen} onOpenChange={setEditCompanyOpen}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Edit Company Details</DialogTitle>
+                <DialogDescription>
+                  Update your company information
+                </DialogDescription>
+              </DialogHeader>
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setError("");
+
+                  if (!editCompanyId || !editCompanyName.trim()) {
+                    setError("Company name is required");
+                    return;
+                  }
+
+                  const tags = editCompanyTags
+                    .split(",")
+                    .map((t) => t.trim())
+                    .filter((t) => t.length > 0);
+
+                  setIsSubmitting(true);
+                  try {
+                    await updateCompanyInfo({
+                      companyId: editCompanyId,
+                      name: editCompanyName.trim(),
+                      description: editCompanyDescription.trim() || undefined,
+                      logo: editCompanyLogo.trim() || undefined,
+                      tags: tags.length > 0 ? tags : undefined,
+                    });
+
+                    setEditCompanyOpen(false);
+                    setEditCompanyId(null);
+                    setSuccess("Company details updated successfully!");
+                  } catch (err) {
+                    setError(
+                      err instanceof Error
+                        ? err.message
+                        : "Failed to update company"
+                    );
+                  } finally {
+                    setIsSubmitting(false);
+                  }
+                }}
+                className="space-y-4"
+              >
+                <div className="space-y-2">
+                  <Label htmlFor="company-name">Company Name *</Label>
+                  <Input
+                    id="company-name"
+                    value={editCompanyName}
+                    onChange={(e) => setEditCompanyName(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company-description">Description</Label>
+                  <Textarea
+                    id="company-description"
+                    value={editCompanyDescription}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) =>
+                      setEditCompanyDescription(e.target.value)
+                    }
+                    rows={3}
+                    placeholder="Describe your company..."
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company-logo">Logo URL</Label>
+                  <Input
+                    id="company-logo"
+                    type="url"
+                    value={editCompanyLogo}
+                    onChange={(e) => setEditCompanyLogo(e.target.value)}
+                    placeholder="https://example.com/logo.png"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="company-tags">Tags (comma-separated)</Label>
+                  <Input
+                    id="company-tags"
+                    value={editCompanyTags}
+                    onChange={(e) => setEditCompanyTags(e.target.value)}
+                    placeholder="technology, startup, innovation"
+                  />
+                </div>
+
+                {error && (
+                  <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    {error}
+                  </div>
+                )}
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setEditCompanyOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Saving..." : "Save Changes"}
                   </Button>
                 </DialogFooter>
               </form>
