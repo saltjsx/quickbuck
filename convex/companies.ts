@@ -124,6 +124,89 @@ export const updateCompanyBalance = mutation({
 // Stock market is now independent of player-owned companies
 // See stocks.ts for the standalone stock market system
 
+// Mutation: Make company public (IPO)
+export const makeCompanyPublic = mutation({
+  args: {
+    companyId: v.id("companies"),
+    ownerId: v.id("players"),
+  },
+  handler: async (ctx, args) => {
+    const company = await ctx.db.get(args.companyId);
+    if (!company) {
+      throw new Error("Company not found");
+    }
+
+    // Verify ownership
+    if (company.ownerId !== args.ownerId) {
+      throw new Error("Only the company owner can make the company public");
+    }
+
+    // Check if already public
+    if (company.isPublic) {
+      throw new Error("Company is already public");
+    }
+
+    // Company must have some balance
+    if (company.balance < 10000) {
+      throw new Error("Company must have at least $100 in balance to go public");
+    }
+
+    // Calculate valuation: 5x company balance
+    const valuation = company.balance * 5; // in cents
+    
+    // Create stock for this company
+    // Assume 1,000,000 outstanding shares initially
+    const outstandingShares = 1000000;
+    const pricePerShare = Math.floor(valuation / outstandingShares); // in cents
+    
+    const stockId = await ctx.db.insert("stocks", {
+      companyId: args.companyId,
+      name: company.name,
+      symbol: company.name
+        .split(" ")
+        .slice(0, 2)
+        .map((word) => word[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 4), // Create ticker from company name (e.g., "Acme Corp" -> "AC")
+      outstandingShares,
+      currentPrice: pricePerShare,
+      marketCap: valuation,
+      liquidity: Math.max(50000, valuation / 100), // Liquidity scales with market cap
+      sector: "other",
+      fairValue: pricePerShare,
+      lastPriceChange: 0,
+      volatility: 0.03,
+      trendMomentum: 0,
+      createdAt: Date.now(),
+      lastUpdated: Date.now(),
+    });
+
+    // Update company to be public
+    await ctx.db.patch(args.companyId, {
+      isPublic: true,
+      marketCap: valuation,
+      updatedAt: Date.now(),
+    });
+
+    return {
+      companyId: args.companyId,
+      stockId,
+      symbol: company.name
+        .split(" ")
+        .slice(0, 2)
+        .map((word) => word[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 4),
+      valuation: valuation / 100, // in dollars for display
+      pricePerShare: pricePerShare / 100, // in dollars for display
+      outstandingShares,
+      message: `${company.name} went public! Valuation: $${(valuation / 100).toFixed(2)}, Share Price: $${(pricePerShare / 100).toFixed(2)}`,
+    };
+  },
+});
+
 // Query: Get company
 export const getCompany = query({
   args: {
