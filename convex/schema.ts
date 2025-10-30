@@ -409,4 +409,62 @@ export default defineSchema({
   })
     .index("by_playerId", ["playerId"])
     .index("by_playerId_updatedAt", ["playerId", "updatedAt"]),
+
+  // Cryptocurrency system
+  cryptocurrencies: defineTable({
+    name: v.string(), // e.g., "GameCoin"
+    symbol: v.string(), // e.g., "GMC"
+    totalSupply: v.number(),
+    circulatingSupply: v.number(),
+    currentPrice: v.number(), // in cents
+    marketCap: v.number(), // in cents
+    liquidity: v.number(), // simulated pool for price impact
+    baseVolatility: v.number(), // daily volatility factor (0.05-0.2)
+    trendDrift: v.number(), // current trend direction (-0.01 to 0.01)
+    lastVolatilityUpdate: v.number(), // for volatility clustering
+    lastPriceChange: v.number(), // for momentum calculation
+    createdAt: v.number(),
+    lastUpdated: v.number(),
+  })
+    .index("by_symbol", ["symbol"]),
+
+  cryptoPriceHistory: defineTable({
+    cryptoId: v.id("cryptocurrencies"),
+    timestamp: v.number(),
+    open: v.number(), // in cents
+    high: v.number(), // in cents
+    low: v.number(), // in cents
+    close: v.number(), // in cents
+    volume: v.number(), // aggregated trades in interval
+  })
+    .index("by_crypto_time", ["cryptoId", "timestamp"])
+    .index("by_timestamp", ["timestamp"]),
+
+  playerCryptoWallets: defineTable({
+    playerId: v.id("players"),
+    cryptoId: v.id("cryptocurrencies"),
+    balance: v.number(), // amount of coins owned
+    totalInvested: v.number(), // in cents, total money spent
+    averagePurchasePrice: v.number(), // in cents per coin
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_player_crypto", ["playerId", "cryptoId"])
+    .index("by_playerId", ["playerId"])
+    .index("by_cryptoId", ["cryptoId"]),
+
+  cryptoTransactions: defineTable({
+    playerId: v.id("players"),
+    cryptoId: v.id("cryptocurrencies"),
+    type: v.union(v.literal("buy"), v.literal("sell")),
+    amount: v.number(), // coins
+    pricePerCoin: v.number(), // in cents
+    totalValue: v.number(), // in cents
+    priceImpact: v.number(), // percentage
+    timestamp: v.number(),
+  })
+    .index("by_playerId", ["playerId"])
+    .index("by_cryptoId", ["cryptoId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_player_crypto_time", ["playerId", "cryptoId", "timestamp"]),
 });

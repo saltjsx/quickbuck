@@ -58,6 +58,10 @@ export default function Panel() {
   // @ts-ignore
   const getAllAlerts = useQuery(api.alerts?.getAllAlerts);
 
+  // Crypto mutations
+  const createCrypto = useMutation(api.crypto.createCryptocurrency);
+  const updateCryptoParams = useMutation(api.crypto.updateCryptoParameters);
+
   const [activeTab, setActiveTab] = useState<
     "players" | "companies" | "products" | "crypto" | "alerts"
   >("players");
@@ -79,6 +83,15 @@ export default function Panel() {
     playerName: string;
     warnings: Array<{ reason: string; createdAt: number }>;
   } | null>(null);
+  const [showCreateCryptoModal, setShowCreateCryptoModal] = useState(false);
+  const [cryptoForm, setCryptoForm] = useState({
+    name: "",
+    symbol: "",
+    initialSupply: "",
+    initialPrice: "",
+    liquidity: "",
+    baseVolatility: "",
+  });
 
   const showMessage = (message: string) => {
     setActionMessage(message);
@@ -303,6 +316,51 @@ export default function Panel() {
     try {
       await deleteCrypto({ cryptoId, reason });
       showMessage("✓ Cryptocurrency deleted");
+    } catch (e: any) {
+      showMessage("✗ Error: " + e.message);
+    }
+  };
+
+  const handleCreateCrypto = async () => {
+    if (
+      !cryptoForm.name ||
+      !cryptoForm.symbol ||
+      !cryptoForm.initialSupply ||
+      !cryptoForm.initialPrice
+    ) {
+      showMessage("✗ Please fill in all required fields");
+      return;
+    }
+
+    try {
+      const initialSupply = parseFloat(cryptoForm.initialSupply);
+      const initialPrice = parseFloat(cryptoForm.initialPrice) * 100; // Convert to cents
+      const liquidity = cryptoForm.liquidity
+        ? parseFloat(cryptoForm.liquidity)
+        : undefined;
+      const baseVolatility = cryptoForm.baseVolatility
+        ? parseFloat(cryptoForm.baseVolatility)
+        : undefined;
+
+      await createCrypto({
+        name: cryptoForm.name,
+        symbol: cryptoForm.symbol.toUpperCase(),
+        initialSupply,
+        initialPrice,
+        liquidity,
+        baseVolatility,
+      });
+
+      showMessage("✓ Cryptocurrency created successfully");
+      setShowCreateCryptoModal(false);
+      setCryptoForm({
+        name: "",
+        symbol: "",
+        initialSupply: "",
+        initialPrice: "",
+        liquidity: "",
+        baseVolatility: "",
+      });
     } catch (e: any) {
       showMessage("✗ Error: " + e.message);
     }
@@ -772,7 +830,25 @@ export default function Panel() {
 
         {activeTab === "crypto" && (
           <div className="crypto-section">
-            <h2>Cryptocurrency Management</h2>
+            <div
+              className="crypto-header"
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "20px",
+              }}
+            >
+              <h2>Cryptocurrency Management</h2>
+              {isAdmin && (
+                <button
+                  className="retro-button btn-primary"
+                  onClick={() => setShowCreateCryptoModal(true)}
+                >
+                  ➕ Create Cryptocurrency
+                </button>
+              )}
+            </div>
             {cryptos === undefined ? (
               <div className="loading">Loading cryptocurrencies...</div>
             ) : cryptos.length === 0 ? (
@@ -782,10 +858,11 @@ export default function Panel() {
                 <thead>
                   <tr>
                     <th>Name</th>
-                    <th>Ticker</th>
-                    <th>Creator</th>
+                    <th>Symbol</th>
                     <th>Price</th>
                     <th>Market Cap</th>
+                    <th>Supply</th>
+                    <th>Volatility</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -793,10 +870,15 @@ export default function Panel() {
                   {cryptos.map((crypto) => (
                     <tr key={crypto._id}>
                       <td>{crypto.name}</td>
-                      <td>{crypto.ticker}</td>
-                      <td>{crypto.creatorName}</td>
-                      <td>${(crypto.price / 100).toFixed(2)}</td>
-                      <td>${(crypto.marketCap / 100).toFixed(2)}</td>
+                      <td>
+                        <strong>{crypto.symbol}</strong>
+                      </td>
+                      <td>${(crypto.currentPrice / 100).toFixed(4)}</td>
+                      <td>${(crypto.marketCap / 100).toLocaleString()}</td>
+                      <td>{crypto.circulatingSupply.toLocaleString()}</td>
+                      <td>
+                        {((crypto.baseVolatility || 0) * 100).toFixed(1)}%
+                      </td>
                       <td>
                         <div className="action-buttons">
                           <button
@@ -1040,6 +1122,141 @@ export default function Panel() {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+
+      {/* Create Crypto Modal */}
+      <div
+        className={`warning-modal-overlay ${
+          showCreateCryptoModal ? "visible" : ""
+        }`}
+      >
+        <div className="warning-modal-box" style={{ maxWidth: "600px" }}>
+          <h3>🪙 Create New Cryptocurrency</h3>
+          <div
+            style={{ display: "flex", flexDirection: "column", gap: "15px" }}
+          >
+            <div>
+              <label htmlFor="crypto-name">Name *</label>
+              <input
+                id="crypto-name"
+                type="text"
+                value={cryptoForm.name}
+                onChange={(e) =>
+                  setCryptoForm({ ...cryptoForm, name: e.target.value })
+                }
+                placeholder="e.g., GameCoin"
+              />
+            </div>
+            <div>
+              <label htmlFor="crypto-symbol">Symbol *</label>
+              <input
+                id="crypto-symbol"
+                type="text"
+                value={cryptoForm.symbol}
+                onChange={(e) =>
+                  setCryptoForm({
+                    ...cryptoForm,
+                    symbol: e.target.value.toUpperCase(),
+                  })
+                }
+                placeholder="e.g., GMC"
+                maxLength={6}
+              />
+            </div>
+            <div>
+              <label htmlFor="crypto-supply">Initial Supply *</label>
+              <input
+                id="crypto-supply"
+                type="number"
+                value={cryptoForm.initialSupply}
+                onChange={(e) =>
+                  setCryptoForm({
+                    ...cryptoForm,
+                    initialSupply: e.target.value,
+                  })
+                }
+                placeholder="e.g., 1000000"
+                min="1"
+              />
+            </div>
+            <div>
+              <label htmlFor="crypto-price">Initial Price (USD) *</label>
+              <input
+                id="crypto-price"
+                type="number"
+                value={cryptoForm.initialPrice}
+                onChange={(e) =>
+                  setCryptoForm({ ...cryptoForm, initialPrice: e.target.value })
+                }
+                placeholder="e.g., 1.00"
+                min="0.01"
+                step="0.01"
+              />
+            </div>
+            <div>
+              <label htmlFor="crypto-liquidity">
+                Liquidity Pool (optional)
+              </label>
+              <input
+                id="crypto-liquidity"
+                type="number"
+                value={cryptoForm.liquidity}
+                onChange={(e) =>
+                  setCryptoForm({ ...cryptoForm, liquidity: e.target.value })
+                }
+                placeholder="Default: 10% of supply"
+                min="1"
+              />
+              <small style={{ color: "#666", fontSize: "12px" }}>
+                Controls price impact from trades
+              </small>
+            </div>
+            <div>
+              <label htmlFor="crypto-volatility">
+                Base Volatility (optional)
+              </label>
+              <input
+                id="crypto-volatility"
+                type="number"
+                value={cryptoForm.baseVolatility}
+                onChange={(e) =>
+                  setCryptoForm({
+                    ...cryptoForm,
+                    baseVolatility: e.target.value,
+                  })
+                }
+                placeholder="Default: 0.1 (10%)"
+                min="0.01"
+                max="1"
+                step="0.01"
+              />
+              <small style={{ color: "#666", fontSize: "12px" }}>
+                Daily volatility factor (0.05-0.2 recommended)
+              </small>
+            </div>
+          </div>
+          <div className="warning-modal-buttons" style={{ marginTop: "20px" }}>
+            <button
+              className="btn-cancel"
+              onClick={() => {
+                setShowCreateCryptoModal(false);
+                setCryptoForm({
+                  name: "",
+                  symbol: "",
+                  initialSupply: "",
+                  initialPrice: "",
+                  liquidity: "",
+                  baseVolatility: "",
+                });
+              }}
+            >
+              Cancel
+            </button>
+            <button className="btn-submit" onClick={handleCreateCrypto}>
+              Create Cryptocurrency
+            </button>
+          </div>
         </div>
       </div>
 

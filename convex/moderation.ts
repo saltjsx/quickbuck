@@ -1253,3 +1253,73 @@ export const checkPlayerFinances = query({
     };
   },
 });
+
+/**
+ * Query: Get all cryptocurrencies for moderation
+ */
+export const getAllCryptosForModeration = query({
+  handler: async (ctx) => {
+    // Check mod access
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+    if (!player) throw new Error("Player not found");
+
+    const role = player.role || "normal";
+    if (role !== "mod" && role !== "admin") {
+      throw new Error("Not authorized");
+    }
+
+    // Get all cryptos
+    const cryptos = await ctx.db.query("cryptocurrencies").collect();
+
+    return cryptos;
+  },
+});
+
+/**
+ * Mutation: Delete cryptocurrency (mod/admin)
+ */
+export const deleteCryptoAsMod = mutation({
+  args: {
+    cryptoId: v.id("cryptocurrencies"),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Check mod access
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+    if (!player) throw new Error("Player not found");
+
+    const role = player.role || "normal";
+    if (role !== "mod" && role !== "admin") {
+      throw new Error("Not authorized");
+    }
+
+    // Delete the crypto
+    await ctx.db.delete(args.cryptoId);
+
+    console.log(`[MODERATION] Crypto ${args.cryptoId} deleted by ${user.name || user.email} (${role}). Reason: ${args.reason}`);
+  },
+});

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, internalMutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 // Shared tick execution logic
 async function executeTickLogic(ctx: any) {
@@ -30,6 +31,9 @@ async function executeTickLogic(ctx: any) {
   // Step 2: Update stock prices based on algorithm
   const stockPriceUpdates = await updateStockPrices(ctx);
   
+  // Step 3: Update cryptocurrency prices
+  const cryptoPriceUpdates: any = await ctx.runMutation(internal.crypto.updateCryptoPrices);
+  
   // Step 4: Apply loan interest
   await applyLoanInterest(ctx);
   
@@ -39,6 +43,7 @@ async function executeTickLogic(ctx: any) {
     timestamp: now,
     botPurchases,
     stockPriceUpdates,
+    cryptoPriceUpdates,
     totalBudgetSpent: botPurchases.reduce((sum, p) => sum + p.totalPrice, 0),
   });
   
@@ -49,6 +54,7 @@ async function executeTickLogic(ctx: any) {
     tickId,
     botPurchases: botPurchases.length,
     stockUpdates: stockPriceUpdates?.length || 0,
+    cryptoUpdates: cryptoPriceUpdates?.length || 0,
   };
 }
 
