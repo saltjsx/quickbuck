@@ -77,8 +77,6 @@ export default function ManageCompaniesPage() {
   const [publicModalOpen, setPublicModalOpen] = useState(false);
   const [selectedCompanyId, setSelectedCompanyId] =
     useState<Id<"companies"> | null>(null);
-  const [stockTicker, setStockTicker] = useState("");
-  const [totalShares, setTotalShares] = useState("1000000");
 
   // State for edit modal
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -148,15 +146,8 @@ export default function ManageCompaniesPage() {
       return;
     }
 
-    if (!stockTicker.trim()) {
-      setError("Stock ticker is required");
-      return;
-    }
-
-    const shares = parseInt(totalShares);
-
-    if (isNaN(shares) || shares <= 0) {
-      setError("Invalid number of shares");
+    if (!player) {
+      setError("Player not found");
       return;
     }
 
@@ -164,13 +155,10 @@ export default function ManageCompaniesPage() {
     try {
       await makeCompanyPublic({
         companyId: selectedCompanyId,
-        ticker: stockTicker.trim().toUpperCase(),
-        totalShares: shares,
+        ownerId: player._id,
       });
 
       // Reset form and close modal
-      setStockTicker("");
-      setTotalShares("1000000");
       setPublicModalOpen(false);
       setSelectedCompanyId(null);
     } catch (err) {
@@ -183,9 +171,8 @@ export default function ManageCompaniesPage() {
   };
 
   // Open make public modal
-  const openMakePublicModal = (companyId: Id<"companies">, name: string) => {
+  const openMakePublicModal = (companyId: Id<"companies">) => {
     setSelectedCompanyId(companyId);
-    setStockTicker(name.substring(0, 4).toUpperCase());
     setPublicModalOpen(true);
   };
 
@@ -446,9 +433,7 @@ export default function ManageCompaniesPage() {
                     {!company.isPublic && company.balance >= 5000000 && (
                       <Button
                         className="w-full"
-                        onClick={() =>
-                          openMakePublicModal(company._id, company.name)
-                        }
+                        onClick={() => openMakePublicModal(company._id)}
                       >
                         <DollarSign className="mr-2 h-4 w-4" />
                         Make Public (IPO)
@@ -473,46 +458,22 @@ export default function ManageCompaniesPage() {
               <DialogHeader>
                 <DialogTitle>Make Company Public (IPO)</DialogTitle>
                 <DialogDescription>
-                  Set the number of shares. The share price will be calculated
+                  Your company will be listed on the stock market. A stock
+                  ticker and initial share price will be calculated
                   automatically based on your company balance.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleMakePublic} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="stock-ticker">Stock Ticker *</Label>
-                  <Input
-                    id="stock-ticker"
-                    placeholder="e.g., TECH"
-                    value={stockTicker}
-                    onChange={(e) =>
-                      setStockTicker(e.target.value.toUpperCase())
-                    }
-                    maxLength={6}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="total-shares">Total Shares *</Label>
-                  <Input
-                    id="total-shares"
-                    type="number"
-                    step="1"
-                    min="1"
-                    placeholder="1000000"
-                    value={totalShares}
-                    onChange={(e) => setTotalShares(e.target.value)}
-                    required
-                  />
-                </div>
-
                 <div className="rounded-md bg-blue-50 p-3 text-sm">
                   <p className="text-muted-foreground mb-2">
                     <strong>How it works:</strong>
                   </p>
                   <ul className="space-y-1 text-xs text-muted-foreground list-disc list-inside">
                     <li>Market Cap = Your company balance × 5</li>
-                    <li>Share Price = Market Cap ÷ Total Shares</li>
+                    <li>1,000,000 shares will be issued</li>
+                    <li>Share Price = Market Cap ÷ 1,000,000</li>
+                    <li>Ticker will be auto-generated from company name</li>
+                    <li>Requires minimum $100 company balance</li>
                   </ul>
                 </div>
 

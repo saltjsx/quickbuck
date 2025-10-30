@@ -23,7 +23,7 @@ export function generatePriceHistory(
   let price = currentPrice * 0.8; // Assume current price is higher than start
   const volatility = 0.02; // 2% daily volatility
   
-  for (let i = days; i >= 0; i--) {
+  for (let i = days; i >= 1; i--) {
     // Random walk with slight upward drift
     const random = Math.random() - 0.45; // Slight upward bias
     const change = random * volatility;
@@ -43,11 +43,24 @@ export function generatePriceHistory(
     });
   }
   
+  // Always use the actual current price for the final data point (today)
+  const date = new Date(now);
+  data.push({
+    timestamp: now,
+    price: currentPrice,
+    displayTime: date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    }),
+    formattedPrice: formatCurrency(currentPrice),
+  });
+  
   return data;
 }
 
 /**
  * Generates a smooth curve through the data for a more polished look
+ * Preserves the first and last data points to maintain accuracy
  */
 export function smoothPriceHistory(data: ChartDataPoint[]): ChartDataPoint[] {
   if (data.length < 3) return data;
@@ -68,6 +81,7 @@ export function smoothPriceHistory(data: ChartDataPoint[]): ChartDataPoint[] {
     });
   }
   
+  // Always preserve the last point as-is (current actual price)
   smoothed.push(data[data.length - 1]);
   return smoothed;
 }
