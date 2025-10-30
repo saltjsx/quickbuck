@@ -18,6 +18,7 @@ export default [
     route("leaderboard", "routes/leaderboard.tsx"),
     route("marketplace", "routes/marketplace.tsx"),
     route("crypto", "routes/crypto.tsx"),
+    route("stocks", "routes/stocks.tsx"),
     route("portfolio", "routes/portfolio.tsx"),
     route("company-sales", "routes/company-sales.tsx"),
     route("gamble", "routes/gamble.tsx"),

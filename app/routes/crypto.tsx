@@ -8,6 +8,7 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
+import { Textarea } from "~/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -60,6 +61,7 @@ export default function CryptoPage() {
   // Mutations
   const buyCrypto = useMutation(api.crypto.buyCrypto);
   const sellCrypto = useMutation(api.crypto.sellCrypto);
+  const createCrypto = useMutation(api.crypto.createCryptocurrency);
 
   // State
   const [searchQuery, setSearchQuery] = useState("");
@@ -70,6 +72,12 @@ export default function CryptoPage() {
   const [tradeDialogOpen, setTradeDialogOpen] = useState(false);
   const [tradeType, setTradeType] = useState<"buy" | "sell">("buy");
   const [tradeAmount, setTradeAmount] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [newCryptoName, setNewCryptoName] = useState("");
+  const [newCryptoSymbol, setNewCryptoSymbol] = useState("");
+  const [newCryptoDescription, setNewCryptoDescription] = useState("");
+  const [newCryptoTags, setNewCryptoTags] = useState("");
+  const [newCryptoImageUrl, setNewCryptoImageUrl] = useState("");
 
   // Filter and sort cryptos
   const filteredCryptos = useMemo(() => {
@@ -158,6 +166,40 @@ export default function CryptoPage() {
     return wallet?.balance || 0;
   };
 
+  const handleCreateCrypto = async () => {
+    if (!newCryptoName || !newCryptoSymbol) {
+      toast.error("Please fill in name and symbol");
+      return;
+    }
+
+    try {
+      // Parse tags from comma-separated string
+      const tags = newCryptoTags
+        .split(",")
+        .map((tag) => tag.trim())
+        .filter((tag) => tag.length > 0);
+
+      await createCrypto({
+        name: newCryptoName,
+        symbol: newCryptoSymbol.toUpperCase(),
+        description: newCryptoDescription || undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        imageUrl: newCryptoImageUrl || undefined,
+      });
+      toast.success(
+        `Created ${newCryptoName} (${newCryptoSymbol.toUpperCase()}) cryptocurrency for $10,000!`
+      );
+      setCreateDialogOpen(false);
+      setNewCryptoName("");
+      setNewCryptoSymbol("");
+      setNewCryptoDescription("");
+      setNewCryptoTags("");
+      setNewCryptoImageUrl("");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to create cryptocurrency");
+    }
+  };
+
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
@@ -217,20 +259,19 @@ export default function CryptoPage() {
             )}
           </div>
 
-          <Tabs defaultValue="market" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="market">
-                <Activity className="mr-2 h-4 w-4" />
-                Market
-              </TabsTrigger>
-              <TabsTrigger value="portfolio">
-                <Wallet className="mr-2 h-4 w-4" />
-                My Portfolio
-              </TabsTrigger>
-            </TabsList>
+          <div className="space-y-4">
+            {/* Create Crypto Button */}
+            <div className="flex justify-end">
+              <Button
+                onClick={() => setCreateDialogOpen(true)}
+                variant="outline"
+              >
+                <Coins className="mr-2 h-4 w-4" />
+                Create Cryptocurrency ($10,000)
+              </Button>
+            </div>
 
-            {/* Market Tab */}
-            <TabsContent value="market" className="space-y-4">
+            <div className="space-y-4">
               {/* Search and Sort */}
               <div className="grid gap-3 md:grid-cols-3">
                 <div className="md:col-span-2">
@@ -280,15 +321,23 @@ export default function CryptoPage() {
                   return (
                     <Card
                       key={crypto._id}
-                      className="hover:shadow-lg transition-shadow"
+                      className="hover:shadow-lg transition-shadow flex flex-col"
                     >
                       <CardHeader className="pb-3">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-center gap-3">
-                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-                              <Coins className="h-6 w-6 text-primary" />
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-3 flex-1">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 flex-shrink-0">
+                              {crypto.imageUrl ? (
+                                <img
+                                  src={crypto.imageUrl}
+                                  alt={crypto.symbol}
+                                  className="h-12 w-12 rounded-full object-cover"
+                                />
+                              ) : (
+                                <Coins className="h-6 w-6 text-primary" />
+                              )}
                             </div>
-                            <div>
+                            <div className="flex-1">
                               <CardTitle className="text-lg">
                                 {crypto.symbol}
                               </CardTitle>
@@ -312,8 +361,26 @@ export default function CryptoPage() {
                           )}
                         </div>
                       </CardHeader>
-                      <CardContent className="space-y-3">
-                        <div className="space-y-1">
+                      <CardContent className="space-y-3 flex-1 flex flex-col">
+                        {crypto.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2">
+                            {crypto.description}
+                          </p>
+                        )}
+                        {crypto.tags && crypto.tags.length > 0 && (
+                          <div className="flex flex-wrap gap-1">
+                            {crypto.tags.map((tag) => (
+                              <Badge
+                                key={tag}
+                                variant="secondary"
+                                className="text-xs"
+                              >
+                                {tag}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                        <div className="space-y-1 mt-auto">
                           <div className="text-2xl font-bold">
                             {formatCurrency(crypto.currentPrice)}
                           </div>
@@ -327,7 +394,7 @@ export default function CryptoPage() {
                             </div>
                           )}
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 mt-3">
                           <Button
                             onClick={() => openTradeDialog(crypto, "buy")}
                             className="flex-1"
@@ -368,137 +435,8 @@ export default function CryptoPage() {
                   </CardContent>
                 </Card>
               )}
-            </TabsContent>
-
-            {/* Portfolio Tab */}
-            <TabsContent value="portfolio" className="space-y-4">
-              {/* Portfolio Summary */}
-              <Card className="bg-gradient-to-r from-primary/10 to-primary/5">
-                <CardHeader>
-                  <CardTitle>Total Portfolio Value</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold">
-                    {formatCurrency(portfolioTotal)}
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Across {myPortfolio?.length || 0} cryptocurrencies
-                  </p>
-                </CardContent>
-              </Card>
-
-              {/* Holdings */}
-              <div className="space-y-3">
-                {myPortfolio && myPortfolio.length > 0 ? (
-                  myPortfolio.map((holding) => {
-                    if (!holding.crypto) return null;
-                    const crypto = holding.crypto;
-                    const isProfitable = holding.profitLoss >= 0;
-
-                    return (
-                      <Card key={holding._id}>
-                        <CardContent className="pt-6">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-                                <Coins className="h-5 w-5 text-primary" />
-                              </div>
-                              <div>
-                                <div className="font-semibold">
-                                  {crypto.symbol}
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                  {holding.balance.toLocaleString()} coins
-                                </div>
-                              </div>
-                            </div>
-                            <div className="text-right">
-                              <div className="font-semibold">
-                                {formatCurrency(holding.currentValue)}
-                              </div>
-                              <div
-                                className={`text-sm ${
-                                  isProfitable
-                                    ? "text-green-600"
-                                    : "text-red-600"
-                                }`}
-                              >
-                                {isProfitable ? "+" : ""}
-                                {formatCurrency(holding.profitLoss)} (
-                                {holding.profitLossPercent.toFixed(2)}%)
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-4 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-                            <div>
-                              <div>Avg. Cost</div>
-                              <div className="font-medium text-foreground">
-                                {formatCurrency(holding.averagePurchasePrice)}
-                              </div>
-                            </div>
-                            <div>
-                              <div>Current Price</div>
-                              <div className="font-medium text-foreground">
-                                {formatCurrency(crypto.currentPrice)}
-                              </div>
-                            </div>
-                            <div>
-                              <div>Invested</div>
-                              <div className="font-medium text-foreground">
-                                {formatCurrency(holding.totalInvested)}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-4 flex gap-2">
-                            <Button
-                              onClick={() => openTradeDialog(crypto, "buy")}
-                              variant="outline"
-                              size="sm"
-                              className="flex-1"
-                            >
-                              Buy More
-                            </Button>
-                            <Button
-                              onClick={() => openTradeDialog(crypto, "sell")}
-                              variant="outline"
-                              size="sm"
-                              className="flex-1"
-                            >
-                              Sell
-                            </Button>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })
-                ) : (
-                  <Card>
-                    <CardContent className="py-12 text-center">
-                      <Wallet className="mx-auto h-12 w-12 text-muted-foreground" />
-                      <h3 className="mt-4 text-lg font-medium">
-                        No Holdings Yet
-                      </h3>
-                      <p className="mt-2 text-sm text-muted-foreground">
-                        Start trading cryptocurrencies to build your portfolio
-                      </p>
-                      <Button
-                        onClick={() =>
-                          document
-                            .querySelector('[value="market"]')
-                            ?.dispatchEvent(
-                              new Event("click", { bubbles: true })
-                            )
-                        }
-                        className="mt-4"
-                      >
-                        Explore Market
-                      </Button>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -575,6 +513,112 @@ export default function CryptoPage() {
             </Button>
             <Button onClick={handleTrade} disabled={!tradeAmount}>
               {tradeType === "buy" ? "Buy" : "Sell"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Crypto Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create New Cryptocurrency</DialogTitle>
+            <DialogDescription>
+              Launch your own cryptocurrency for $10,000. You'll receive
+              1,000,000 coins at $1.00 each.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {currentPlayer && (
+              <div>
+                <Label>Your Balance</Label>
+                <div className="text-lg font-semibold">
+                  {formatCurrency(currentPlayer.balance)}
+                </div>
+              </div>
+            )}
+            <div>
+              <Label htmlFor="crypto-name">Cryptocurrency Name</Label>
+              <Input
+                id="crypto-name"
+                type="text"
+                placeholder="e.g., Bitcoin"
+                value={newCryptoName}
+                onChange={(e) => setNewCryptoName(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="crypto-symbol">Symbol (3-5 characters)</Label>
+              <Input
+                id="crypto-symbol"
+                type="text"
+                placeholder="e.g., BTC"
+                value={newCryptoSymbol}
+                onChange={(e) =>
+                  setNewCryptoSymbol(e.target.value.toUpperCase())
+                }
+                maxLength={5}
+              />
+            </div>
+            <div>
+              <Label htmlFor="crypto-description">Description (optional)</Label>
+              <Textarea
+                id="crypto-description"
+                placeholder="Brief description of your cryptocurrency"
+                value={newCryptoDescription}
+                onChange={(e) => setNewCryptoDescription(e.target.value)}
+                className="min-h-20"
+              />
+            </div>
+            <div>
+              <Label htmlFor="crypto-tags">Tags (optional)</Label>
+              <Input
+                id="crypto-tags"
+                type="text"
+                placeholder="e.g., gaming, defi, meme (comma-separated)"
+                value={newCryptoTags}
+                onChange={(e) => setNewCryptoTags(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="crypto-image">Image URL (optional)</Label>
+              <Input
+                id="crypto-image"
+                type="url"
+                placeholder="https://example.com/image.png"
+                value={newCryptoImageUrl}
+                onChange={(e) => setNewCryptoImageUrl(e.target.value)}
+              />
+            </div>
+            <div className="rounded-lg bg-muted p-3">
+              <div className="flex justify-between text-sm">
+                <span>Creation Cost</span>
+                <span className="font-semibold">$10,000</span>
+              </div>
+              <div className="flex justify-between text-sm mt-1">
+                <span>Initial Supply</span>
+                <span className="font-semibold">1,000,000 coins</span>
+              </div>
+              <div className="flex justify-between text-sm mt-1">
+                <span>Initial Price</span>
+                <span className="font-semibold">$1.00 per coin</span>
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setCreateDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreateCrypto}
+              disabled={
+                !newCryptoName || !newCryptoSymbol || newCryptoSymbol.length < 3
+              }
+            >
+              Create for $10,000
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -139,7 +139,7 @@ function calculateFairValue(
   recentPrices: number[]
 ): number {
   if (recentPrices.length === 0) {
-    return stock.currentPrice;
+    return stock.currentPrice ?? 10000; // Default to 100.00 if undefined
   }
   
   // Use 20-period moving average as base fair value
@@ -158,7 +158,7 @@ function getCurrentVolatility(stock: Doc<"stocks">): number {
   const baseVol = SECTOR_BASE_VOLATILITY[stock.sector as Sector] || 0.03;
   
   // Check if we're in a volatility cluster (recent large change)
-  if (Math.abs(stock.lastPriceChange) > VOLATILITY_CLUSTERING_THRESHOLD) {
+  if (Math.abs(stock.lastPriceChange ?? 0) > VOLATILITY_CLUSTERING_THRESHOLD) {
     return baseVol * VOLATILITY_CLUSTERING_FACTOR;
   }
   
@@ -261,7 +261,8 @@ function calculatePriceImpact(
  */
 function simulateVolume(stock: Doc<"stocks">): number {
   // Base volume proportional to outstanding shares
-  const baseVolume = stock.outstandingShares * 0.001; // 0.1% of outstanding shares
+  // Generate realistic volume based on stock characteristics
+  const baseVolume = (stock.outstandingShares ?? 1000000) * 0.001; // 0.1% of outstanding shares
   
   // Add randomness
   return Math.round(baseVolume * randomUniform(0.5, 1.5));
@@ -350,10 +351,11 @@ export const updateStockPrices = internalMutation({
     
     // Group stocks by sector
     const stocksBySector = allStocks.reduce((acc, stock) => {
-      if (!acc[stock.sector]) {
-        acc[stock.sector] = [];
+      const sector = stock.sector ?? "other";
+      if (!acc[sector]) {
+        acc[sector] = [];
       }
-      acc[stock.sector].push(stock);
+      acc[sector].push(stock);
       return acc;
     }, {} as Record<string, Doc<"stocks">[]>);
     
@@ -375,7 +377,7 @@ export const updateStockPrices = internalMutation({
           .order("desc")
           .take(20);
         
-        const recentPrices = recentHistory.map(h => h.close);
+        const recentPrices = recentHistory.map(h => h.close).filter((p): p is number => p !== undefined);
         
         // Calculate fair value
         const fairValue = calculateFairValue(stock, recentPrices);
@@ -384,15 +386,16 @@ export const updateStockPrices = internalMutation({
         const volatility = getCurrentVolatility(stock);
         
         // Generate sub-ticks for OHLC
-        const prices: number[] = [stock.currentPrice];
-        let currentPrice = stock.currentPrice;
+        const currentStockPrice = stock.currentPrice ?? 10000;
+        const prices: number[] = [currentStockPrice];
+        let currentPrice = currentStockPrice;
         
         for (let i = 0; i < SUB_TICKS; i++) {
           const newPrice = calculateNewPrice(
             currentPrice,
             fairValue,
             volatility,
-            stock.trendMomentum,
+            stock.trendMomentum ?? 0,
             sectorDrift,
             marketTrend,
             1 / SUB_TICKS
@@ -402,7 +405,7 @@ export const updateStockPrices = internalMutation({
         }
         
         // Calculate OHLC
-        const open = stock.currentPrice;
+        const open = currentStockPrice;
         const high = Math.max(...prices);
         const low = Math.min(...prices);
         const close = prices[prices.length - 1];
@@ -410,10 +413,10 @@ export const updateStockPrices = internalMutation({
         
         // Calculate price change and new momentum
         const priceChange = (close - open) / open;
-        const newMomentum = priceChange * 0.7 + stock.trendMomentum * 0.3; // Exponential moving average
+        const newMomentum = priceChange * 0.7 + (stock.trendMomentum ?? 0) * 0.3; // Exponential moving average
         
         // Update stock
-        const newMarketCap = close * stock.outstandingShares;
+        const newMarketCap = close * (stock.outstandingShares ?? 1000000);
         
         await ctx.db.patch(stock._id, {
           currentPrice: close,
@@ -513,7 +516,8 @@ export const buyStock = mutation({
     }
     
     // Calculate ask price (buy at slightly higher price)
-    const askPrice = Math.round(stock.currentPrice * (1 + BID_ASK_SPREAD));
+    const currentPrice = stock.currentPrice ?? 10000;
+    const askPrice = Math.round(currentPrice * (1 + BID_ASK_SPREAD));
     
     // Calculate total cost
     const totalCost = askPrice * args.shares;
@@ -524,13 +528,14 @@ export const buyStock = mutation({
     }
     
     // Calculate price impact
-    const impact = calculatePriceImpact(args.shares, stock.liquidity, 1);
-    const newPrice = Math.round(stock.currentPrice * (1 + impact));
+    const liquidity = stock.liquidity ?? 1000000;
+    const impact = calculatePriceImpact(args.shares, liquidity, 1);
+    const newPrice = Math.round(currentPrice * (1 + impact));
     
     const now = Date.now();
     
     // Update stock price and market cap
-    const newMarketCap = newPrice * stock.outstandingShares;
+    const newMarketCap = newPrice * (stock.outstandingShares ?? 1000000);
     await ctx.db.patch(args.stockId, {
       currentPrice: newPrice,
       marketCap: newMarketCap,
@@ -684,19 +689,21 @@ export const sellStock = mutation({
     }
     
     // Calculate bid price (sell at slightly lower price)
-    const bidPrice = Math.round(stock.currentPrice * (1 - BID_ASK_SPREAD));
+    const currentPrice = stock.currentPrice ?? 10000;
+    const bidPrice = Math.round(currentPrice * (1 - BID_ASK_SPREAD));
     
     // Calculate total proceeds
     const totalProceeds = bidPrice * args.shares;
     
     // Calculate price impact (negative for selling)
-    const impact = calculatePriceImpact(args.shares, stock.liquidity, -1);
-    const newPrice = Math.round(stock.currentPrice * (1 + impact));
+    const liquidity = stock.liquidity ?? 1000000;
+    const impact = calculatePriceImpact(args.shares, liquidity, -1);
+    const newPrice = Math.round(currentPrice * (1 + impact));
     
     const now = Date.now();
     
     // Update stock price and market cap
-    const newMarketCap = newPrice * stock.outstandingShares;
+    const newMarketCap = newPrice * (stock.outstandingShares ?? 1000000);
     await ctx.db.patch(args.stockId, {
       currentPrice: newPrice,
       marketCap: newMarketCap,
@@ -858,7 +865,7 @@ export const getPlayerPortfolio = query({
         const stock = await ctx.db.get(portfolio.stockId);
         if (!stock) return null;
         
-        const currentValue = stock.currentPrice * portfolio.shares;
+        const currentValue = (stock.currentPrice ?? 10000) * portfolio.shares;
         const gainLoss = currentValue - portfolio.totalInvested;
         const gainLossPercent = (gainLoss / portfolio.totalInvested) * 100;
         
@@ -960,25 +967,26 @@ export const getMarketOverview = query({
     }
     
     // Calculate total market cap
-    const totalMarketCap = stocks.reduce((sum, s) => sum + s.marketCap, 0);
+    const totalMarketCap = stocks.reduce((sum, s) => sum + (s.marketCap ?? 0), 0);
     
     // Calculate average 24h change
-    const averageChange24h = stocks.reduce((sum, s) => sum + s.lastPriceChange, 0) / stocks.length;
+    const averageChange24h = stocks.reduce((sum, s) => sum + (s.lastPriceChange ?? 0), 0) / stocks.length;
     
     // Group by sector
     const sectorStats = stocks.reduce((acc, stock) => {
-      if (!acc[stock.sector]) {
-        acc[stock.sector] = {
-          sector: stock.sector,
+      const sector = stock.sector ?? "other";
+      if (!acc[sector]) {
+        acc[sector] = {
+          sector: sector,
           stockCount: 0,
           totalMarketCap: 0,
           averageChange: 0,
         };
       }
       
-      acc[stock.sector].stockCount++;
-      acc[stock.sector].totalMarketCap += stock.marketCap;
-      acc[stock.sector].averageChange += stock.lastPriceChange;
+      acc[sector].stockCount++;
+      acc[sector].totalMarketCap += stock.marketCap ?? 0;
+      acc[sector].averageChange += stock.lastPriceChange ?? 0;
       
       return acc;
     }, {} as Record<string, any>);
@@ -1033,14 +1041,15 @@ export const getStockStats = query({
     const dayHistory = history.slice(0, 12); // Last 1 hour (12 * 5 minutes)
     const weekHistory = history; // Last 2.5 hours (30 * 5 minutes) - adjust as needed
     
-    const dayHigh = Math.max(...dayHistory.map(h => h.high));
-    const dayLow = Math.min(...dayHistory.map(h => h.low));
-    const weekHigh = Math.max(...weekHistory.map(h => h.high));
-    const weekLow = Math.min(...weekHistory.map(h => h.low));
-    const volume24h = dayHistory.reduce((sum, h) => sum + h.volume, 0);
+    const dayHigh = Math.max(...dayHistory.map(h => h.high).filter((h): h is number => h !== undefined));
+    const dayLow = Math.min(...dayHistory.map(h => h.low).filter((h): h is number => h !== undefined));
+    const weekHigh = Math.max(...weekHistory.map(h => h.high).filter((h): h is number => h !== undefined));
+    const weekLow = Math.min(...weekHistory.map(h => h.low).filter((h): h is number => h !== undefined));
+    const volume24h = dayHistory.reduce((sum, h) => sum + (h.volume ?? 0), 0);
     
-    const oldPrice = dayHistory[dayHistory.length - 1]?.close || stock.currentPrice;
-    const priceChange24h = stock.currentPrice - oldPrice;
+    const currentPrice = stock.currentPrice ?? 10000;
+    const oldPrice = dayHistory[dayHistory.length - 1]?.close ?? currentPrice;
+    const priceChange24h = currentPrice - oldPrice;
     const priceChangePercent24h = (priceChange24h / oldPrice) * 100;
     
     return {

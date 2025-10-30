@@ -135,15 +135,17 @@ function simulateSubTicks(
 // ============================================================================
 
 /**
- * Create a new cryptocurrency
- * Only admins should be able to call this
+ * Create a new cryptocurrency - costs $10,000
  */
 export const createCryptocurrency = mutation({
   args: {
     name: v.string(),
     symbol: v.string(),
-    initialSupply: v.number(),
-    initialPrice: v.number(), // in cents
+    description: v.optional(v.string()),
+    tags: v.optional(v.array(v.string())),
+    imageUrl: v.optional(v.string()),
+    initialSupply: v.optional(v.number()),
+    initialPrice: v.optional(v.number()), // in cents
     liquidity: v.optional(v.number()),
     baseVolatility: v.optional(v.number()),
   },
@@ -154,7 +156,7 @@ export const createCryptocurrency = mutation({
     // Get user and player
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
@@ -164,9 +166,18 @@ export const createCryptocurrency = mutation({
       .unique();
     if (!player) throw new Error("Player not found");
 
-    // Check admin role
-    if (player.role !== "admin") {
-      throw new Error("Only admins can create cryptocurrencies");
+    // Check player role
+    if (player.role === "banned") {
+      throw new Error("You are banned and cannot create cryptocurrencies");
+    }
+    if (player.role === "limited") {
+      throw new Error("Your account is limited and cannot create cryptocurrencies");
+    }
+
+    // Cost to create crypto: $10,000
+    const CREATION_COST = 1000000; // $10,000 in cents
+    if (player.balance < CREATION_COST) {
+      throw new Error(`You need ${CREATION_COST / 100} to create a cryptocurrency`);
     }
 
     // Validate symbol uniqueness
@@ -179,24 +190,37 @@ export const createCryptocurrency = mutation({
       throw new Error(`Cryptocurrency with symbol ${args.symbol} already exists`);
     }
 
+    // Set defaults for player-created cryptos
+    const initialSupply = args.initialSupply || 1000000; // Default 1M supply
+    const initialPrice = args.initialPrice || 100; // Default $1.00
+    const liquidity = args.liquidity || initialSupply * 0.1; // 10% of supply
+    const baseVolatility = args.baseVolatility || 0.15; // 15% volatility for new crypto
+
     // Validate inputs
-    if (args.initialSupply <= 0) throw new Error("Initial supply must be positive");
-    if (args.initialPrice <= 0) throw new Error("Initial price must be positive");
+    if (initialSupply <= 0) throw new Error("Initial supply must be positive");
+    if (initialPrice <= 0) throw new Error("Initial price must be positive");
 
     const now = Date.now();
-    const liquidity = args.liquidity || args.initialSupply * 0.1; // 10% of supply as default liquidity
-    const baseVolatility = args.baseVolatility || 0.1; // Default 10% volatility
-    const marketCap = Math.floor(args.initialPrice * args.initialSupply);
+    const marketCap = Math.floor(initialPrice * initialSupply);
+
+    // Deduct creation cost
+    await ctx.db.patch(player._id, {
+      balance: player.balance - CREATION_COST,
+      updatedAt: now,
+    });
 
     const cryptoId = await ctx.db.insert("cryptocurrencies", {
       name: args.name,
       symbol: args.symbol.toUpperCase(),
-      totalSupply: args.initialSupply,
-      circulatingSupply: args.initialSupply,
-      currentPrice: args.initialPrice,
-      marketCap: marketCap,
-      liquidity: liquidity,
-      baseVolatility: baseVolatility,
+      description: args.description,
+      tags: args.tags,
+      imageUrl: args.imageUrl,
+      totalSupply: initialSupply,
+      circulatingSupply: initialSupply,
+      currentPrice: initialPrice,
+      marketCap,
+      liquidity,
+      baseVolatility,
       trendDrift: 0,
       lastVolatilityUpdate: now,
       lastPriceChange: 0,
@@ -208,10 +232,10 @@ export const createCryptocurrency = mutation({
     await ctx.db.insert("cryptoPriceHistory", {
       cryptoId,
       timestamp: now,
-      open: args.initialPrice,
-      high: args.initialPrice,
-      low: args.initialPrice,
-      close: args.initialPrice,
+      open: initialPrice,
+      high: initialPrice,
+      low: initialPrice,
+      close: initialPrice,
       volume: 0,
     });
 
@@ -235,7 +259,7 @@ export const updateCryptoParameters = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
@@ -275,7 +299,7 @@ export const buyCrypto = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
@@ -395,7 +419,7 @@ export const sellCrypto = mutation({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
       .unique();
     if (!user) throw new Error("User not found");
 
@@ -688,7 +712,7 @@ export const getMyWallet = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
       .unique();
     if (!user) return null;
 
@@ -726,7 +750,7 @@ export const getMyPortfolio = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
       .unique();
     if (!user) return [];
 
@@ -779,7 +803,7 @@ export const getMyTransactions = query({
 
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
       .unique();
     if (!user) return [];
 

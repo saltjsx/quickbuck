@@ -346,6 +346,9 @@ export default defineSchema({
   cryptocurrencies: defineTable({
     name: v.string(), // e.g., "GameCoin"
     symbol: v.string(), // e.g., "GMC"
+    description: v.optional(v.string()), // user-provided description
+    tags: v.optional(v.array(v.string())), // user-provided tags
+    imageUrl: v.optional(v.string()), // user-provided image URL/link
     totalSupply: v.number(),
     circulatingSupply: v.number(),
     currentPrice: v.number(), // in cents
