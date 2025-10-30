@@ -9,7 +9,7 @@ export const createCompany = mutation({
   args: {
     ownerId: v.id("players"),
     name: v.string(),
-    ticker: v.optional(v.string()),
+
     description: v.optional(v.string()),
     logo: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
@@ -24,7 +24,6 @@ export const createCompany = mutation({
     // CONTENT FILTER: Validate company name and description
     const validatedName = validateName(args.name, "Company name");
     const validatedDescription = validateDescription(args.description, "Company description");
-    const validatedTicker = validateTicker(args.ticker);
     const validatedTags = validateTags(args.tags);
 
     const now = Date.now();
@@ -32,7 +31,6 @@ export const createCompany = mutation({
     const companyId = await ctx.db.insert("companies", {
       ownerId: args.ownerId,
       name: validatedName,
-      ticker: validatedTicker,
       description: validatedDescription,
       logo: args.logo,
       tags: validatedTags,
@@ -122,98 +120,9 @@ export const updateCompanyBalance = mutation({
   },
 });
 
-// Mutation: Make company public (IPO)
-export const makeCompanyPublic = mutation({
-  args: {
-    companyId: v.id("companies"),
-    ticker: v.string(),
-    totalShares: v.number(), // Only players set the number of shares
-  },
-  handler: async (ctx, args) => {
-    // CONTENT FILTER: Validate ticker symbol
-    const validatedTicker = validateTicker(args.ticker);
-    if (!validatedTicker) {
-      throw new Error("Ticker symbol is required");
-    }
-
-    // EXPLOIT FIX: Validate total shares is positive and safe integer
-    if (args.totalShares <= 0) {
-      throw new Error("Total shares must be positive");
-    }
-
-    if (!Number.isSafeInteger(args.totalShares)) {
-      throw new Error("Total shares is not a safe integer");
-    }
-
-    // EXPLOIT FIX: Set reasonable max shares limit (prevent overflow in calculations)
-    const MAX_SHARES = 1000000000; // 1 billion shares max
-    if (args.totalShares > MAX_SHARES) {
-      throw new Error(`Total shares cannot exceed ${MAX_SHARES}`);
-    }
-
-    const company = await ctx.db.get(args.companyId);
-    if (!company) {
-      throw new Error("Company not found");
-    }
-
-    if (company.balance < 5000000) {
-      throw new Error("Company balance must be at least $50,000 to go public");
-    }
-
-    if (company.isPublic) {
-      throw new Error("Company is already public");
-    }
-
-    // Check if ticker is already taken
-    const existingStock = await ctx.db
-      .query("stocks")
-      .withIndex("by_ticker", (q) => q.eq("ticker", validatedTicker))
-      .unique();
-
-    if (existingStock) {
-      throw new Error("Ticker symbol already in use");
-    }
-
-    // Market cap is always 5x the company balance
-    const marketCap = company.balance * 5;
-
-    // EXPLOIT FIX: Validate market cap is safe
-    if (!Number.isSafeInteger(marketCap)) {
-      throw new Error("Market cap calculation overflow");
-    }
-
-    // Share price is calculated from market cap and total shares
-    const initialSharePrice = Math.floor(marketCap / args.totalShares);
-
-    // EXPLOIT FIX: Validate share price is positive
-    if (initialSharePrice <= 0) {
-      throw new Error("Invalid share price calculation - too many shares for market cap");
-    }
-    const now = Date.now();
-
-    // Update company
-    await ctx.db.patch(args.companyId, {
-      isPublic: true,
-      ticker: validatedTicker,
-      marketCap,
-      sharesOutstanding: args.totalShares,
-      updatedAt: now,
-    });
-
-    // Create stock entry
-    const stockId = await ctx.db.insert("stocks", {
-      companyId: args.companyId,
-      ticker: validatedTicker,
-      price: initialSharePrice,
-      totalShares: args.totalShares,
-      marketCap,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    return stockId;
-  },
-});
+// Note: Company IPO system has been removed
+// Stock market is now independent of player-owned companies
+// See stocks.ts for the standalone stock market system
 
 // Query: Get company
 export const getCompany = query({
@@ -255,20 +164,10 @@ export const getAllCompanies = query({
   },
 });
 
-// Query: Get company by ticker
-export const getCompanyByTicker = query({
-  args: {
-    ticker: v.string(),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("companies")
-      .withIndex("by_ticker", (q) => q.eq("ticker", args.ticker))
-      .unique();
-  },
-});
+// Note: Ticker system removed - see stocks.ts for independent stock market
 
-// Query: Get player's ownership percentage in a company
+// Note: Company ownership is now 100% to owner
+// Company shares system removed - see stocks.ts for independent stock market
 export const getPlayerCompanyOwnership = query({
   args: {
     playerId: v.id("players"),
@@ -278,49 +177,17 @@ export const getPlayerCompanyOwnership = query({
     const company = await ctx.db.get(args.companyId);
     if (!company) return 0;
 
-    // Check if player is the owner
+    // Player owns 100% if they're the owner
     if (company.ownerId === args.playerId) {
-      // If not public, owner has 100%
-      if (!company.isPublic) return 100;
-    }
-
-    // Check shareholdings for public companies
-    if (company.isPublic) {
-      const holdings = await ctx.db
-        .query("companyShares")
-        .withIndex("by_userId_companyId", (q) =>
-          q.eq("userId", args.playerId).eq("companyId", args.companyId)
-        )
-        .collect();
-
-      const totalShares = holdings.reduce((sum, h) => sum + h.shares, 0);
-      
-      if (company.sharesOutstanding && company.sharesOutstanding > 0) {
-        return (totalShares / company.sharesOutstanding) * 100;
-      }
+      return 100;
     }
 
     return 0;
   },
 });
 
-// Query: Get top companies by market cap
-export const getTopCompaniesByMarketCap = query({
-  args: {
-    limit: v.number(),
-  },
-  handler: async (ctx, args) => {
-    const publicCompanies = await ctx.db
-      .query("companies")
-      .withIndex("by_isPublic", (q) => q.eq("isPublic", true))
-      .collect();
-
-    return publicCompanies
-      .filter((c) => c.marketCap !== undefined)
-      .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
-      .slice(0, args.limit);
-  },
-});
+// Note: Market cap system removed - companies now ranked by balance only
+// See stocks.ts for independent stock market with market caps
 
 // Query: Get top companies by balance
 export const getTopCompaniesByBalance = query({
@@ -350,17 +217,7 @@ export const deleteCompany = mutation({
       throw new Error("Only the company owner can delete the company");
     }
 
-    // Delete the stock if it exists (regardless of public status or shareholders)
-    if (company.isPublic) {
-      const stock = await ctx.db
-        .query("stocks")
-        .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
-        .unique();
-      
-      if (stock) {
-        await ctx.db.delete(stock._id);
-      }
-    }
+    // Note: Stock system is now independent of companies
 
     // Transfer company balance to owner
     const owner = await ctx.db.get(args.ownerId);

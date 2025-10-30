@@ -49,6 +49,10 @@ export default defineSchema({
     flaggedStatus: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
+    // Legacy fields - to be removed via migration
+    ticker: v.optional(v.string()),
+    marketCap: v.optional(v.number()),
+    sharesOutstanding: v.optional(v.number()),
   })
     .index("by_ownerId", ["ownerId"])
     .index("by_isPublic", ["isPublic"]),
@@ -209,6 +213,8 @@ export default defineSchema({
         })
       )
     ),
+    // Legacy field from old stock system
+    stockPriceUpdates: v.optional(v.any()),
     totalBudgetSpent: v.number(), // in cents
   })
     .index("by_timestamp", ["timestamp"])
@@ -393,4 +399,73 @@ export default defineSchema({
     .index("by_cryptoId", ["cryptoId"])
     .index("by_timestamp", ["timestamp"])
     .index("by_player_crypto_time", ["playerId", "cryptoId", "timestamp"]),
+
+  // Stock Market System
+  stocks: defineTable({
+    name: v.optional(v.string()), // e.g., "TechCorp"
+    symbol: v.optional(v.string()), // e.g., "TCH"
+    outstandingShares: v.optional(v.number()),
+    currentPrice: v.optional(v.number()), // in cents
+    marketCap: v.optional(v.number()), // in cents (currentPrice * outstandingShares)
+    liquidity: v.optional(v.number()), // simulated pool size for price impact
+    sector: v.optional(v.string()), // e.g., "tech", "energy", "finance", "healthcare", "consumer"
+    fairValue: v.optional(v.number()), // in cents, simulated intrinsic value for mean reversion
+    lastPriceChange: v.optional(v.number()), // for momentum tracking
+    volatility: v.optional(v.number()), // current volatility factor
+    trendMomentum: v.optional(v.number()), // short-term trend direction
+    lastVolatilityCluster: v.optional(v.number()), // timestamp of last high volatility event
+    createdAt: v.optional(v.number()),
+    lastUpdated: v.optional(v.number()),
+    // Legacy fields from old company-based stock system
+    companyId: v.optional(v.id("companies")),
+    ticker: v.optional(v.string()),
+    price: v.optional(v.number()),
+    totalShares: v.optional(v.number()),
+    previousPrice: v.optional(v.number()),
+    updatedAt: v.optional(v.number()),
+  })
+    .index("by_symbol", ["symbol"])
+    .index("by_sector", ["sector"]),
+
+  stockPriceHistory: defineTable({
+    stockId: v.id("stocks"),
+    timestamp: v.number(),
+    open: v.optional(v.number()), // in cents
+    high: v.optional(v.number()), // in cents
+    low: v.optional(v.number()), // in cents
+    close: v.optional(v.number()), // in cents
+    volume: v.optional(v.number()), // aggregated trades in interval
+    // Legacy field
+    price: v.optional(v.number()),
+  })
+    .index("by_stock_time", ["stockId", "timestamp"])
+    .index("by_timestamp", ["timestamp"]),
+
+  playerStockPortfolios: defineTable({
+    playerId: v.id("players"),
+    stockId: v.id("stocks"),
+    shares: v.number(),
+    averageCost: v.number(), // in cents per share
+    totalInvested: v.number(), // in cents
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_player_stock", ["playerId", "stockId"])
+    .index("by_playerId", ["playerId"])
+    .index("by_stockId", ["stockId"]),
+
+  stockTransactions: defineTable({
+    playerId: v.id("players"),
+    stockId: v.id("stocks"),
+    type: v.union(v.literal("buy"), v.literal("sell")),
+    shares: v.number(),
+    pricePerShare: v.number(), // in cents
+    totalValue: v.number(), // in cents
+    priceImpact: v.number(), // percentage
+    timestamp: v.number(),
+  })
+    .index("by_playerId", ["playerId"])
+    .index("by_stockId", ["stockId"])
+    .index("by_timestamp", ["timestamp"])
+    .index("by_player_stock_time", ["playerId", "stockId", "timestamp"]),
 });

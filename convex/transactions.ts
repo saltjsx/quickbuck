@@ -190,7 +190,7 @@ export const transferCash = mutation({
   },
 });
 
-// Mutation: Transfer stock between accounts - REMOVED (stock market removed)
+// Note: Stock transfers are now handled in stocks.ts (buyStock/sellStock)
 // export const transferStock = mutation({
 //   ...
 // });

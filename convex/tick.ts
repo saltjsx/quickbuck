@@ -39,13 +39,16 @@ async function executeTickLogic(ctx: any) {
   // Step 1: Bot purchases from marketplace
   const botPurchases = await executeBotPurchases(ctx, botBudget);
   
-  // Step 2: Update cryptocurrency prices
+  // Step 2: Update stock prices
+  const stockPriceUpdates: any = await ctx.runMutation(internal.stocks.updateStockPrices);
+  
+  // Step 3: Update cryptocurrency prices
   const cryptoPriceUpdates: any = await ctx.runMutation(internal.crypto.updateCryptoPrices);
   
-  // Step 3: Apply loan interest
+  // Step 4: Apply loan interest
   await applyLoanInterest(ctx);
   
-  // Step 4: Record tick history
+  // Step 5: Record tick history
   const tickId = await ctx.db.insert("tickHistory", {
     tickNumber,
     timestamp: now,
@@ -60,6 +63,7 @@ async function executeTickLogic(ctx: any) {
     tickNumber,
     tickId,
     botPurchases: botPurchases.length,
+    stockUpdates: stockPriceUpdates?.updated || 0,
     cryptoUpdates: cryptoPriceUpdates?.length || 0,
   };
 }

@@ -87,10 +87,11 @@ export const getTopCompaniesByMarketCap = query({
     const { limit = 5 } = args;
     const companies = await ctx.db.query("companies").collect();
     
-    // Filter public companies, sort by market cap descending and take top N
+    // Filter public companies, sort by balance descending and take top N
+    // Note: Market cap system removed - companies now ranked by balance
     const sorted = companies
       .filter((c) => c.isPublic)
-      .sort((a, b) => (b.marketCap || 0) - (a.marketCap || 0))
+      .sort((a, b) => b.balance - a.balance)
       .slice(0, limit);
 
     // Enrich with owner info
@@ -259,7 +260,6 @@ export const getAllProductsSorted = query({
           ...product,
           companyName: company?.name || "Unknown",
           companyLogo: company?.logo,
-          ticker: company?.ticker || "N/A",
           rank: offset + index + 1,
         };
       })
@@ -319,9 +319,7 @@ export const searchCompanies = query({
         const nameMatch = c.name
           .toLowerCase()
           .includes(searchQuery.toLowerCase());
-        const tickerMatch = c.ticker
-          ?.toLowerCase()
-          .includes(searchQuery.toLowerCase());
+        const tickerMatch = false; // Ticker system removed
         return nameMatch || tickerMatch;
       })
       .slice(0, limit);
@@ -362,7 +360,6 @@ export const searchProducts = query({
           ...product,
           companyName: company?.name || "Unknown",
           companyLogo: company?.logo,
-          ticker: company?.ticker || "N/A",
         };
       })
     );
