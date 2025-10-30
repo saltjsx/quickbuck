@@ -137,6 +137,7 @@ export const makeCompanyPublic = mutation({
     companyId: v.id("companies"),
     ownerId: v.id("players"),
     ticker: v.string(), // User-chosen ticker for the stock
+    sector: v.string(), // User-chosen sector
   },
   handler: async (ctx, args) => {
     const company = await ctx.db.get(args.companyId);
@@ -152,6 +153,12 @@ export const makeCompanyPublic = mutation({
     // Check if already public
     if (company.isPublic) {
       throw new Error("Company is already public");
+    }
+
+    // Validate sector
+    const validSectors = ["tech", "energy", "finance", "healthcare", "consumer"];
+    if (!validSectors.includes(args.sector.toLowerCase())) {
+      throw new Error("Invalid sector. Must be one of: tech, energy, finance, healthcare, consumer");
     }
 
     // Company must have some balance
@@ -191,7 +198,7 @@ export const makeCompanyPublic = mutation({
       currentPrice: pricePerShare,
       marketCap: valuation,
       liquidity: Math.max(50000, valuation / 100), // Liquidity scales with market cap
-      sector: "other",
+      sector: args.sector.toLowerCase(),
       fairValue: pricePerShare,
       lastPriceChange: 0,
       volatility: 0.03,
@@ -203,6 +210,7 @@ export const makeCompanyPublic = mutation({
     // Update company to be public
     await ctx.db.patch(args.companyId, {
       isPublic: true,
+      sector: args.sector.toLowerCase(),
       marketCap: valuation,
       updatedAt: Date.now(),
     });

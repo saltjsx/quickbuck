@@ -25,6 +25,13 @@ import {
 } from "~/components/ui/dialog";
 import { Badge } from "~/components/ui/badge";
 import { CompanyLogo } from "~/components/ui/company-logo";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
 import { useNavigate } from "react-router";
@@ -81,6 +88,7 @@ export default function ManageCompaniesPage() {
   const [selectedCompanyId, setSelectedCompanyId] =
     useState<Id<"companies"> | null>(null);
   const [publicCompanyTicker, setPublicCompanyTicker] = useState("");
+  const [publicCompanySector, setPublicCompanySector] = useState("tech");
 
   // Mutations for edit
   const updateCompanyInfo = useMutation(api.companies.updateCompanyInfo);
@@ -175,18 +183,25 @@ export default function ManageCompaniesPage() {
       return;
     }
 
+    if (!publicCompanySector.trim()) {
+      setError("Sector is required");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await makeCompanyPublic({
         companyId: selectedCompanyId,
         ownerId: player._id,
         ticker: publicCompanyTicker.trim(),
+        sector: publicCompanySector.trim(),
       });
 
       // Reset form and close modal
       setPublicModalOpen(false);
       setSelectedCompanyId(null);
       setPublicCompanyTicker("");
+      setPublicCompanySector("tech");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to make company public"
@@ -200,6 +215,7 @@ export default function ManageCompaniesPage() {
   const openMakePublicModal = (companyId: Id<"companies">) => {
     setSelectedCompanyId(companyId);
     setPublicCompanyTicker("");
+    setPublicCompanySector("tech");
     setError("");
     setPublicModalOpen(true);
   };
@@ -579,6 +595,28 @@ export default function ManageCompaniesPage() {
                   />
                   <p className="text-xs text-muted-foreground">
                     2-6 characters. Must be unique.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="public-sector">Industry Sector *</Label>
+                  <Select
+                    value={publicCompanySector}
+                    onValueChange={setPublicCompanySector}
+                  >
+                    <SelectTrigger id="public-sector">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="tech">Technology</SelectItem>
+                      <SelectItem value="energy">Energy</SelectItem>
+                      <SelectItem value="finance">Finance</SelectItem>
+                      <SelectItem value="healthcare">Healthcare</SelectItem>
+                      <SelectItem value="consumer">Consumer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Choose the industry category for your company stock.
                   </p>
                 </div>
 

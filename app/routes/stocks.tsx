@@ -244,8 +244,16 @@ export default function StocksPage() {
                     <CardContent className="pt-6 space-y-4">
                       {/* Company Logo, Ticker, Name */}
                       <div className="flex items-start gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 flex-shrink-0">
-                          <Building2 className="h-6 w-6 text-primary" />
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 flex-shrink-0 overflow-hidden">
+                          {stock.companyLogo ? (
+                            <img
+                              src={stock.companyLogo}
+                              alt={stock.symbol}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <Building2 className="h-6 w-6 text-primary" />
+                          )}
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="font-bold text-lg">

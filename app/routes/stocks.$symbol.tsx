@@ -206,8 +206,16 @@ export default function StockDetailPage() {
 
           {/* Header */}
           <div className="flex items-start gap-4">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 flex-shrink-0">
-              <Building2 className="h-8 w-8 text-primary" />
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 flex-shrink-0 overflow-hidden">
+              {stock.companyLogo ? (
+                <img
+                  src={stock.companyLogo}
+                  alt={stock.symbol}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <Building2 className="h-8 w-8 text-primary" />
+              )}
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2">

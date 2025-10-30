@@ -43,6 +43,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     logo: v.optional(v.string()),
     tags: v.optional(v.array(v.string())),
+    sector: v.optional(v.string()), // e.g., "tech", "energy", "finance", "healthcare", "consumer"
     balance: v.number(), // in cents
     isPublic: v.boolean(),
     reputationScore: v.number(), // 0-1

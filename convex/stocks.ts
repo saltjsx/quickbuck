@@ -791,11 +791,30 @@ export const sellStock = mutation({
 // ============================================================================
 
 /**
- * Get all stocks
+ * Get all stocks with company information
  */
 export const getAllStocks = query({
   handler: async (ctx) => {
-    return await ctx.db.query("stocks").collect();
+    const stocks = await ctx.db.query("stocks").collect();
+    
+    // Enrich stocks with company data (logo)
+    const enrichedStocks = await Promise.all(
+      stocks.map(async (stock) => {
+        let companyLogo = undefined;
+        
+        if (stock.companyId) {
+          const company = await ctx.db.get(stock.companyId);
+          companyLogo = company?.logo;
+        }
+        
+        return {
+          ...stock,
+          companyLogo,
+        };
+      })
+    );
+    
+    return enrichedStocks;
   },
 });
 
