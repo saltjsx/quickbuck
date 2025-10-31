@@ -91,8 +91,8 @@ export default function StockDetailPage() {
   const [tradeAmount, setTradeAmount] = useState("");
   const [selectedCompany, setSelectedCompany] = useState<string>("");
 
-  // Find holding for current player
-  const holding = myPortfolio?.find((p) => p.stock?.symbol === symbol);
+  // Find holding for current player by comparing stock IDs (more reliable than symbol)
+  const holding = myPortfolio?.find((p) => p.stockId === stock?._id);
 
   if (!stock) {
     return (

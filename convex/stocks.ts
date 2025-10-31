@@ -1208,7 +1208,7 @@ export const getPlayerPortfolio = query({
     
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
       .first();
     
     if (!user) {
@@ -1268,7 +1268,7 @@ export const getPlayerStockTransactions = query({
     
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
       .first();
     
     if (!user) {
