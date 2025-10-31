@@ -27,6 +27,16 @@ export const createProduct = mutation({
       throw new Error("Your account does not have permission to create products");
     }
 
+    // HARD LIMIT: Check if company has reached max products (30)
+    const companyProducts = await ctx.db
+      .query("products")
+      .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
+      .collect();
+    
+    if (companyProducts.length >= 30) {
+      throw new Error("Your company has reached the maximum limit of 30 products. Delete an existing product to create a new one.");
+    }
+
     // CONTENT FILTER: Validate product name, description, and tags
     const validatedName = validateName(args.name, "Product name");
     const validatedDescription = validateDescription(args.description, "Product description");

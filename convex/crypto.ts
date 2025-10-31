@@ -220,6 +220,16 @@ export const createCryptocurrency = mutation({
       throw new Error(`You need ${CREATION_COST / 100} to create a cryptocurrency`);
     }
 
+    // HARD LIMIT: Check if player has reached max cryptocurrencies (3)
+    const playerCryptos = await ctx.db
+      .query("cryptocurrencies")
+      .withIndex("by_createdByPlayerId", (q) => q.eq("createdByPlayerId", player._id))
+      .collect();
+    
+    if (playerCryptos.length >= 3) {
+      throw new Error("You have reached the maximum limit of 3 cryptocurrencies. Delete an existing cryptocurrency to create a new one.");
+    }
+
     // Validate symbol uniqueness
     const existing = await ctx.db
       .query("cryptocurrencies")
@@ -255,6 +265,7 @@ export const createCryptocurrency = mutation({
       description: args.description,
       tags: args.tags,
       imageUrl: args.imageUrl,
+      createdByPlayerId: player._id,
       totalSupply: initialSupply,
       circulatingSupply: initialSupply,
       currentPrice: initialPrice,

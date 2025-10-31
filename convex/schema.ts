@@ -355,6 +355,7 @@ export default defineSchema({
     description: v.optional(v.string()), // user-provided description
     tags: v.optional(v.array(v.string())), // user-provided tags
     imageUrl: v.optional(v.string()), // user-provided image URL/link
+    createdByPlayerId: v.optional(v.id("players")), // player who created this crypto
     totalSupply: v.number(),
     circulatingSupply: v.number(),
     currentPrice: v.number(), // in cents
@@ -367,7 +368,8 @@ export default defineSchema({
     createdAt: v.number(),
     lastUpdated: v.number(),
   })
-    .index("by_symbol", ["symbol"]),
+    .index("by_symbol", ["symbol"])
+    .index("by_createdByPlayerId", ["createdByPlayerId"]),
 
   cryptoPriceHistory: defineTable({
     cryptoId: v.id("cryptocurrencies"),
