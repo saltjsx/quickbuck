@@ -1,14 +1,7 @@
+import { useEffect, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "convex/_generated/api";
-import {
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { createChart, ColorType, LineSeries } from "lightweight-charts";
 import { formatCurrency } from "~/lib/game-utils";
 import type { Id } from "convex/_generated/dataModel";
 
@@ -33,6 +26,8 @@ export function CryptoPriceChart({
   height = 320,
   showStats = true,
 }: CryptoPriceChartProps) {
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+
   // Fetch actual price history from database
   const priceHistoryRaw = useQuery(api.crypto.getPriceHistory, {
     cryptoId,
@@ -82,7 +77,63 @@ export function CryptoPriceChart({
   const changePercent = (change / prices[0]) * 100;
 
   const isPositive = change >= 0;
-  const textColor = isPositive ? "#10b981" : "#ef4444"; // Green or red
+
+  useEffect(() => {
+    if (!chartContainerRef.current) return;
+
+    const chart = createChart(chartContainerRef.current, {
+      layout: {
+        background: { type: ColorType.Solid, color: "transparent" },
+        textColor: "#9ca3af",
+        attributionLogo: false,
+      },
+      width: chartContainerRef.current.clientWidth,
+      height: height,
+      grid: {
+        vertLines: { color: "#e5e7eb" },
+        horzLines: { color: "#e5e7eb" },
+      },
+      rightPriceScale: {
+        borderColor: "#e5e7eb",
+      },
+      timeScale: {
+        borderColor: "#e5e7eb",
+      },
+    });
+
+    const lineSeries = chart.addSeries(LineSeries, {
+      color: isPositive ? "#10b981" : "#ef4444",
+      lineWidth: 3,
+      priceFormat: {
+        type: "custom",
+        formatter: (price: number) => `$${(price / 100).toFixed(0)}`,
+      },
+    });
+
+    // Transform data for TradingView (time-based horizontal scale using timestamps)
+    const chartData = data.map((d) => ({
+      time: Math.floor(d.timestamp / 1000) as any, // Convert to Unix timestamp in seconds
+      value: d.price,
+    }));
+
+    lineSeries.setData(chartData);
+    chart.timeScale().fitContent();
+
+    const handleResize = () => {
+      if (chartContainerRef.current) {
+        chart.applyOptions({
+          width: chartContainerRef.current.clientWidth,
+        });
+      }
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      chart.remove();
+    };
+  }, [data, height, isPositive]);
 
   return (
     <div className="w-full space-y-3">
@@ -114,45 +165,7 @@ export function CryptoPriceChart({
         </div>
       )}
 
-      <ResponsiveContainer width="100%" height={height}>
-        <LineChart
-          data={data}
-          margin={{ top: 5, right: 10, left: -20, bottom: 5 }}
-        >
-          <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-          <XAxis
-            dataKey="displayTime"
-            tick={{ fill: "#9ca3af", fontSize: 12 }}
-            stroke="#e5e7eb"
-          />
-          <YAxis
-            domain={["dataMin - 10", "dataMax + 10"]}
-            tick={{ fill: "#9ca3af", fontSize: 12 }}
-            stroke="#e5e7eb"
-            tickFormatter={(value) => `$${(value / 100).toFixed(0)}`}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: "#1f2937",
-              border: "1px solid #374151",
-              borderRadius: "0.5rem",
-              padding: "0.75rem",
-            }}
-            labelStyle={{ color: "#e5e7eb" }}
-            formatter={(value: any) => [formatCurrency(value), symbol]}
-            labelFormatter={(label) => `Date: ${label}`}
-          />
-          <Line
-            type="monotone"
-            dataKey="price"
-            stroke={textColor}
-            strokeWidth={2.5}
-            dot={false}
-            isAnimationActive={true}
-            animationDuration={800}
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      <div ref={chartContainerRef} />
     </div>
   );
 }

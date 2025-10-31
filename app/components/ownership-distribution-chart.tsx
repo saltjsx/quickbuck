@@ -1,11 +1,4 @@
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  ResponsiveContainer,
-  Legend,
-} from "recharts";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import type { Id } from "convex/_generated/dataModel";
 
 interface OwnershipData {
@@ -142,11 +135,11 @@ export function OwnershipDistributionChart({
             ))}
           </Pie>
           <Tooltip
-            formatter={(value: any, name: string) => {
+            formatter={(value: any) => {
               const percentage = ((value / total) * 100).toFixed(1);
               const formattedValue =
                 type === "shares" ? value.toLocaleString() : value.toFixed(4);
-              return [`${formattedValue} (${percentage}%)`, name];
+              return [`${formattedValue} (${percentage}%)`, "Value"];
             }}
             contentStyle={{
               backgroundColor: "#1f2937",
