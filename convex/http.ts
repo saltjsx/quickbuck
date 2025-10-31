@@ -126,6 +126,37 @@ http.route({
   }),
 });
 
+// Migration endpoint - for fixing data issues
+http.route({
+  path: "/api/migrations/fix-production-costs",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const result = await ctx.runMutation(internal.migrations.fixMissingProductionCostPercentage);
+      
+      return new Response(JSON.stringify({
+        success: true,
+        data: result,
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    } catch (error) {
+      return new Response(JSON.stringify({
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      }), {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+    }
+  }),
+});
+
 // Log that routes are configured
 console.log("HTTP routes configured");
 

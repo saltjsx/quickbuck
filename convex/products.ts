@@ -351,6 +351,7 @@ export const getCompanyProducts = query({
       name: p.name,
       description: p.description,
       price: p.price,
+      productionCostPercentage: p.productionCostPercentage, // Needed for cost calculations
       image: p.image,
       stock: p.stock,
       isActive: p.isActive,

@@ -9,6 +9,35 @@
 
 import { internalMutation } from "./_generated/server";
 
+/**
+ * Migration: Fix products with missing productionCostPercentage
+ * Sets a default of 0.35 (35%) for any products that don't have this field
+ */
+export const fixMissingProductionCostPercentage = internalMutation({
+  handler: async (ctx) => {
+    const products = await ctx.db.query("products").collect();
+    let fixed = 0;
+    
+    for (const product of products) {
+      if (product.productionCostPercentage === undefined || 
+          product.productionCostPercentage === null ||
+          isNaN(product.productionCostPercentage)) {
+        await ctx.db.patch(product._id, {
+          productionCostPercentage: 0.35 + Math.random() * 0.32, // 35%-67%
+          updatedAt: Date.now(),
+        });
+        fixed++;
+      }
+    }
+    
+    return {
+      success: true,
+      totalProducts: products.length,
+      fixedProducts: fixed,
+    };
+  },
+});
+
 export const cleanupOldStockSystem = internalMutation({
   handler: async (ctx) => {
     let deletedStocks = 0;
