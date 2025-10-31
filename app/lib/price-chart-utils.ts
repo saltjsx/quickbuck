@@ -8,16 +8,41 @@ export interface ChartDataPoint {
 }
 
 /**
+ * Seeded random number generator (simple LCG implementation)
+ * This ensures consistent random numbers for the same seed (symbol)
+ */
+function seededRandom(seed: string): () => number {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    const char = seed.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  // Use a Linear Congruential Generator
+  let state = Math.abs(hash);
+  
+  return function() {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+}
+
+/**
  * Generates sample price history data for charting
  * Simulates a realistic price movement based on the current price and volatility
  */
 export function generatePriceHistory(
   currentPrice: number,
-  days: number = 7
+  days: number = 7,
+  symbol: string = ""
 ): ChartDataPoint[] {
   const data: ChartDataPoint[] = [];
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
+  
+  // Create seeded random generator for consistent results per symbol
+  const random = symbol ? seededRandom(symbol) : Math.random;
   
   // Start from 'days' ago
   let price = currentPrice * 0.8; // Assume current price is higher than start
@@ -25,8 +50,8 @@ export function generatePriceHistory(
   
   for (let i = days; i >= 1; i--) {
     // Random walk with slight upward drift
-    const random = Math.random() - 0.45; // Slight upward bias
-    const change = random * volatility;
+    const randomValue = random() - 0.45; // Slight upward bias
+    const change = randomValue * volatility;
     price = Math.max(currentPrice * 0.5, price * (1 + change)); // Don't go below 50% of current
     
     const timestamp = now - i * dayMs;

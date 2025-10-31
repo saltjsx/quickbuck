@@ -30,7 +30,9 @@ export function PriceChart({
   days = 7,
 }: PriceChartProps) {
   // Generate mock historical data (in production, fetch from API)
-  const data = smoothPriceHistory(generatePriceHistory(currentPrice, days));
+  const data = smoothPriceHistory(
+    generatePriceHistory(currentPrice, days, symbol)
+  );
   const stats = calculatePriceStats(data);
 
   const isPositive = stats.change >= 0;
