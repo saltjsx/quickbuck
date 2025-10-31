@@ -149,7 +149,9 @@ export const getAllPlayersSorted = query({
   },
   handler: async (ctx, args) => {
     const { sortBy = "netWorth", limit = 50, offset = 0 } = args;
-    const players = await ctx.db.query("players").collect();
+    // Limit to max 100 to prevent excessive bandwidth
+    const safeLimit = Math.min(limit, 100);
+    const players = await ctx.db.query("players").take(500); // Limit initial fetch
 
     let sorted;
 
@@ -167,16 +169,17 @@ export const getAllPlayersSorted = query({
     }
 
     // Apply pagination
-    const paginated = sorted.slice(offset, offset + limit);
+    const paginated = sorted.slice(offset, offset + safeLimit);
 
-    // Enrich with user info and calculate rank
+    // Enrich with user info - only return needed fields
     const enriched = await Promise.all(
       paginated.map(async (player, index) => {
         const user = await ctx.db.get(player.userId);
         return {
-          ...player,
+          _id: player._id,
+          balance: player.balance,
+          netWorth: (player as any).netWorth,
           userName: user?.name || "Anonymous",
-          userEmail: user?.email,
           userImage: user?.image,
           rank: offset + index + 1,
         };
@@ -187,7 +190,7 @@ export const getAllPlayersSorted = query({
       players: enriched,
       total: players.length,
       offset,
-      limit,
+      limit: safeLimit,
     };
   },
 });
@@ -201,7 +204,8 @@ export const getAllCompaniesSorted = query({
   },
   handler: async (ctx, args) => {
     const { sortBy = "marketCap", limit = 50, offset = 0 } = args;
-    const companies = await ctx.db.query("companies").collect();
+    const safeLimit = Math.min(limit, 100); // Max 100 per query
+    const companies = await ctx.db.query("companies").take(500); // Limit initial fetch
 
     // Sort companies
     const sorted = companies.sort((a, b) => {
@@ -212,15 +216,19 @@ export const getAllCompaniesSorted = query({
     });
 
     // Apply pagination
-    const paginated = sorted.slice(offset, offset + limit);
+    const paginated = sorted.slice(offset, offset + safeLimit);
 
-    // Enrich with owner info and calculate rank
+    // Enrich with owner info - only return needed fields
     const enriched = await Promise.all(
       paginated.map(async (company, index) => {
         const owner = await ctx.db.get(company.ownerId);
         const ownerUser = owner ? await ctx.db.get(owner.userId) : null;
         return {
-          ...company,
+          _id: company._id,
+          name: company.name,
+          logo: company.logo,
+          balance: company.balance,
+          isPublic: company.isPublic,
           ownerName: ownerUser?.name || "Anonymous",
           ownerImage: ownerUser?.image,
           rank: offset + index + 1,
@@ -232,7 +240,7 @@ export const getAllCompaniesSorted = query({
       companies: enriched,
       total: companies.length,
       offset,
-      limit,
+      limit: safeLimit,
     };
   },
 });
@@ -245,19 +253,25 @@ export const getAllProductsSorted = query({
   },
   handler: async (ctx, args) => {
     const { limit = 50, offset = 0 } = args;
-    const products = await ctx.db.query("products").collect();
+    const safeLimit = Math.min(limit, 100); // Max 100 per query
+    const products = await ctx.db.query("products").take(500); // Limit initial fetch
 
     // Sort by revenue descending
     const sorted = products
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
-      .slice(offset, offset + limit);
+      .slice(offset, offset + safeLimit);
 
-    // Enrich with company info and calculate rank
+    // Enrich with company info - only return needed fields
     const enriched = await Promise.all(
       sorted.map(async (product, index) => {
         const company = await ctx.db.get(product.companyId);
         return {
-          ...product,
+          _id: product._id,
+          name: product.name,
+          image: product.image,
+          price: product.price,
+          totalRevenue: product.totalRevenue,
+          totalSold: product.totalSold,
           companyName: company?.name || "Unknown",
           companyLogo: company?.logo,
           rank: offset + index + 1,
@@ -269,7 +283,7 @@ export const getAllProductsSorted = query({
       products: enriched,
       total: products.length,
       offset,
-      limit,
+      limit: safeLimit,
     };
   },
 });

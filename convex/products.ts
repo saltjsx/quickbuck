@@ -335,22 +335,70 @@ export const getProduct = query({
 export const getCompanyProducts = query({
   args: {
     companyId: v.id("companies"),
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    return await ctx.db
+    const limit = args.limit || 100; // Default 100, helps with large companies
+    
+    const products = await ctx.db
       .query("products")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
-      .collect();
+      .take(limit);
+    
+    // Return only essential fields to reduce bandwidth
+    return products.map(p => ({
+      _id: p._id,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      image: p.image,
+      stock: p.stock,
+      isActive: p.isActive,
+      isArchived: p.isArchived,
+      totalSold: p.totalSold,
+      totalRevenue: p.totalRevenue,
+      qualityRating: p.qualityRating,
+      maxPerOrder: p.maxPerOrder,
+      tags: p.tags,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      companyId: p.companyId,
+    }));
   },
 });
 
 // Query: Get all products (for marketplace)
 export const getAllProducts = query({
-  handler: async (ctx) => {
-    return await ctx.db
+  args: {
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit || 100, 200); // Default 100, max 200
+    const offset = args.offset || 0;
+    
+    // Fetch with pagination
+    const allProducts = await ctx.db
       .query("products")
       .withIndex("by_isActive", (q) => q.eq("isActive", true))
-      .collect();
+      .take(1000); // Max 1000 total to prevent excessive queries
+    
+    const paginatedProducts = allProducts.slice(offset, offset + limit);
+    
+    // Return only essential fields for marketplace display
+    return paginatedProducts.map(p => ({
+      _id: p._id,
+      companyId: p.companyId,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      image: p.image,
+      tags: p.tags,
+      stock: p.stock,
+      maxPerOrder: p.maxPerOrder,
+      totalSold: p.totalSold,
+      qualityRating: p.qualityRating,
+    }));
   },
 });
 
@@ -401,22 +449,38 @@ export const getProductsByPriceRange = query({
 export const getProductBatchOrders = query({
   args: {
     companyId: v.id("companies"),
+    limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
+    const limit = Math.min(args.limit || 20, 50); // Default 20, max 50
+    
     const transactions = await ctx.db
       .query("transactions")
       .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.companyId))
       .filter((q) => q.eq(q.field("assetType"), "product"))
       .order("desc")
-      .take(50);
+      .take(limit);
 
-    // Enrich with product details including image
+    // Enrich with product details - only fetch needed fields
     const enriched = await Promise.all(
       transactions.map(async (tx) => {
-        if (!tx.assetId) return { ...tx, productName: "Unknown", productImage: undefined };
+        if (!tx.assetId) {
+          return { 
+            _id: tx._id,
+            description: tx.description,
+            amount: tx.amount,
+            createdAt: tx.createdAt,
+            productName: "Unknown", 
+            productImage: undefined,
+            productPrice: undefined,
+          };
+        }
         const product = await ctx.db.get(tx.assetId as Id<"products">);
         return {
-          ...tx,
+          _id: tx._id,
+          description: tx.description,
+          amount: tx.amount,
+          createdAt: tx.createdAt,
           productName: product?.name || "Unknown",
           productImage: product?.image,
           productPrice: product?.price,

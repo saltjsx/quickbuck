@@ -28,13 +28,8 @@ async function executeTickLogic(ctx: any) {
   
   console.log(`Executing tick #${tickNumber}`);
   
-  // Get global config for budget
-  const gameConfigDoc = await ctx.db
-    .query("gameConfig")
-    .withIndex("by_key", (q: any) => q.eq("key", "botBudget"))
-    .first();
-  
-  const botBudget = gameConfigDoc?.value || 10000000; // Default $100,000 in cents
+  // Hardcode bot budget to avoid extra query (was 10000000 = $100k)
+  const botBudget = 10000000; // $100,000 in cents
   
   // Step 1: Bot purchases from marketplace
   const botPurchases = await executeBotPurchases(ctx, botBudget);
@@ -101,23 +96,28 @@ async function executeBotPurchases(ctx: any, totalBudget: number) {
     totalPrice: number;
   }> = [];
   
-  // Get all active products
+  // Get active products - limit to reduce bandwidth
+  // Only fetch fields needed for bot purchase logic
   const products = await ctx.db
     .query("products")
     .withIndex("by_isActive", (q: any) => q.eq("isActive", true))
-    .collect();
+    .filter((q: any) => 
+      q.and(
+        q.eq(q.field("isArchived"), false),
+        q.lte(q.field("price"), 5000000) // Skip products over $50k
+      )
+    )
+    .take(100); // Limit to top 100 products to reduce bandwidth
   
   if (products.length === 0) {
     console.log("No active products found");
     return purchases;
   }
   
-  // Filter out invalid products
+  // Filter out invalid products (already filtered by price in query)
   const eligibleProducts = products.filter((p: any) => {
     return (
-      !p.isArchived &&
       p.price > 0 &&
-      p.price <= 5000000 && // $50,000 cap
       (p.stock === undefined || p.stock === null || p.stock > 0)
     );
   });

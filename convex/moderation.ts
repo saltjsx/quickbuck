@@ -949,7 +949,11 @@ export const getAllCompaniesForModeration = query({
 
 // Query: Get all products for moderation
 export const getAllProductsForModeration = query({
-  handler: async (ctx) => {
+  args: {
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
 
@@ -972,20 +976,40 @@ export const getAllProductsForModeration = query({
       throw new Error("Insufficient permissions");
     }
 
-    const products = await ctx.db.query("products").collect();
+    const limit = Math.min(args.limit || 50, 200); // Default 50, max 200
+    const offset = args.offset || 0;
+    
+    // Use pagination to reduce bandwidth
+    const allProducts = await ctx.db.query("products").collect();
+    const products = allProducts.slice(offset, offset + limit);
 
-    // Enrich with company data
+    // Enrich with company data - only return needed fields
     const enrichedProducts = await Promise.all(
       products.map(async (product) => {
         const company = await ctx.db.get(product.companyId);
         return {
-          ...product,
+          _id: product._id,
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          image: product.image,
+          isActive: product.isActive,
+          isArchived: product.isArchived,
+          totalSold: product.totalSold,
+          totalRevenue: product.totalRevenue,
+          createdAt: product.createdAt,
+          companyId: product.companyId,
           companyName: company?.name || "Unknown",
         };
       })
     );
 
-    return enrichedProducts;
+    return {
+      products: enrichedProducts,
+      total: allProducts.length,
+      offset,
+      limit,
+    };
   },
 });
 
