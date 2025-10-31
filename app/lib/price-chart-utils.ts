@@ -44,15 +44,31 @@ export function generatePriceHistory(
   // Create seeded random generator for consistent results per symbol
   const random = symbol ? seededRandom(symbol) : Math.random;
   
-  // Start from 'days' ago
-  let price = currentPrice * 0.8; // Assume current price is higher than start
-  const volatility = 0.02; // 2% daily volatility
+  // Generate a starting price using the seed
+  // This creates variation in whether stocks are up or down overall
+  const startMultiplier = 0.7 + (random() * 0.6); // Range: 0.7 to 1.3
+  let price = currentPrice * startMultiplier;
+  
+  // Calculate volatility based on symbol (some stocks more volatile than others)
+  const baseVolatility = 0.015 + (random() * 0.025); // Range: 1.5% to 4%
+  
+  // Calculate target (we want to end near current price, but with smooth progression)
+  const targetPrice = currentPrice;
+  const drift = (targetPrice - price) / (days + 1); // Gradual drift toward target
   
   for (let i = days; i >= 1; i--) {
-    // Random walk with slight upward drift
-    const randomValue = random() - 0.45; // Slight upward bias
-    const change = randomValue * volatility;
-    price = Math.max(currentPrice * 0.5, price * (1 + change)); // Don't go below 50% of current
+    // Random walk with drift toward current price
+    const randomValue = random() - 0.5; // Centered random
+    const randomChange = randomValue * baseVolatility;
+    
+    // Add drift component to gradually move toward current price
+    const driftComponent = drift / price;
+    
+    // Combine random walk with drift
+    price = price * (1 + randomChange + driftComponent);
+    
+    // Don't go below 30% or above 200% of current price
+    price = Math.max(currentPrice * 0.3, Math.min(currentPrice * 2.0, price));
     
     const timestamp = now - i * dayMs;
     const date = new Date(timestamp);
