@@ -311,6 +311,7 @@ export default function StockDetailPage() {
                   height={320}
                   showStats={true}
                   days={7}
+                  stockId={stock._id}
                 />
               </CardContent>
             </Card>

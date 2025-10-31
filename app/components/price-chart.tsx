@@ -13,6 +13,8 @@ import {
   smoothPriceHistory,
   calculatePriceStats,
 } from "~/lib/price-chart-utils";
+import { useStockPriceHistory } from "~/hooks/use-stock-price-history";
+import type { Id } from "convex/_generated/dataModel";
 
 interface PriceChartProps {
   currentPrice: number;
@@ -20,6 +22,7 @@ interface PriceChartProps {
   height?: number;
   showStats?: boolean;
   days?: number;
+  stockId?: Id<"stocks"> | null;
 }
 
 export function PriceChart({
@@ -28,12 +31,29 @@ export function PriceChart({
   height = 320,
   showStats = true,
   days = 7,
+  stockId,
 }: PriceChartProps) {
-  // Generate mock historical data (in production, fetch from API)
-  const data = smoothPriceHistory(
-    generatePriceHistory(currentPrice, days, symbol)
+  // Fetch real price history from database
+  const realHistory = useStockPriceHistory(stockId, 100);
+
+  // Use real data if available, otherwise fall back to generated data
+  let data;
+  if (realHistory && realHistory.length > 0) {
+    // Real data is already in cents, use as-is
+    data = realHistory;
+  } else {
+    // Fallback: generate mock data while real data loads
+    data = smoothPriceHistory(generatePriceHistory(currentPrice, days, symbol));
+  }
+
+  const stats = calculatePriceStats(
+    data.map((d) => ({
+      timestamp: d.timestamp ?? 0,
+      price: d.price,
+      displayTime: d.displayTime ?? "",
+      formattedPrice: d.formattedPrice ?? "",
+    }))
   );
-  const stats = calculatePriceStats(data);
 
   const isPositive = stats.change >= 0;
   const textColor = isPositive ? "#10b981" : "#ef4444"; // Green or red
@@ -83,7 +103,7 @@ export function PriceChart({
             domain={["dataMin - 10", "dataMax + 10"]}
             tick={{ fill: "#9ca3af", fontSize: 12 }}
             stroke="#e5e7eb"
-            tickFormatter={(value) => `$${(value / 100).toFixed(0)}`}
+            tickFormatter={(value) => `$${(value / 100).toFixed(2)}`}
           />
           <Tooltip
             contentStyle={{
@@ -93,7 +113,10 @@ export function PriceChart({
               padding: "0.75rem",
             }}
             labelStyle={{ color: "#e5e7eb" }}
-            formatter={(value: any) => [formatCurrency(value), symbol]}
+            formatter={(value: any) => [
+              `$${(Number(value) / 100).toFixed(2)}`,
+              symbol,
+            ]}
             labelFormatter={(label) => `Date: ${label}`}
           />
           <Line

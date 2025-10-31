@@ -279,6 +279,7 @@ export default function StocksPage() {
                           height={80}
                           showStats={false}
                           days={7}
+                          stockId={stock._id}
                         />
                       </div>
 
