@@ -6,3 +6,5 @@ You MUST follow these instructions to ensure this codebase works well.
 - Ensure you test code before submitting.
 - Never do "npx convex deploy". Only use "npx convex dev", and I will deploy it myself after testing.
 - Do NOT do "npm run dev". I already have the server always running.
+- Anything you do, IMPLEMENT IT FULLY. Do not leave things half done.
+- Always use the todos tool provided to keep track of tasks.

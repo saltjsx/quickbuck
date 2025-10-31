@@ -88,13 +88,22 @@ function calculatePriceImpact(
   liquidity: number,
   isBuy: boolean
 ): number {
+  // Validate inputs to prevent NaN/Infinity
+  if (!isFinite(amount) || !isFinite(liquidity) || liquidity <= 0) {
+    // If liquidity is invalid, assume minimal impact
+    return 0;
+  }
+  
   // Buy increases price, sell decreases it
   // Impact = (amount / liquidity) * direction
   const direction = isBuy ? 1 : -1;
   const rawImpact = (amount / liquidity) * direction;
   
   // Cap impact at ±30% per trade to prevent manipulation
-  return Math.max(-0.3, Math.min(0.3, rawImpact));
+  const impact = Math.max(-0.3, Math.min(0.3, rawImpact));
+  
+  // Final validation
+  return isFinite(impact) ? impact : 0;
 }
 
 /**
@@ -107,6 +116,15 @@ function simulateSubTicks(
   volatility: number,
   subTickCount: number = 5
 ): number[] {
+  // Validate inputs to prevent NaN propagation
+  if (!isFinite(startPrice) || startPrice <= 0) {
+    console.error(`Invalid startPrice: ${startPrice}`);
+    return [1]; // Return minimum valid price
+  }
+  
+  if (!isFinite(drift)) drift = 0;
+  if (!isFinite(volatility) || volatility < 0) volatility = 0.1;
+  
   const prices = [startPrice];
   
   for (let i = 0; i < subTickCount; i++) {
@@ -119,9 +137,31 @@ function simulateSubTicks(
     const exponent = subDrift + randomComponent;
     let newPrice = lastPrice * Math.exp(exponent);
     
+    // Validate newPrice
+    if (!isFinite(newPrice) || newPrice <= 0) {
+      console.error(`Invalid newPrice in sub-tick: ${newPrice}, using lastPrice`);
+      newPrice = lastPrice;
+    }
+    
     // Random events can happen at sub-tick level too (lower probability)
     if (Math.random() < 0.01) {
       newPrice *= randomUniform(0.85, 1.15);
+    }
+    
+    // Ensure minimum movement for very low prices to prevent "stuck" behavior
+    // If price is very low (< $0.10) and calculation suggests movement, ensure at least 1 cent change
+    if (lastPrice < 10 && Math.abs(newPrice - lastPrice) < 1) {
+      const shouldMove = Math.abs(exponent) > 0.01;
+      if (shouldMove) {
+        // Add minimum 1 cent movement in the direction suggested by drift
+        const direction = exponent > 0 ? 1 : -1;
+        newPrice = Math.max(1, lastPrice + direction);
+      }
+    }
+    
+    // Final validation before adding to array
+    if (!isFinite(newPrice) || newPrice <= 0) {
+      newPrice = Math.max(1, lastPrice);
     }
     
     prices.push(newPrice);
@@ -280,6 +320,69 @@ export const updateCryptoParameters = mutation({
   },
 });
 
+/**
+ * Fix all cryptocurrencies with invalid prices (admin only)
+ */
+export const fixInvalidCryptoPrices = mutation({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+    if (!user) throw new Error("User not found");
+
+    const player = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+    if (!player || player.role !== "admin") {
+      throw new Error("Only admins can fix crypto prices");
+    }
+
+    const cryptos = await ctx.db.query("cryptocurrencies").collect();
+    const fixed: string[] = [];
+    const now = Date.now();
+
+    for (const crypto of cryptos) {
+      // Check if price is invalid (NaN, Infinity, negative, or zero)
+      if (!isFinite(crypto.currentPrice) || crypto.currentPrice < 1) {
+        // Reset to minimum valid price
+        const newPrice = 1; // 1 cent
+        const newMarketCap = newPrice * crypto.circulatingSupply;
+        
+        await ctx.db.patch(crypto._id, {
+          currentPrice: newPrice,
+          marketCap: newMarketCap,
+          lastPriceChange: 0,
+          lastUpdated: now,
+        });
+        
+        fixed.push(`${crypto.symbol} (was: ${crypto.currentPrice}, now: ${newPrice})`);
+      }
+      
+      // Also validate and fix liquidity
+      if (!isFinite(crypto.liquidity) || crypto.liquidity <= 0) {
+        await ctx.db.patch(crypto._id, {
+          liquidity: crypto.circulatingSupply * 0.1,
+          lastUpdated: now,
+        });
+        fixed.push(`${crypto.symbol} liquidity fixed`);
+      }
+    }
+
+    return {
+      success: true,
+      fixed,
+      message: fixed.length > 0 
+        ? `Fixed ${fixed.length} cryptocurrency issues: ${fixed.join(", ")}`
+        : "No invalid cryptocurrencies found",
+    };
+  },
+});
+
 // ============================================================================
 // PLAYER MUTATIONS - Buy and sell cryptocurrencies
 // ============================================================================
@@ -339,13 +442,23 @@ export const buyCrypto = mutation({
       );
     }
 
+    // Validate current price
+    if (!isFinite(crypto.currentPrice) || crypto.currentPrice < 1) {
+      throw new Error("This cryptocurrency has an invalid price. Please contact support.");
+    }
+    
     // Calculate price impact
     const priceImpact = calculatePriceImpact(args.amount, crypto.liquidity, true);
-    const newPrice = Math.floor(crypto.currentPrice * (1 + priceImpact));
+    const newPrice = Math.max(1, Math.floor(crypto.currentPrice * (1 + priceImpact)));
     
     // Use average price for transaction (current + new) / 2
     const avgPrice = Math.floor((crypto.currentPrice + newPrice) / 2);
     const totalCost = avgPrice * args.amount;
+
+    // Validate calculations to prevent NaN
+    if (!isFinite(avgPrice) || !isFinite(totalCost) || avgPrice < 1 || totalCost < 1) {
+      throw new Error("Invalid price calculation. Please try again.");
+    }
 
     // Check if player has enough balance
     if (player.balance < totalCost) {
@@ -467,13 +580,23 @@ export const sellCrypto = mutation({
       throw new Error("Insufficient cryptocurrency balance");
     }
 
+    // Validate current price
+    if (!isFinite(crypto.currentPrice) || crypto.currentPrice < 1) {
+      throw new Error("This cryptocurrency has an invalid price. Please contact support.");
+    }
+
     // Calculate price impact (negative for sell)
     const priceImpact = calculatePriceImpact(args.amount, crypto.liquidity, false);
-    const newPrice = Math.floor(crypto.currentPrice * (1 + priceImpact));
+    const newPrice = Math.max(1, Math.floor(crypto.currentPrice * (1 + priceImpact)));
     
     // Use average price for transaction
     const avgPrice = Math.floor((crypto.currentPrice + newPrice) / 2);
     const totalRevenue = avgPrice * args.amount;
+
+    // Validate calculations to prevent NaN
+    if (!isFinite(avgPrice) || !isFinite(totalRevenue) || avgPrice < 1 || totalRevenue < 1) {
+      throw new Error("Invalid price calculation. Please try again.");
+    }
 
     // Update wallet
     const newBalance = wallet.balance - args.amount;
@@ -581,6 +704,17 @@ export const updateCryptoPrices = internalMutation({
 
     for (const crypto of cryptos) {
       try {
+        // Validate crypto data before processing
+        if (!isFinite(crypto.currentPrice) || crypto.currentPrice < 1) {
+          console.error(`Crypto ${crypto.symbol} has invalid price: ${crypto.currentPrice}, resetting to 1`);
+          await ctx.db.patch(crypto._id, {
+            currentPrice: 1,
+            marketCap: crypto.circulatingSupply,
+            lastUpdated: Date.now(),
+          });
+          continue;
+        }
+        
         const oldPrice = crypto.currentPrice;
         
         // Get momentum from recent history
@@ -601,10 +735,16 @@ export const updateCryptoPrices = internalMutation({
         // Apply event multiplier to final price
         let finalPrice = subTickPrices[subTickPrices.length - 1] * eventMultiplier;
         
+        // Validate finalPrice to prevent NaN propagation
+        if (!isFinite(finalPrice) || finalPrice < 0) {
+          console.error(`Invalid finalPrice for ${crypto.symbol}: ${finalPrice}, using oldPrice`);
+          finalPrice = oldPrice;
+        }
+        
         // Calculate OHLC from sub-ticks
         const open = oldPrice;
-        const high = Math.max(...subTickPrices, open);
-        const low = Math.min(...subTickPrices, open);
+        const high = Math.max(...subTickPrices.filter(p => isFinite(p) && p > 0), open);
+        const low = Math.min(...subTickPrices.filter(p => isFinite(p) && p > 0), open);
         const close = finalPrice;
         
         // Prevent extreme single-tick movements (clamp to ±50%)
@@ -613,18 +753,46 @@ export const updateCryptoPrices = internalMutation({
           Math.min(Math.floor(oldPrice * 1.5), Math.floor(close))
         );
         
-        // Prevent price from going below 1 cent
-        const newPrice = Math.max(1, clampedClose);
+        // Prevent price from going below 1 cent to prevent NaN
+        let newPrice = Math.max(1, clampedClose);
+        
+        // For very low prices, ensure there's actual movement to prevent "stuck" behavior
+        if (oldPrice < 10) {
+          // If we're below $0.10 and the unrounded close suggests movement
+          const suggestedChange = close - oldPrice;
+          const shouldMoveUp = suggestedChange > (oldPrice * 0.02); // More than 2% up
+          const shouldMoveDown = suggestedChange < -(oldPrice * 0.02); // More than 2% down
+          
+          if (shouldMoveUp && newPrice === oldPrice) {
+            newPrice = Math.max(1, oldPrice + 1); // Move up at least 1 cent
+          } else if (shouldMoveDown && newPrice === oldPrice && oldPrice > 1) {
+            newPrice = Math.max(1, oldPrice - 1); // Move down at least 1 cent
+          }
+        }
         
         // Calculate actual change for next momentum calculation
-        const priceChange = (newPrice - oldPrice) / oldPrice;
+        const priceChange = oldPrice > 0 ? (newPrice - oldPrice) / oldPrice : 0;
+        
+        // Validate priceChange
+        const validPriceChange = isFinite(priceChange) ? priceChange : 0;
         
         // Update cryptocurrency
         const newMarketCap = Math.floor(newPrice * crypto.circulatingSupply);
+        
+        // Final validation before database update
+        if (!isFinite(newPrice) || newPrice < 1) {
+          console.error(`Invalid newPrice for ${crypto.symbol}: ${newPrice}`);
+          continue; // Skip this update
+        }
+        if (!isFinite(newMarketCap)) {
+          console.error(`Invalid marketCap for ${crypto.symbol}: ${newMarketCap}`);
+          continue; // Skip this update
+        }
+        
         await ctx.db.patch(crypto._id, {
           currentPrice: newPrice,
           marketCap: newMarketCap,
-          lastPriceChange: priceChange,
+          lastPriceChange: validPriceChange,
           lastVolatilityUpdate: Date.now(),
           lastUpdated: Date.now(),
         });

@@ -235,8 +235,19 @@ function calculateNewPrice(
   const maxChange = currentPrice * (MAX_TICK_CHANGE_PERCENT / SUB_TICKS);
   newPrice = clamp(newPrice, currentPrice - maxChange, currentPrice + maxChange);
   
-  // Prevent negative prices
-  newPrice = Math.max(newPrice, 100); // Minimum $1.00
+  // Prevent negative prices - minimum 1 cent to prevent NaN
+  newPrice = Math.max(newPrice, 1); // Minimum $0.01
+  
+  // Ensure minimum movement for very low prices to prevent "stuck" behavior
+  // If price is very low (< $10) and calculation suggests movement, ensure at least 1 cent change
+  if (currentPrice < 1000 && Math.abs(newPrice - currentPrice) < 1) {
+    const shouldMove = Math.abs(drift + randomComponent) > 0.01;
+    if (shouldMove) {
+      // Add minimum 1 cent movement in the direction suggested by drift
+      const direction = (drift + randomComponent) > 0 ? 1 : -1;
+      newPrice = Math.max(1, currentPrice + direction);
+    }
+  }
   
   return Math.round(newPrice);
 }
@@ -532,10 +543,15 @@ export const buyStock = mutation({
     
     // Calculate ask price (buy at slightly higher price)
     const currentPrice = stock.currentPrice ?? 10000;
-    const askPrice = Math.round(currentPrice * (1 + BID_ASK_SPREAD));
+    const askPrice = Math.max(1, Math.round(currentPrice * (1 + BID_ASK_SPREAD)));
     
     // Calculate total cost
     const totalCost = askPrice * args.shares;
+
+    // Validate calculations to prevent NaN
+    if (!isFinite(askPrice) || !isFinite(totalCost) || askPrice < 1 || totalCost < 1) {
+      throw new Error("Invalid price calculation. Please try again.");
+    }
     
     // Check player has enough balance
     if (player.balance < totalCost) {
@@ -705,15 +721,20 @@ export const sellStock = mutation({
     
     // Calculate bid price (sell at slightly lower price)
     const currentPrice = stock.currentPrice ?? 10000;
-    const bidPrice = Math.round(currentPrice * (1 - BID_ASK_SPREAD));
+    const bidPrice = Math.max(1, Math.round(currentPrice * (1 - BID_ASK_SPREAD)));
     
     // Calculate total proceeds
     const totalProceeds = bidPrice * args.shares;
+
+    // Validate calculations to prevent NaN
+    if (!isFinite(bidPrice) || !isFinite(totalProceeds) || bidPrice < 1 || totalProceeds < 1) {
+      throw new Error("Invalid price calculation. Please try again.");
+    }
     
     // Calculate price impact (negative for selling)
     const liquidity = stock.liquidity ?? 1000000;
     const impact = calculatePriceImpact(args.shares, liquidity, -1);
-    const newPrice = Math.round(currentPrice * (1 + impact));
+    const newPrice = Math.max(1, Math.round(currentPrice * (1 + impact)));
     
     const now = Date.now();
     
@@ -895,10 +916,15 @@ export const buyStockForCompany = mutation({
     
     // Calculate ask price (buy at slightly higher price)
     const currentPrice = stock.currentPrice ?? 10000;
-    const askPrice = Math.round(currentPrice * (1 + BID_ASK_SPREAD));
+    const askPrice = Math.max(1, Math.round(currentPrice * (1 + BID_ASK_SPREAD)));
     
     // Calculate total cost
     const totalCost = askPrice * args.shares;
+
+    // Validate calculations to prevent NaN
+    if (!isFinite(askPrice) || !isFinite(totalCost) || askPrice < 1 || totalCost < 1) {
+      throw new Error("Invalid price calculation. Please try again.");
+    }
     
     // Check company has enough balance
     if (company.balance < totalCost) {
@@ -908,7 +934,7 @@ export const buyStockForCompany = mutation({
     // Calculate price impact (positive for buying)
     const liquidity = stock.liquidity ?? 1000000;
     const impact = calculatePriceImpact(args.shares, liquidity, 1);
-    const newPrice = Math.round(currentPrice * (1 + impact));
+    const newPrice = Math.max(1, Math.round(currentPrice * (1 + impact)));
     
     const now = Date.now();
     
@@ -1056,15 +1082,20 @@ export const sellStockForCompany = mutation({
     
     // Calculate bid price (sell at slightly lower price)
     const currentPrice = stock.currentPrice ?? 10000;
-    const bidPrice = Math.round(currentPrice * (1 - BID_ASK_SPREAD));
+    const bidPrice = Math.max(1, Math.round(currentPrice * (1 - BID_ASK_SPREAD)));
     
     // Calculate total proceeds
     const totalProceeds = bidPrice * args.shares;
+
+    // Validate calculations to prevent NaN
+    if (!isFinite(bidPrice) || !isFinite(totalProceeds) || bidPrice < 1 || totalProceeds < 1) {
+      throw new Error("Invalid price calculation. Please try again.");
+    }
     
     // Calculate price impact (negative for selling)
     const liquidity = stock.liquidity ?? 1000000;
     const impact = calculatePriceImpact(args.shares, liquidity, -1);
-    const newPrice = Math.round(currentPrice * (1 + impact));
+    const newPrice = Math.max(1, Math.round(currentPrice * (1 + impact)));
     
     const now = Date.now();
     
