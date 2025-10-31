@@ -29,7 +29,7 @@ import {
   Users,
 } from "lucide-react";
 import { getAuth } from "@clerk/react-router/ssr.server";
-import { redirect, Link, useParams } from "react-router";
+import { redirect, Link, useParams, useNavigate } from "react-router";
 import { toast } from "sonner";
 import type { Route } from "./+types/stocks.$symbol";
 
@@ -56,6 +56,7 @@ function getSectorColor(sector: string): string {
 
 export default function StockDetailPage() {
   const { symbol } = useParams();
+  const navigate = useNavigate();
 
   // Queries
   const allStocks = useQuery(api.stocks.getAllStocks);
@@ -255,32 +256,54 @@ export default function StockDetailPage() {
           {/* Stats Grid */}
           <div className="grid gap-3 md:grid-cols-4">
             <Card>
-              <CardContent className="pt-6">
-                <div className="text-sm text-muted-foreground">Market Cap</div>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Market Cap
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div className="text-2xl font-bold">
                   {formatCurrency(stock.marketCap ?? 0)}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="pt-6">
-                <div className="text-sm text-muted-foreground">Your Shares</div>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Your Shares
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div className="text-2xl font-bold">
                   {holding?.shares.toLocaleString() ?? 0}
                 </div>
+                <Link
+                  to="/portfolio"
+                  className="text-xs text-primary hover:underline"
+                >
+                  View in Portfolio
+                </Link>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="pt-6">
-                <div className="text-sm text-muted-foreground">Your Value</div>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Your Value
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div className="text-2xl font-bold">
                   {holding ? formatCurrency(holding.currentValue) : "$0.00"}
                 </div>
               </CardContent>
             </Card>
             <Card>
-              <CardContent className="pt-6">
-                <div className="text-sm text-muted-foreground">P&L</div>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  P&L
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
                 <div
                   className={`text-2xl font-bold ${
                     holding && holding.gainLoss >= 0

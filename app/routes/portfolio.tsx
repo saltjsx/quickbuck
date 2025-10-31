@@ -16,7 +16,7 @@ import {
 } from "~/components/ui/table";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
-import { Coins, ShoppingBag, ArrowUpDown } from "lucide-react";
+import { Coins, ShoppingBag, ArrowUpDown, Building2 } from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
 import { getAuth } from "@clerk/react-router/ssr.server";
 import { redirect } from "react-router";
@@ -69,6 +69,9 @@ export default function PortfolioPage() {
     player?._id ? { userId: player._id } : "skip"
   );
 
+  // Get stock portfolio
+  const stockPortfolio = useQuery(api.stocks.getPlayerPortfolio);
+
   // Get player inventory (marketplace items)
   const playerInventory = useQuery(
     api.products.getPlayerInventory,
@@ -84,11 +87,27 @@ export default function PortfolioPage() {
     order: "desc",
   });
 
+  const [stockSort, setStockSort] = useState<{
+    field: SortField;
+    order: SortOrder;
+  }>({
+    field: "value",
+    order: "desc",
+  });
+
   // Build crypto details - already enriched from getUserCryptoHoldings
   const cryptoWithDetails = cryptoHoldings
     ? cryptoHoldings.map((holding) => ({
         holding,
         crypto: holding.crypto,
+      }))
+    : [];
+
+  // Build stock details - already enriched from getPlayerPortfolio
+  const stockWithDetails = stockPortfolio
+    ? stockPortfolio.map((portfolio) => ({
+        portfolio,
+        stock: portfolio.stock,
       }))
     : [];
 
@@ -100,6 +119,12 @@ export default function PortfolioPage() {
         (item.crypto
           ? Math.floor(item.holding.balance * item.crypto.currentPrice)
           : 0),
+      0
+    ) || 0;
+
+  const totalStockValue =
+    stockWithDetails.reduce(
+      (sum, item) => sum + (item.portfolio.currentValue || 0),
       0
     ) || 0;
 
@@ -134,6 +159,28 @@ export default function PortfolioPage() {
     });
   };
 
+  const sortStocks = (data: typeof stockWithDetails) => {
+    if (!data) return [];
+    return [...data].sort((a, b) => {
+      let comparison = 0;
+      switch (stockSort.field) {
+        case "value":
+          comparison =
+            (a.portfolio.currentValue || 0) - (b.portfolio.currentValue || 0);
+          break;
+        case "amount":
+          comparison = a.portfolio.shares - b.portfolio.shares;
+          break;
+        case "name":
+          comparison = (a.stock?.symbol || "").localeCompare(
+            b.stock?.symbol || ""
+          );
+          break;
+      }
+      return stockSort.order === "asc" ? comparison : -comparison;
+    });
+  };
+
   const sortedCrypto = sortCrypto(cryptoWithDetails);
 
   const cryptoRows = useMemo(() => {
@@ -150,6 +197,25 @@ export default function PortfolioPage() {
     });
   }, [sortedCrypto]);
 
+  const sortedStocks = sortStocks(stockWithDetails);
+
+  const stockRows = useMemo(() => {
+    return sortedStocks.map((item) => {
+      const currentValue = item.portfolio.currentValue || 0;
+      const totalInvested = item.portfolio.totalInvested || 0;
+      const gainLoss = currentValue - totalInvested;
+      const gainLossPercent =
+        totalInvested > 0 ? (gainLoss / totalInvested) * 100 : 0;
+      return {
+        ...item,
+        currentValue,
+        totalInvested,
+        gainLoss,
+        gainLossPercent,
+      };
+    });
+  }, [sortedStocks]);
+
   return (
     <div className="flex flex-1 flex-col">
       <div className="@container/main flex flex-1 flex-col gap-2">
@@ -163,6 +229,130 @@ export default function PortfolioPage() {
               A clear overview of your assets, holdings, and allocations.
             </p>
           </div>
+
+          {/* Stock Holdings Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-muted-foreground" />
+                  <CardTitle>Stock Holdings</CardTitle>
+                </div>
+                <div className="text-right">
+                  <p className="text-xs text-muted-foreground">Total Value</p>
+                  <div className="text-lg font-semibold text-foreground">
+                    <AnimatedNumber value={totalStockValue} compact={false} />
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!stockWithDetails || stockWithDetails.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  No stock holdings yet
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Stock</TableHead>
+                      <TableHead
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() =>
+                          setStockSort({
+                            field: "amount",
+                            order:
+                              stockSort.field === "amount" &&
+                              stockSort.order === "desc"
+                                ? "asc"
+                                : "desc",
+                          })
+                        }
+                      >
+                        <div className="flex items-center gap-1">
+                          Shares
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                      </TableHead>
+                      <TableHead>Avg Cost</TableHead>
+                      <TableHead
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() =>
+                          setStockSort({
+                            field: "value",
+                            order:
+                              stockSort.field === "value" &&
+                              stockSort.order === "desc"
+                                ? "asc"
+                                : "desc",
+                          })
+                        }
+                      >
+                        <div className="flex items-center gap-1">
+                          Value
+                          <ArrowUpDown className="h-3 w-3" />
+                        </div>
+                      </TableHead>
+                      <TableHead className="text-right">P/L</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {stockRows.map((item) => (
+                      <TableRow
+                        key={item.portfolio._id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() =>
+                          item.stock && navigate(`/stocks/${item.stock.symbol}`)
+                        }
+                      >
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <span>{item.stock?.symbol}</span>
+                            <Badge
+                              variant="outline"
+                              className="font-mono text-xs"
+                            >
+                              {item.stock?.name}
+                            </Badge>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {item.portfolio.shares.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatCurrency(item.portfolio.averageCost)}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {formatCurrency(item.currentValue)}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">
+                          <span
+                            className={
+                              item.gainLoss >= 0
+                                ? "text-green-600"
+                                : "text-red-500"
+                            }
+                          >
+                            {item.gainLoss >= 0 ? "+" : "-"}
+                            {formatCurrency(Math.abs(item.gainLoss))}
+                          </span>
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            ({item.gainLossPercent.toFixed(1)}%)
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell colSpan={4}>Total</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(totalStockValue)}
+                      </TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Holdings Sections */}
           <Card>
@@ -290,7 +480,7 @@ export default function PortfolioPage() {
           {/* Net Worth Breakdown */}
           <NetWorthBreakdownModern
             cash={totalBalance}
-            stocksValue={0}
+            stocksValue={totalStockValue}
             cryptoValue={totalCryptoValue}
             companyEquity={companyEquity}
             isLoading={player === undefined}
