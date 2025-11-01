@@ -84,6 +84,7 @@ export default function CompanyDashboardPage() {
   const updateProduct = useMutation(api.products.updateProduct);
   const deleteProduct = useMutation(api.products.deleteProduct);
   const orderBatch = useMutation(api.products.orderProductBatch);
+  const bulkOrderProducts = useMutation(api.products.bulkOrderProducts);
   const updateCompanyInfo = useMutation(api.companies.updateCompanyInfo);
 
   // State for edit company modal
@@ -122,6 +123,14 @@ export default function CompanyDashboardPage() {
   );
   const [batchQuantity, setBatchQuantity] = useState("");
   const [batchError, setBatchError] = useState("");
+
+  // State for bulk order modal
+  const [bulkOrderOpen, setBulkOrderOpen] = useState(false);
+  const [totalBudget, setTotalBudget] = useState("");
+  const [productAllocations, setProductAllocations] = useState<
+    Record<string, string>
+  >({});
+  const [bulkOrderError, setBulkOrderError] = useState("");
 
   // Handle add product
   const handleAddProduct = async (e: React.FormEvent) => {
@@ -335,6 +344,126 @@ export default function CompanyDashboardPage() {
     } catch (err) {
       setBatchError(
         err instanceof Error ? err.message : "Failed to order batch"
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Handle bulk order
+  const openBulkOrderModal = () => {
+    if (!products || products.length === 0) {
+      setError("No products to restock");
+      return;
+    }
+
+    // Initialize with total budget
+    const budget = company?.balance || 0;
+    setTotalBudget(String(Math.floor(budget / 100)));
+
+    // Set equal allocation percentages for all products (100% / product count)
+    const equalPercentage = 100 / products.length;
+    const initialAllocations: Record<string, string> = {};
+    products.forEach((product) => {
+      initialAllocations[product._id] = String(equalPercentage);
+    });
+    setProductAllocations(initialAllocations);
+    setBulkOrderError("");
+    setBulkOrderOpen(true);
+  };
+
+  const handleAllocationChange = (productId: string, value: string) => {
+    setProductAllocations((prev) => ({
+      ...prev,
+      [productId]: value,
+    }));
+  };
+
+  const redistributeAllocations = (changedProductId: string) => {
+    if (!products) return;
+
+    const changedPercentage = parseFloat(
+      productAllocations[changedProductId] || "0"
+    );
+
+    // Calculate remaining percentage for other products
+    const otherProducts = products.filter((p) => p._id !== changedProductId);
+    if (otherProducts.length === 0) return;
+
+    const remainingPercentage = 100 - changedPercentage;
+    const equalShare = remainingPercentage / otherProducts.length;
+
+    setProductAllocations((prev) => {
+      const updated = { ...prev };
+      otherProducts.forEach((product) => {
+        updated[product._id] = String(equalShare);
+      });
+      return updated;
+    });
+  };
+
+  const handleBulkOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBulkOrderError("");
+    setSuccess("");
+
+    if (!company || !products) return;
+
+    const budgetCents = Math.round(parseFloat(totalBudget || "0") * 100);
+    if (isNaN(budgetCents) || budgetCents <= 0) {
+      setBulkOrderError("Invalid budget amount");
+      return;
+    }
+
+    if (budgetCents > company.balance) {
+      setBulkOrderError(
+        `Insufficient balance. Budget: ${formatCurrency(
+          budgetCents
+        )}, Available: ${formatCurrency(company.balance)}`
+      );
+      return;
+    }
+
+    // Build allocations with percentages
+    const allocations = products.map((product) => {
+      const percentage = parseFloat(productAllocations[product._id] || "0");
+      return {
+        productId: product._id,
+        percentage: Math.max(0, Math.min(100, percentage)),
+      };
+    });
+
+    // Validate allocations sum to 100%
+    const totalPercentage = allocations.reduce(
+      (sum, alloc) => sum + alloc.percentage,
+      0
+    );
+    if (Math.abs(totalPercentage - 100) > 0.1) {
+      setBulkOrderError(
+        `Allocations must total 100% (currently ${totalPercentage.toFixed(1)}%)`
+      );
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const result = await bulkOrderProducts({
+        companyId: company._id,
+        totalBudget: budgetCents,
+        productAllocations: allocations,
+      });
+
+      setBulkOrderOpen(false);
+      setSuccess(
+        `Bulk order completed! Restocked ${
+          result.orders.length
+        } products for ${formatCurrency(
+          result.totalSpent
+        )}. Unspent: ${formatCurrency(result.unspentBudget)}`
+      );
+    } catch (err) {
+      setBulkOrderError(
+        err instanceof Error ? err.message : "Failed to complete bulk order"
       );
     } finally {
       setIsSubmitting(false);
@@ -689,6 +818,17 @@ export default function CompanyDashboardPage() {
                 <Package className="h-5 w-5" />
                 Products & Inventory
               </CardTitle>
+              <div className="flex gap-2">
+                <Button
+                  onClick={openBulkOrderModal}
+                  disabled={!products || products.length === 0}
+                  size="sm"
+                  variant="outline"
+                >
+                  <ShoppingCart className="mr-2 h-4 w-4" />
+                  Bulk Restock
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               {!products ? (
@@ -1167,6 +1307,223 @@ export default function CompanyDashboardPage() {
                   </Button>
                   <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting ? "Ordering..." : "Order Batch"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Bulk Order Modal */}
+          <Dialog open={bulkOrderOpen} onOpenChange={setBulkOrderOpen}>
+            <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Bulk Restock Products</DialogTitle>
+                <DialogDescription>
+                  Set a total budget and allocate amounts to each product for
+                  restocking
+                </DialogDescription>
+              </DialogHeader>
+              <form onSubmit={handleBulkOrder} className="space-y-4">
+                {/* Total Budget Input */}
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="total-budget">Total Budget ($) *</Label>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        setTotalBudget(
+                          String(Math.floor(company?.balance || 0) / 100)
+                        )
+                      }
+                      className="text-xs h-6"
+                    >
+                      Max: {formatCurrency(company?.balance || 0)}
+                    </Button>
+                  </div>
+                  <Input
+                    id="total-budget"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g., 1000"
+                    value={totalBudget}
+                    onChange={(e) => setTotalBudget(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {/* Product Budget Allocations */}
+                {products && products.length > 0 && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <Label>Budget Allocation Per Product</Label>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const equalPercentage = 100 / products.length;
+                          const newAllocations: Record<string, string> = {};
+                          products.forEach((p) => {
+                            newAllocations[p._id] = String(equalPercentage);
+                          });
+                          setProductAllocations(newAllocations);
+                        }}
+                        className="text-xs"
+                      >
+                        Equal Split
+                      </Button>
+                    </div>
+
+                    <div className="space-y-3 max-h-96 overflow-y-auto border rounded-lg p-4">
+                      {products.map((product) => {
+                        const allocationPercentage = parseFloat(
+                          productAllocations[product._id] || "0"
+                        );
+                        const budgetCents = Math.round(
+                          parseFloat(totalBudget || "0") * 100
+                        );
+                        const productBudget = Math.floor(
+                          (budgetCents * allocationPercentage) / 100
+                        );
+                        const productionCost = Math.floor(
+                          product.price *
+                            (product.productionCostPercentage ?? 0.35)
+                        );
+                        const quantity =
+                          productionCost > 0
+                            ? Math.floor(productBudget / productionCost)
+                            : 0;
+
+                        return (
+                          <div
+                            key={product._id}
+                            className="space-y-2 p-3 rounded-lg bg-muted/50"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="flex gap-2 items-center flex-1">
+                                {product.image ? (
+                                  <div className="w-10 h-10 bg-muted rounded flex-shrink-0">
+                                    <img
+                                      src={product.image}
+                                      alt={product.name}
+                                      className="w-full h-full object-cover rounded"
+                                    />
+                                  </div>
+                                ) : (
+                                  <div className="w-10 h-10 bg-muted rounded flex-shrink-0 flex items-center justify-center">
+                                    <Package className="h-5 w-5 text-muted-foreground" />
+                                  </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium truncate">
+                                    {product.name}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Cost/Unit: {formatCurrency(productionCost)}{" "}
+                                    • Stock: {product.stock || 0}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-medium text-green-600">
+                                  +{quantity} units
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  ({formatCurrency(productBudget)})
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Label
+                                htmlFor={`allocation-${product._id}`}
+                                className="text-xs min-w-[30px]"
+                              >
+                                %
+                              </Label>
+                              <Input
+                                id={`allocation-${product._id}`}
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.1"
+                                placeholder="0"
+                                value={productAllocations[product._id] || ""}
+                                onChange={(e) =>
+                                  handleAllocationChange(
+                                    product._id,
+                                    e.target.value
+                                  )
+                                }
+                                onBlur={() =>
+                                  redistributeAllocations(product._id)
+                                }
+                                className="h-8 text-sm"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Summary */}
+                    <div className="rounded-md border-2 border-primary/20 bg-primary/5 p-4 space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Total Allocation:
+                        </span>
+                        <span className="font-medium">
+                          {Object.values(productAllocations)
+                            .reduce(
+                              (sum, val) => sum + (parseFloat(val) || 0),
+                              0
+                            )
+                            .toFixed(1)}
+                          %
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Total Budget:
+                        </span>
+                        <span className="font-medium">
+                          {formatCurrency(
+                            Math.round(parseFloat(totalBudget || "0") * 100)
+                          )}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Company Balance:
+                        </span>
+                        <span className="font-medium">
+                          {formatCurrency(company?.balance || 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {bulkOrderError && (
+                  <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    {bulkOrderError}
+                  </div>
+                )}
+
+                <DialogFooter>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setBulkOrderOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting}>
+                    {isSubmitting ? "Processing..." : "Complete Bulk Order"}
                   </Button>
                 </DialogFooter>
               </form>

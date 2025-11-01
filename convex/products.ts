@@ -299,7 +299,155 @@ export const deleteProduct = mutation({
   },
 });
 
-// Mutation: Update product stock
+// Mutation: Bulk order products with percentage-based allocation
+export const bulkOrderProducts = mutation({
+  args: {
+    companyId: v.id("companies"),
+    totalBudget: v.number(),
+    productAllocations: v.array(
+      v.object({
+        productId: v.id("products"),
+        percentage: v.number(), // 0-100, sum should equal 100
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    // Validate total budget
+    if (args.totalBudget <= 0 || !Number.isSafeInteger(args.totalBudget)) {
+      throw new Error("Invalid total budget");
+    }
+
+    // Validate company exists
+    const company = await ctx.db.get(args.companyId);
+    if (!company) {
+      throw new Error("Company not found");
+    }
+
+    // Check company has sufficient balance
+    if (company.balance < args.totalBudget) {
+      throw new Error(
+        `Insufficient balance. Need ${args.totalBudget / 100} but have ${
+          company.balance / 100
+        }`
+      );
+    }
+
+    // Validate allocations sum to 100%
+    const percentageSum = args.productAllocations.reduce(
+      (sum, alloc) => sum + alloc.percentage,
+      0
+    );
+    if (Math.abs(percentageSum - 100) > 0.1) {
+      throw new Error("Product allocation percentages must sum to 100%");
+    }
+
+    // Validate each percentage is valid
+    for (const allocation of args.productAllocations) {
+      if (allocation.percentage < 0 || allocation.percentage > 100) {
+        throw new Error("Each product percentage must be between 0 and 100");
+      }
+    }
+
+    const results = [];
+    let totalSpent = 0;
+
+    // Process each product order
+    for (const allocation of args.productAllocations) {
+      if (allocation.percentage <= 0) continue;
+
+      const product = await ctx.db.get(allocation.productId);
+      if (!product) {
+        throw new Error(`Product ${allocation.productId} not found`);
+      }
+
+      if (product.companyId !== args.companyId) {
+        throw new Error(
+          `Product ${allocation.productId} does not belong to this company`
+        );
+      }
+
+      // Calculate budget for this product based on percentage
+      const budgetAmount = Math.floor(
+        (args.totalBudget * allocation.percentage) / 100
+      );
+
+      if (budgetAmount <= 0) continue;
+
+      // Calculate production cost and quantity
+      const productionCostPercentage = product.productionCostPercentage ?? 0.35;
+      const productionCost = Math.floor(
+        product.price * productionCostPercentage
+      );
+
+      if (productionCost <= 0) {
+        throw new Error(`Invalid production cost for product ${product.name}`);
+      }
+
+      const quantity = Math.floor(budgetAmount / productionCost);
+      if (quantity <= 0) continue;
+
+      const actualCost = productionCost * quantity;
+
+      // Validate safe integers
+      if (!Number.isSafeInteger(actualCost)) {
+        throw new Error("Cost calculation overflow");
+      }
+
+      const newStock = (product.stock || 0) + quantity;
+      if (!Number.isSafeInteger(newStock)) {
+        throw new Error("Stock calculation overflow");
+      }
+
+      // Update product stock
+      await ctx.db.patch(allocation.productId, {
+        stock: newStock,
+        updatedAt: Date.now(),
+      });
+
+      totalSpent += actualCost;
+
+      results.push({
+        productId: allocation.productId,
+        productName: product.name,
+        quantity,
+        costPerUnit: productionCost,
+        totalCost: actualCost,
+        newStock,
+        allocationPercentage: allocation.percentage,
+      });
+    }
+
+    // Deduct total spent from company balance
+    if (totalSpent > 0) {
+      const now = Date.now();
+      await ctx.db.patch(args.companyId, {
+        balance: company.balance - totalSpent,
+        updatedAt: now,
+      });
+
+      // Create transaction record for bulk order
+      await ctx.db.insert("transactions", {
+        fromAccountId: args.companyId,
+        fromAccountType: "company" as const,
+        toAccountId: args.companyId,
+        toAccountType: "company" as const,
+        amount: totalSpent,
+        assetType: "product" as const,
+        description: `Bulk order: ${results.length} products restocked`,
+        createdAt: now,
+      });
+    }
+
+    return {
+      totalSpent,
+      totalBudget: args.totalBudget,
+      unspentBudget: args.totalBudget - totalSpent,
+      orders: results,
+    };
+  },
+});
+
+// Mutation: Update product info
 export const updateProductStock = mutation({
   args: {
     productId: v.id("products"),
