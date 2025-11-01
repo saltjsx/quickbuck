@@ -10,6 +10,7 @@ import { Label } from "~/components/ui/label";
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
+import { Skeleton } from "~/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -219,7 +220,20 @@ export default function CryptoPage() {
             </div>
 
             {/* Market Stats */}
-            {marketStats && (
+            {!marketStats ? (
+              <div className="grid gap-3 md:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <Card key={i}>
+                    <CardHeader className="pb-2">
+                      <Skeleton className="h-4 w-32" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-7 w-40" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
               <div className="grid gap-3 md:grid-cols-3">
                 <Card>
                   <CardHeader className="pb-2">
@@ -315,92 +329,130 @@ export default function CryptoPage() {
 
               {/* Crypto List */}
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredCryptos.map((crypto) => {
-                  const priceChange = crypto.lastPriceChange * 100;
-                  const isPositive = priceChange >= 0;
-
-                  return (
-                    <Link
-                      key={crypto._id}
-                      to={`/crypto/${crypto.symbol}`}
-                      className="group"
-                    >
-                      <Card className="hover:shadow-lg transition-all hover:scale-[1.02] h-full">
+                {!allCryptos ? (
+                  // Skeleton loading state
+                  <>
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                      <Card key={i}>
                         <CardHeader className="pb-3">
                           <div className="flex flex-col items-center gap-2">
-                            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-                              {crypto.imageUrl ? (
-                                <img
-                                  src={crypto.imageUrl}
-                                  alt={crypto.symbol}
-                                  className="h-16 w-16 rounded-full object-cover"
-                                />
-                              ) : (
-                                <Coins className="h-8 w-8 text-primary" />
-                              )}
+                            <Skeleton className="h-16 w-16 rounded-full" />
+                            <div className="text-center w-full space-y-2">
+                              <Skeleton className="h-5 w-24 mx-auto" />
+                              <Skeleton className="h-4 w-28 mx-auto" />
                             </div>
-                            <div className="text-center">
-                              <CardTitle className="text-lg">
-                                {crypto.symbol}
-                              </CardTitle>
-                              <p className="text-sm text-muted-foreground">
-                                {crypto.name}
-                              </p>
-                            </div>
-                            {priceChange !== 0 && (
-                              <Badge
-                                variant={isPositive ? "default" : "destructive"}
-                                className="text-xs"
-                              >
-                                {isPositive ? (
-                                  <TrendingUp className="mr-1 h-3 w-3" />
-                                ) : (
-                                  <TrendingDown className="mr-1 h-3 w-3" />
-                                )}
-                                {isPositive ? "+" : ""}
-                                {priceChange.toFixed(2)}%
-                              </Badge>
-                            )}
+                            <Skeleton className="h-6 w-20" />
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-3">
-                          {/* Mini 7-day chart */}
-                          <div className="h-20 rounded-md overflow-hidden">
-                            <CryptoPriceChart
-                              cryptoId={crypto._id}
-                              currentPrice={crypto.currentPrice}
-                              symbol={crypto.symbol}
-                              height={80}
-                              showStats={false}
-                            />
-                          </div>
+                          {/* Chart skeleton */}
+                          <Skeleton className="h-20 rounded-md" />
 
-                          <div className="space-y-1">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="text-muted-foreground">
-                                Market Cap
-                              </span>
-                              <span className="font-medium">
-                                {formatCurrency(crypto.marketCap)}
-                              </span>
+                          {/* Stats skeleton */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <Skeleton className="h-4 w-20" />
+                              <Skeleton className="h-4 w-24" />
                             </div>
                             <div className="flex items-center justify-between">
-                              <span className="text-sm text-muted-foreground">
-                                Price
-                              </span>
-                              <span className="text-lg font-bold">
-                                {formatCurrency(crypto.currentPrice)}
-                              </span>
+                              <Skeleton className="h-4 w-12" />
+                              <Skeleton className="h-5 w-28" />
                             </div>
                           </div>
                         </CardContent>
                       </Card>
-                    </Link>
-                  );
-                })}
+                    ))}
+                  </>
+                ) : (
+                  filteredCryptos.map((crypto) => {
+                    const priceChange = crypto.lastPriceChange * 100;
+                    const isPositive = priceChange >= 0;
+
+                    return (
+                      <Link
+                        key={crypto._id}
+                        to={`/crypto/${crypto.symbol}`}
+                        className="group"
+                      >
+                        <Card className="hover:shadow-lg transition-all hover:scale-[1.02] h-full">
+                          <CardHeader className="pb-3">
+                            <div className="flex flex-col items-center gap-2">
+                              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
+                                {crypto.imageUrl ? (
+                                  <img
+                                    src={crypto.imageUrl}
+                                    alt={crypto.symbol}
+                                    className="h-16 w-16 rounded-full object-cover"
+                                  />
+                                ) : (
+                                  <Coins className="h-8 w-8 text-primary" />
+                                )}
+                              </div>
+                              <div className="text-center">
+                                <CardTitle className="text-lg">
+                                  {crypto.symbol}
+                                </CardTitle>
+                                <p className="text-sm text-muted-foreground">
+                                  {crypto.name}
+                                </p>
+                              </div>
+                              {priceChange !== 0 && (
+                                <Badge
+                                  variant={
+                                    isPositive ? "default" : "destructive"
+                                  }
+                                  className="text-xs"
+                                >
+                                  {isPositive ? (
+                                    <TrendingUp className="mr-1 h-3 w-3" />
+                                  ) : (
+                                    <TrendingDown className="mr-1 h-3 w-3" />
+                                  )}
+                                  {isPositive ? "+" : ""}
+                                  {priceChange.toFixed(2)}%
+                                </Badge>
+                              )}
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {/* Mini 7-day chart */}
+                            <div className="h-20 rounded-md overflow-hidden">
+                              <CryptoPriceChart
+                                cryptoId={crypto._id}
+                                currentPrice={crypto.currentPrice}
+                                symbol={crypto.symbol}
+                                height={80}
+                                showStats={false}
+                              />
+                            </div>
+
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">
+                                  Market Cap
+                                </span>
+                                <span className="font-medium">
+                                  {formatCurrency(crypto.marketCap)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-muted-foreground">
+                                  Price
+                                </span>
+                                <span className="text-lg font-bold">
+                                  {formatCurrency(crypto.currentPrice)}
+                                </span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      </Link>
+                    );
+                  })
+                )}
               </div>
 
-              {filteredCryptos.length === 0 && (
+              {allCryptos && filteredCryptos.length === 0 && (
                 <Card>
                   <CardContent className="py-12 text-center">
                     <Coins className="mx-auto h-12 w-12 text-muted-foreground" />

@@ -6,6 +6,7 @@ import { api } from "convex/_generated/api";
 import { Card, CardContent } from "~/components/ui/card";
 import { Input } from "~/components/ui/input";
 import { Badge } from "~/components/ui/badge";
+import { Skeleton } from "~/components/ui/skeleton";
 import {
   Select,
   SelectContent,
@@ -123,7 +124,18 @@ export default function StocksPage() {
             </div>
 
             {/* Market Stats */}
-            {marketOverview && (
+            {!marketOverview ? (
+              <div className="grid gap-3 md:grid-cols-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <Card key={i}>
+                    <CardContent className="pt-6 space-y-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-7 w-32" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
               <div className="grid gap-3 md:grid-cols-4">
                 <Card>
                   <CardContent className="pt-6">
@@ -230,102 +242,141 @@ export default function StocksPage() {
 
           {/* Stock Cards Grid */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredStocks.map((stock) => {
-              const priceChange = (stock.lastPriceChange ?? 0) * 100;
-              const isPositive = priceChange >= 0;
-
-              return (
-                <Link
-                  to={`/stocks/${stock.symbol}`}
-                  key={stock._id}
-                  className="block"
-                >
-                  <Card className="hover:shadow-lg transition-all cursor-pointer h-full">
+            {!allStocks ? (
+              // Skeleton loading state
+              <>
+                {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                  <Card key={i}>
                     <CardContent className="pt-6 space-y-4">
-                      {/* Company Logo, Ticker, Name */}
+                      {/* Logo and ticker skeleton */}
                       <div className="flex items-start gap-3">
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 flex-shrink-0 overflow-hidden">
-                          {stock.companyLogo ? (
-                            <img
-                              src={stock.companyLogo}
-                              alt={stock.symbol}
-                              className="h-full w-full object-cover"
-                            />
-                          ) : (
-                            <Building2 className="h-6 w-6 text-primary" />
-                          )}
+                        <Skeleton className="h-12 w-12 rounded-full flex-shrink-0" />
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <Skeleton className="h-5 w-16" />
+                          <Skeleton className="h-4 w-32" />
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="font-bold text-lg">
-                            {stock.symbol}
-                          </div>
-                          <div className="text-sm text-muted-foreground truncate">
-                            {stock.name}
-                          </div>
-                        </div>
-                        <Badge
-                          variant="outline"
-                          className={getSectorColor(stock.sector ?? "other")}
-                        >
-                          {(stock.sector ?? "other").toUpperCase()}
-                        </Badge>
+                        <Skeleton className="h-6 w-20 rounded-full" />
                       </div>
 
-                      {/* Mini 7-day chart */}
-                      <div className="h-20 rounded-lg overflow-hidden">
-                        <PriceChart
-                          currentPrice={stock.currentPrice ?? 0}
-                          symbol={stock.symbol || ""}
-                          height={80}
-                          showStats={false}
-                          days={7}
-                          stockId={stock._id}
-                        />
+                      {/* Chart skeleton */}
+                      <Skeleton className="h-20 rounded-lg" />
+
+                      {/* Market cap skeleton */}
+                      <div className="space-y-1">
+                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="h-5 w-32" />
                       </div>
 
-                      {/* Market Cap */}
-                      <div>
-                        <div className="text-xs text-muted-foreground">
-                          Market Cap
-                        </div>
-                        <div className="font-semibold">
-                          {formatCurrency(stock.marketCap ?? 0)}
-                        </div>
-                      </div>
-
-                      {/* Share Price and Change */}
+                      {/* Price and change skeleton */}
                       <div className="flex items-end justify-between">
-                        <div>
-                          <div className="text-xs text-muted-foreground">
-                            Share Price
-                          </div>
-                          <div className="text-2xl font-bold">
-                            {formatCurrency(stock.currentPrice ?? 0)}
-                          </div>
+                        <div className="space-y-1">
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="h-6 w-32" />
                         </div>
-                        {priceChange !== 0 && (
-                          <Badge
-                            variant={isPositive ? "default" : "destructive"}
-                            className="h-fit"
-                          >
-                            {isPositive ? (
-                              <TrendingUp className="mr-1 h-3 w-3" />
-                            ) : (
-                              <TrendingDown className="mr-1 h-3 w-3" />
-                            )}
-                            {isPositive ? "+" : ""}
-                            {priceChange.toFixed(2)}%
-                          </Badge>
-                        )}
+                        <Skeleton className="h-6 w-20" />
                       </div>
                     </CardContent>
                   </Card>
-                </Link>
-              );
-            })}
+                ))}
+              </>
+            ) : (
+              filteredStocks.map((stock) => {
+                const priceChange = (stock.lastPriceChange ?? 0) * 100;
+                const isPositive = priceChange >= 0;
+
+                return (
+                  <Link
+                    to={`/stocks/${stock.symbol}`}
+                    key={stock._id}
+                    className="block"
+                  >
+                    <Card className="hover:shadow-lg transition-all cursor-pointer h-full">
+                      <CardContent className="pt-6 space-y-4">
+                        {/* Company Logo, Ticker, Name */}
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 flex-shrink-0 overflow-hidden">
+                            {stock.companyLogo ? (
+                              <img
+                                src={stock.companyLogo}
+                                alt={stock.symbol}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <Building2 className="h-6 w-6 text-primary" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="font-bold text-lg">
+                              {stock.symbol}
+                            </div>
+                            <div className="text-sm text-muted-foreground truncate">
+                              {stock.name}
+                            </div>
+                          </div>
+                          <Badge
+                            variant="outline"
+                            className={getSectorColor(stock.sector ?? "other")}
+                          >
+                            {(stock.sector ?? "other").toUpperCase()}
+                          </Badge>
+                        </div>
+
+                        {/* Mini 7-day chart */}
+                        <div className="h-20 rounded-lg overflow-hidden">
+                          <PriceChart
+                            currentPrice={stock.currentPrice ?? 0}
+                            symbol={stock.symbol || ""}
+                            height={80}
+                            showStats={false}
+                            days={7}
+                            stockId={stock._id}
+                          />
+                        </div>
+
+                        {/* Market Cap */}
+                        <div>
+                          <div className="text-xs text-muted-foreground">
+                            Market Cap
+                          </div>
+                          <div className="font-semibold">
+                            {formatCurrency(stock.marketCap ?? 0)}
+                          </div>
+                        </div>
+
+                        {/* Share Price and Change */}
+                        <div className="flex items-end justify-between">
+                          <div>
+                            <div className="text-xs text-muted-foreground">
+                              Share Price
+                            </div>
+                            <div className="text-2xl font-bold">
+                              {formatCurrency(stock.currentPrice ?? 0)}
+                            </div>
+                          </div>
+                          {priceChange !== 0 && (
+                            <Badge
+                              variant={isPositive ? "default" : "destructive"}
+                              className="h-fit"
+                            >
+                              {isPositive ? (
+                                <TrendingUp className="mr-1 h-3 w-3" />
+                              ) : (
+                                <TrendingDown className="mr-1 h-3 w-3" />
+                              )}
+                              {isPositive ? "+" : ""}
+                              {priceChange.toFixed(2)}%
+                            </Badge>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </Link>
+                );
+              })
+            )}
           </div>
 
-          {filteredStocks.length === 0 && (
+          {allStocks && filteredStocks.length === 0 && (
             <Card>
               <CardContent className="py-12 text-center">
                 <Building2 className="mx-auto h-12 w-12 text-muted-foreground" />

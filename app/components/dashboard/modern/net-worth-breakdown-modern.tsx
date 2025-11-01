@@ -2,6 +2,7 @@
 
 import { motion } from "motion/react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Skeleton } from "~/components/ui/skeleton";
 import { formatCompactCurrency } from "~/lib/game-utils";
 
 type Props = {
@@ -33,8 +34,22 @@ export function NetWorthBreakdownModern({
         <CardHeader>
           <CardTitle>Net Worth Breakdown</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="h-32 animate-pulse rounded bg-muted" />
+        <CardContent className="space-y-5">
+          {/* Horizontal Stacked Bar Skeleton */}
+          <Skeleton className="h-10 w-full rounded-md" />
+
+          {/* Legend Skeletons */}
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-3 w-3 rounded-sm" />
+                <div className="min-w-0 space-y-1">
+                  <Skeleton className="h-4 w-16" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+            ))}
+          </div>
         </CardContent>
       </Card>
     );

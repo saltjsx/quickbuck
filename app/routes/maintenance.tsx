@@ -2,6 +2,7 @@ import { useQuery } from "convex/react";
 import { useNavigate } from "react-router";
 import { useEffect } from "react";
 import { api } from "../../convex/_generated/api";
+import { Skeleton } from "~/components/ui/skeleton";
 
 export default function MaintenancePage() {
   const navigate = useNavigate();
@@ -16,8 +17,40 @@ export default function MaintenancePage() {
 
   if (!maintenanceStatus) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        <div className="text-white">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 px-4">
+        <div className="text-center max-w-md space-y-6">
+          {/* Animated icon skeleton */}
+          <div className="mb-8 inline-block">
+            <Skeleton className="w-24 h-24 rounded-full" />
+          </div>
+
+          {/* Title skeleton */}
+          <Skeleton className="h-10 w-64 mx-auto" />
+
+          {/* Message skeleton */}
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-full" />
+            <Skeleton className="h-6 w-3/4 mx-auto" />
+          </div>
+
+          {/* Reason box skeleton */}
+          <div className="p-4 bg-slate-800 border border-slate-700 rounded-lg space-y-2">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-5 w-full" />
+          </div>
+
+          {/* Timer skeleton */}
+          <div className="p-4 bg-gradient-to-r from-slate-800 to-slate-700 rounded-lg border border-slate-600 space-y-2">
+            <Skeleton className="h-3 w-32 mx-auto" />
+            <Skeleton className="h-4 w-40 mx-auto" />
+          </div>
+
+          {/* Footer text skeleton */}
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-56 mx-auto" />
+            <Skeleton className="h-3 w-40 mx-auto" />
+          </div>
+        </div>
       </div>
     );
   }

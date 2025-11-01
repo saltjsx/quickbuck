@@ -106,7 +106,7 @@ export function CryptoPriceChart({
       lineWidth: 3,
       priceFormat: {
         type: "custom",
-        formatter: (price: number) => `$${(price / 100).toFixed(0)}`,
+        formatter: (price: number) => `${price.toFixed(2)}¢`,
       },
     });
 
@@ -141,15 +141,15 @@ export function CryptoPriceChart({
         <div className="grid grid-cols-4 gap-2 text-sm">
           <div>
             <div className="text-muted-foreground">High</div>
-            <div className="font-semibold">{formatCurrency(high)}</div>
+            <div className="font-semibold">{high.toFixed(2)}¢</div>
           </div>
           <div>
             <div className="text-muted-foreground">Low</div>
-            <div className="font-semibold">{formatCurrency(low)}</div>
+            <div className="font-semibold">{low.toFixed(2)}¢</div>
           </div>
           <div>
             <div className="text-muted-foreground">Avg</div>
-            <div className="font-semibold">{formatCurrency(average)}</div>
+            <div className="font-semibold">{average.toFixed(2)}¢</div>
           </div>
           <div>
             <div className="text-muted-foreground">Change</div>

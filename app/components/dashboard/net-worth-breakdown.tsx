@@ -1,6 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency, formatCompactCurrency } from "~/lib/game-utils";
 
 interface NetWorthBreakdownProps {
@@ -53,8 +54,30 @@ export function NetWorthBreakdown({
         <CardHeader>
           <CardTitle>Net Worth Breakdown</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="h-32 animate-pulse rounded bg-muted" />
+        <CardContent className="space-y-4">
+          {/* Horizontal Stacked Bar Skeleton */}
+          <Skeleton className="h-8 w-full rounded-md" />
+
+          {/* Legend Skeletons */}
+          <div className="grid grid-cols-2 gap-4">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="flex items-center gap-2">
+                <Skeleton className="h-3 w-3 rounded-sm" />
+                <div className="flex-1 space-y-1">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Total Skeleton */}
+          <div className="border-t pt-4">
+            <div className="flex justify-between">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+          </div>
         </CardContent>
       </Card>
     );

@@ -25,7 +25,7 @@
       "routes/stocks": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/stocks.$symbol": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/portfolio": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
-      "routes/company-sales": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
+      "routes/dashboard/company-marketplace": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/gamble": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/upgrades": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
       "routes/dashboard/accounts": "nodejs_eyJydW50aW1lIjoibm9kZWpzIn0",
@@ -183,11 +183,11 @@
           "runtime": "nodejs"
         }
       },
-      "routes/company-sales": {
-        "id": "routes/company-sales",
+      "routes/dashboard/company-marketplace": {
+        "id": "routes/dashboard/company-marketplace",
         "parentId": "routes/dashboard/layout",
-        "file": "app/routes/company-sales.tsx",
-        "path": "company-sales",
+        "file": "app/routes/dashboard/company-marketplace.tsx",
+        "path": "company-marketplace",
         "config": {
           "runtime": "nodejs"
         }
@@ -378,11 +378,11 @@
         "file": "routes/portfolio.tsx",
         "path": "portfolio"
       },
-      "routes/company-sales": {
-        "id": "routes/company-sales",
+      "routes/dashboard/company-marketplace": {
+        "id": "routes/dashboard/company-marketplace",
         "parentId": "routes/dashboard/layout",
-        "file": "routes/company-sales.tsx",
-        "path": "company-sales"
+        "file": "routes/dashboard/company-marketplace.tsx",
+        "path": "company-marketplace"
       },
       "routes/gamble": {
         "id": "routes/gamble",

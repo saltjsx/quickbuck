@@ -20,6 +20,7 @@ import * as Sentry from "@sentry/react";
 import { initializeSentryClient } from "./lib/sentry.client";
 import { useEffect } from "react";
 import { Toaster } from "sonner";
+import "number-flow";
 
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
 

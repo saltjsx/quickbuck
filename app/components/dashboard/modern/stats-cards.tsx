@@ -51,7 +51,7 @@ export function StatsCards({ balance, netWorth }: StatsCardsProps) {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-semibold">
-                  <AnimatedNumber value={c.value} />
+                  <AnimatedNumber value={c.value} compact={false} />
                 </div>
               </CardContent>
             </Card>

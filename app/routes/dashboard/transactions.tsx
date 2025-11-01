@@ -22,6 +22,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { Button } from "~/components/ui/button";
+import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
 import { Filter, Receipt, ChevronLeft, ChevronRight } from "lucide-react";
@@ -311,9 +312,23 @@ export default function TransactionsPage() {
             </CardHeader>
             <CardContent>
               {!transactions ? (
-                <p className="text-sm text-muted-foreground">
-                  Loading transactions...
-                </p>
+                <div className="space-y-3">
+                  {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between border-b pb-3"
+                    >
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-4 w-48" />
+                        <Skeleton className="h-3 w-32" />
+                      </div>
+                      <div className="space-y-2 text-right">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-5 w-16" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : paginatedTransactions.length === 0 ? (
                 <p className="py-8 text-center text-sm text-muted-foreground">
                   No transactions found

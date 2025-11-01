@@ -2,6 +2,7 @@
 
 import { DollarSign, TrendingUp, Wallet } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency, formatCompactCurrency } from "~/lib/game-utils";
 
 interface PlayerStatsProps {
@@ -23,10 +24,12 @@ export function PlayerStats({
         {[1, 2, 3].map((i) => (
           <Card key={i}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Loading...</CardTitle>
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-4 w-4 rounded" />
             </CardHeader>
             <CardContent>
-              <div className="h-8 w-32 animate-pulse rounded bg-muted" />
+              <Skeleton className="h-7 w-32 mb-2" />
+              <Skeleton className="h-3 w-28" />
             </CardContent>
           </Card>
         ))}

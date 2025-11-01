@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "~/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency, formatCompactCurrency } from "~/lib/game-utils";
 import { UserAvatar } from "~/components/ui/user-avatar";
 import { CompanyLogo } from "~/components/ui/company-logo";
@@ -298,9 +299,21 @@ export default function LeaderboardPage() {
                   </CardHeader>
                   <CardContent>
                     {!topPlayersByBalance ? (
-                      <p className="text-sm text-muted-foreground">
-                        Loading...
-                      </p>
+                      <div className="space-y-3">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-6 w-6 rounded-full" />
+                              <Skeleton className="h-8 w-8 rounded-full" />
+                              <Skeleton className="h-4 w-32" />
+                            </div>
+                            <Skeleton className="h-4 w-20" />
+                          </div>
+                        ))}
+                      </div>
                     ) : topPlayersByBalance.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         No players yet
@@ -344,9 +357,21 @@ export default function LeaderboardPage() {
                   </CardHeader>
                   <CardContent>
                     {!topPlayersByNetWorth ? (
-                      <p className="text-sm text-muted-foreground">
-                        Loading...
-                      </p>
+                      <div className="space-y-3">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-6 w-6 rounded-full" />
+                              <Skeleton className="h-8 w-8 rounded-full" />
+                              <Skeleton className="h-4 w-32" />
+                            </div>
+                            <Skeleton className="h-4 w-20" />
+                          </div>
+                        ))}
+                      </div>
                     ) : topPlayersByNetWorth.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         No players yet
@@ -390,9 +415,24 @@ export default function LeaderboardPage() {
                   </CardHeader>
                   <CardContent>
                     {!topCompaniesByMarketCap ? (
-                      <p className="text-sm text-muted-foreground">
-                        Loading...
-                      </p>
+                      <div className="space-y-3">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-6 w-6 rounded-full" />
+                              <Skeleton className="h-8 w-8 rounded-lg" />
+                              <div className="space-y-1">
+                                <Skeleton className="h-4 w-32" />
+                                <Skeleton className="h-3 w-16" />
+                              </div>
+                            </div>
+                            <Skeleton className="h-4 w-20" />
+                          </div>
+                        ))}
+                      </div>
                     ) : topCompaniesByMarketCap.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         No public companies yet
@@ -441,9 +481,24 @@ export default function LeaderboardPage() {
                   </CardHeader>
                   <CardContent>
                     {!topCompaniesByBalance ? (
-                      <p className="text-sm text-muted-foreground">
-                        Loading...
-                      </p>
+                      <div className="space-y-3">
+                        {[1, 2, 3, 4, 5].map((i) => (
+                          <div
+                            key={i}
+                            className="flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-6 w-6 rounded-full" />
+                              <Skeleton className="h-8 w-8 rounded-lg" />
+                              <div className="space-y-1">
+                                <Skeleton className="h-4 w-32" />
+                                <Skeleton className="h-3 w-16" />
+                              </div>
+                            </div>
+                            <Skeleton className="h-4 w-20" />
+                          </div>
+                        ))}
+                      </div>
                     ) : topCompaniesByBalance.length === 0 ? (
                       <p className="text-sm text-muted-foreground">
                         No companies yet
@@ -522,14 +577,27 @@ export default function LeaderboardPage() {
                   </TableHeader>
                   <TableBody>
                     {!allPlayers ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={4}
-                          className="text-center text-muted-foreground"
-                        >
-                          Loading players...
-                        </TableCell>
-                      </TableRow>
+                      <>
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                          <TableRow key={i}>
+                            <TableCell>
+                              <Skeleton className="h-4 w-8" />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Skeleton className="h-8 w-8 rounded-full" />
+                                <Skeleton className="h-4 w-32" />
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-24" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-24" />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </>
                     ) : filteredPlayers.length === 0 ? (
                       <TableRow>
                         <TableCell
@@ -607,14 +675,30 @@ export default function LeaderboardPage() {
                   </TableHeader>
                   <TableBody>
                     {!allCompanies ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="text-center text-muted-foreground"
-                        >
-                          Loading companies...
-                        </TableCell>
-                      </TableRow>
+                      <>
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                          <TableRow key={i}>
+                            <TableCell>
+                              <Skeleton className="h-4 w-8" />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Skeleton className="h-8 w-8 rounded-lg" />
+                                <Skeleton className="h-4 w-32" />
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-16" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-24" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-24" />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </>
                     ) : filteredCompanies.length === 0 ? (
                       <TableRow>
                         <TableCell
@@ -696,14 +780,30 @@ export default function LeaderboardPage() {
                   </TableHeader>
                   <TableBody>
                     {!allProducts ? (
-                      <TableRow>
-                        <TableCell
-                          colSpan={5}
-                          className="text-center text-muted-foreground"
-                        >
-                          Loading products...
-                        </TableCell>
-                      </TableRow>
+                      <>
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                          <TableRow key={i}>
+                            <TableCell>
+                              <Skeleton className="h-4 w-8" />
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-40" />
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                <Skeleton className="h-6 w-6 rounded-lg" />
+                                <Skeleton className="h-4 w-32" />
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Skeleton className="h-4 w-24" />
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Skeleton className="h-4 w-16 ml-auto" />
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </>
                     ) : filteredProducts.length === 0 ? (
                       <TableRow>
                         <TableCell

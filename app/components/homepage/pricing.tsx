@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
+import { Skeleton } from "~/components/ui/skeleton";
 import { api } from "../../../convex/_generated/api";
 
 export default function Pricing({ loaderData }: { loaderData: any }) {
@@ -82,12 +83,32 @@ export default function Pricing({ loaderData }: { loaderData: any }) {
         </div>
 
         {!loaderData?.plans ? (
-          <div className="mt-8 flex items-center justify-center">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Loading plans...</span>
-            </div>
-            {error && <p className="text-red-500 mt-4 text-center">{error}</p>}
+          <div className="mt-8 grid gap-6 md:mt-20 md:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <Card key={i} className="relative flex flex-col">
+                <CardHeader>
+                  <Skeleton className="h-6 w-24 mb-2" />
+                  <Skeleton className="h-8 w-32" />
+                  <Skeleton className="h-4 w-full mt-2" />
+                </CardHeader>
+                <CardContent className="flex-1 space-y-4">
+                  <div className="space-y-2">
+                    {[1, 2, 3, 4, 5].map((j) => (
+                      <div key={j} className="flex items-center gap-2">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-4 w-full" />
+                      </div>
+                    ))}
+                  </div>
+                  <Skeleton className="h-10 w-full rounded" />
+                </CardContent>
+              </Card>
+            ))}
+            {error && (
+              <p className="text-red-500 mt-4 text-center col-span-3">
+                {error}
+              </p>
+            )}
           </div>
         ) : (
           <div className="mt-8 grid gap-6 md:mt-20 md:grid-cols-3">

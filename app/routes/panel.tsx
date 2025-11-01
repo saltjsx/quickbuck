@@ -103,7 +103,11 @@ export default function Panel() {
   if (moderationAccess === undefined) {
     return (
       <div className="retro-panel">
-        <div className="retro-loading">Loading...</div>
+        <div className="retro-loading">
+          <div className="retro-spinner"></div>
+          <p>LOADING MODERATION PANEL...</p>
+          <p className="retro-dots">...</p>
+        </div>
       </div>
     );
   }

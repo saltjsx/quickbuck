@@ -15,6 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "~/components/ui/table";
+import { Skeleton } from "~/components/ui/skeleton";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
 import { DollarSign, TrendingDown, AlertTriangle, History } from "lucide-react";
@@ -428,9 +429,23 @@ export default function LoansPage() {
             </CardHeader>
             <CardContent>
               {!allLoans ? (
-                <p className="text-sm text-muted-foreground">
-                  Loading loans...
-                </p>
+                <div className="space-y-3">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <div
+                      key={i}
+                      className="flex items-center justify-between border-b pb-3"
+                    >
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-4 w-32" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                      <div className="space-y-2 text-right">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : allLoans.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No loans yet</p>
               ) : (
