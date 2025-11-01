@@ -6,7 +6,10 @@ import type { Id, Doc } from "./_generated/dataModel";
 export type PlayerRole = "normal" | "limited" | "banned" | "mod" | "admin";
 
 // Helper: Get player role
-export async function getPlayerRole(ctx: any, playerId: Id<"players">): Promise<PlayerRole> {
+export async function getPlayerRole(
+  ctx: any,
+  playerId: Id<"players">
+): Promise<PlayerRole> {
   const player = await ctx.db.get(playerId);
   return player?.role || "normal";
 }
@@ -18,26 +21,32 @@ export async function hasPermission(
   requiredRole: "mod" | "admin"
 ): Promise<boolean> {
   const role = await getPlayerRole(ctx, playerId);
-  
+
   if (requiredRole === "admin") {
     return role === "admin";
   }
-  
+
   if (requiredRole === "mod") {
     return role === "mod" || role === "admin";
   }
-  
+
   return false;
 }
 
 // Helper: Check if player can perform actions
-export async function canPerformActions(ctx: any, playerId: Id<"players">): Promise<boolean> {
+export async function canPerformActions(
+  ctx: any,
+  playerId: Id<"players">
+): Promise<boolean> {
   const role = await getPlayerRole(ctx, playerId);
   return role !== "banned" && role !== "limited";
 }
 
 // Helper: Check if player can create content
-export async function canCreateContent(ctx: any, playerId: Id<"players">): Promise<boolean> {
+export async function canCreateContent(
+  ctx: any,
+  playerId: Id<"players">
+): Promise<boolean> {
   const role = await getPlayerRole(ctx, playerId);
   return role !== "banned" && role !== "limited";
 }
@@ -96,13 +105,15 @@ export const checkModerationAccess = query({
 // Query: Get all players for moderation panel
 export const getAllPlayersForModeration = query({
   args: {
-    filterRole: v.optional(v.union(
-      v.literal("normal"),
-      v.literal("limited"),
-      v.literal("banned"),
-      v.literal("mod"),
-      v.literal("admin")
-    )),
+    filterRole: v.optional(
+      v.union(
+        v.literal("normal"),
+        v.literal("limited"),
+        v.literal("banned"),
+        v.literal("mod"),
+        v.literal("admin")
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -128,7 +139,7 @@ export const getAllPlayersForModeration = query({
     }
 
     let players: Doc<"players">[];
-    
+
     if (args.filterRole) {
       players = await ctx.db
         .query("players")
@@ -304,7 +315,9 @@ export const banPlayer = mutation({
       // Marketplace listings
       const listings = await ctx.db
         .query("marketplaceListings")
-        .withIndex("by_sellerCompanyId", (q) => q.eq("sellerCompanyId", company._id))
+        .withIndex("by_sellerCompanyId", (q) =>
+          q.eq("sellerCompanyId", company._id)
+        )
         .collect();
 
       for (const listing of listings) {
@@ -347,7 +360,9 @@ export const banPlayer = mutation({
     // Delete all user transactions
     const transactionsFrom = await ctx.db
       .query("transactions")
-      .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.targetPlayerId))
+      .withIndex("by_fromAccountId", (q) =>
+        q.eq("fromAccountId", args.targetPlayerId)
+      )
       .collect();
 
     for (const tx of transactionsFrom) {
@@ -356,7 +371,9 @@ export const banPlayer = mutation({
 
     const transactionsTo = await ctx.db
       .query("transactions")
-      .withIndex("by_toAccountId", (q) => q.eq("toAccountId", args.targetPlayerId))
+      .withIndex("by_toAccountId", (q) =>
+        q.eq("toAccountId", args.targetPlayerId)
+      )
       .collect();
 
     for (const tx of transactionsTo) {
@@ -386,7 +403,9 @@ export const banPlayer = mutation({
     // Delete marketplace sales where user was involved (as purchaser)
     const purchaserSales = await ctx.db
       .query("marketplaceSales")
-      .withIndex("by_purchaserId", (q) => q.eq("purchaserId", args.targetPlayerId))
+      .withIndex("by_purchaserId", (q) =>
+        q.eq("purchaserId", args.targetPlayerId)
+      )
       .collect();
 
     for (const sale of purchaserSales) {
@@ -434,7 +453,10 @@ export const banPlayer = mutation({
       updatedAt: Date.now(),
     });
 
-    return { success: true, message: "Player banned successfully and all data cleared" };
+    return {
+      success: true,
+      message: "Player banned successfully and all data cleared",
+    };
   },
 });
 
@@ -535,7 +557,9 @@ export const warnPlayer = mutation({
 
     return {
       success: true,
-      message: `Player warned successfully (${newWarnings.length} total warning${newWarnings.length !== 1 ? "s" : ""})`,
+      message: `Player warned successfully (${
+        newWarnings.length
+      } total warning${newWarnings.length !== 1 ? "s" : ""})`,
       warningCount: newWarnings.length,
     };
   },
@@ -619,7 +643,9 @@ export const removeWarning = mutation({
     }
 
     // Remove the specific warning
-    const newWarnings = warnings.filter((_, index) => index !== args.warningIndex);
+    const newWarnings = warnings.filter(
+      (_, index) => index !== args.warningIndex
+    );
 
     await ctx.db.patch(args.targetPlayerId, {
       warnings: newWarnings,
@@ -777,7 +803,10 @@ export const deleteCompanyAsMod = mutation({
     // Delete the company
     await ctx.db.delete(args.companyId);
 
-    return { success: true, message: `Company deleted by moderator. Reason: ${args.reason}` };
+    return {
+      success: true,
+      message: `Company deleted by moderator. Reason: ${args.reason}`,
+    };
   },
 });
 
@@ -816,7 +845,82 @@ export const deleteProductAsMod = mutation({
     // Actually delete the product
     await ctx.db.delete(args.productId);
 
-    return { success: true, message: `Product deleted by moderator. Reason: ${args.reason}` };
+    return {
+      success: true,
+      message: `Product deleted by moderator. Reason: ${args.reason}`,
+    };
+  },
+});
+
+// Mutation: Bulk delete products (mod/admin)
+export const bulkDeleteProducts = mutation({
+  args: {
+    productIds: v.array(v.id("products")),
+    reason: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .unique();
+
+    if (!user) throw new Error("User not found");
+
+    const currentPlayer = await ctx.db
+      .query("players")
+      .withIndex("by_userId", (q) => q.eq("userId", user._id))
+      .unique();
+
+    if (!currentPlayer) throw new Error("Player not found");
+
+    const hasAccess = await hasPermission(ctx, currentPlayer._id, "mod");
+    if (!hasAccess) {
+      throw new Error("Insufficient permissions - mod or admin required");
+    }
+
+    if (args.productIds.length === 0) {
+      throw new Error("No products selected for deletion");
+    }
+
+    if (args.productIds.length > 100) {
+      throw new Error("Cannot delete more than 100 products at once");
+    }
+
+    let deletedCount = 0;
+    const errors: string[] = [];
+
+    for (const productId of args.productIds) {
+      try {
+        const product = await ctx.db.get(productId);
+        if (!product) {
+          errors.push(`Product ${productId} not found`);
+          continue;
+        }
+
+        await ctx.db.delete(productId);
+        deletedCount++;
+      } catch (error: any) {
+        errors.push(`Failed to delete product ${productId}: ${error.message}`);
+      }
+    }
+
+    const message =
+      errors.length > 0
+        ? `Deleted ${deletedCount} of ${
+            args.productIds.length
+          } products. Errors: ${errors.join(", ")}`
+        : `Successfully deleted ${deletedCount} products. Reason: ${args.reason}`;
+
+    return {
+      success: true,
+      message,
+      deletedCount,
+      totalRequested: args.productIds.length,
+      errors,
+    };
   },
 });
 
@@ -858,7 +962,10 @@ export const setPlayerBalance = mutation({
       updatedAt: Date.now(),
     });
 
-    return { success: true, message: `Player balance set to $${(args.newBalance / 100).toFixed(2)}` };
+    return {
+      success: true,
+      message: `Player balance set to $${(args.newBalance / 100).toFixed(2)}`,
+    };
   },
 });
 
@@ -900,7 +1007,10 @@ export const setCompanyBalance = mutation({
       updatedAt: Date.now(),
     });
 
-    return { success: true, message: `Company balance set to $${(args.newBalance / 100).toFixed(2)}` };
+    return {
+      success: true,
+      message: `Company balance set to $${(args.newBalance / 100).toFixed(2)}`,
+    };
   },
 });
 
@@ -978,7 +1088,7 @@ export const getAllProductsForModeration = query({
 
     const limit = Math.min(args.limit || 50, 200); // Default 50, max 200
     const offset = args.offset || 0;
-    
+
     // Use pagination to reduce bandwidth
     const allProducts = await ctx.db.query("products").collect();
     const products = allProducts.slice(offset, offset + limit);
@@ -1059,7 +1169,7 @@ export const grantAdminRole = mutation({
 
 /**
  * ADMIN FUNCTION: Fix player balance after duplicate loan issue
- * 
+ *
  * This function corrects the balance of players who received duplicate loan credits
  * due to a race condition that has now been fixed.
  */
@@ -1119,7 +1229,9 @@ export const fixDuplicateLoanBalance = mutation({
       toAccountType: "player" as const,
       amount: args.adjustmentAmount,
       assetType: "cash" as const,
-      description: `Admin adjustment by ${user.email || user.name}: ${args.reason}`,
+      description: `Admin adjustment by ${user.email || user.name}: ${
+        args.reason
+      }`,
       createdAt: Date.now(),
     });
 
@@ -1157,7 +1269,9 @@ export const checkPlayerFinances = query({
     // Get all transactions
     const sentTransactions = await ctx.db
       .query("transactions")
-      .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.playerId))
+      .withIndex("by_fromAccountId", (q) =>
+        q.eq("fromAccountId", args.playerId)
+      )
       .collect();
 
     const receivedTransactions = await ctx.db
@@ -1165,13 +1279,16 @@ export const checkPlayerFinances = query({
       .withIndex("by_toAccountId", (q) => q.eq("toAccountId", args.playerId))
       .collect();
 
-    const totalReceived = receivedTransactions.reduce((sum, tx) => sum + tx.amount, 0);
+    const totalReceived = receivedTransactions.reduce(
+      (sum, tx) => sum + tx.amount,
+      0
+    );
     const totalSent = sentTransactions.reduce((sum, tx) => sum + tx.amount, 0);
 
     return {
       playerId: args.playerId,
       currentBalance: player.balance,
-      loans: loans.map(loan => ({
+      loans: loans.map((loan) => ({
         amount: loan.amount,
         remaining: loan.remainingBalance,
         status: loan.status,
@@ -1260,7 +1377,11 @@ export const deleteCryptoAsMod = mutation({
     // Delete the crypto
     await ctx.db.delete(args.cryptoId);
 
-    console.log(`[MODERATION] Crypto ${args.cryptoId} deleted by ${user.name || user.email} (${role}). Reason: ${args.reason}`);
+    console.log(
+      `[MODERATION] Crypto ${args.cryptoId} deleted by ${
+        user.name || user.email
+      } (${role}). Reason: ${args.reason}`
+    );
   },
 });
 
@@ -1288,7 +1409,9 @@ export const detectDuplicateLoanCredits = query({
     // Get all transactions for this player related to loans
     const transactions = await ctx.db
       .query("transactions")
-      .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.playerId))
+      .withIndex("by_fromAccountId", (q) =>
+        q.eq("fromAccountId", args.playerId)
+      )
       .collect();
 
     const loanTransactions = transactions.filter(
@@ -1327,7 +1450,9 @@ export const detectDuplicateLoanCredits = query({
       txByAmountAndTime.get(key)!.push(tx);
     }
 
-    const duplicateTransactionsByTimestamp = Array.from(txByAmountAndTime.entries())
+    const duplicateTransactionsByTimestamp = Array.from(
+      txByAmountAndTime.entries()
+    )
       .filter(([_, txsInGroup]) => txsInGroup.length > 1)
       .map(([key, txsInGroup]) => ({
         key,
@@ -1397,7 +1522,9 @@ export const repairDuplicateLoanTransactions = mutation({
     // Get all loan transactions for this player with the specified amount
     const transactions = await ctx.db
       .query("transactions")
-      .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.playerId))
+      .withIndex("by_fromAccountId", (q) =>
+        q.eq("fromAccountId", args.playerId)
+      )
       .collect();
 
     const duplicateTransactions = transactions.filter(
@@ -1469,7 +1596,7 @@ export const repairDuplicateLoanTransactions = mutation({
 export const checkAndReportNegativeBalances = internalMutation({
   handler: async (ctx) => {
     const players = await ctx.db.query("players").collect();
-    
+
     const negativeBalancePlayers = [];
     const playersWithIssues = [];
 
@@ -1504,7 +1631,9 @@ export const checkAndReportNegativeBalances = internalMutation({
       );
       negativeBalancePlayers.forEach((p) => {
         console.warn(
-          `  - Player ${p.playerId}: $${(p.balance / 100).toFixed(2)} (Net Worth: $${(p.netWorth / 100).toFixed(2)})`
+          `  - Player ${p.playerId}: $${(p.balance / 100).toFixed(
+            2
+          )} (Net Worth: $${(p.netWorth / 100).toFixed(2)})`
         );
       });
     }
@@ -1516,7 +1645,9 @@ export const checkAndReportNegativeBalances = internalMutation({
       playersWithIssues.forEach((p) => {
         console.warn(`  - Player ${p.playerId}:`);
         p.issues.forEach((issue) => {
-          console.warn(`    [${issue.severity}] ${issue.type}: ${issue.message}`);
+          console.warn(
+            `    [${issue.severity}] ${issue.type}: ${issue.message}`
+          );
         });
       });
     }
@@ -1576,7 +1707,11 @@ async function auditPlayerBalanceInternal(ctx: any, playerId: Id<"players">) {
     issues.push({
       type: "BALANCE_MISMATCH",
       severity: "HIGH",
-      message: `Balance mismatch of $${(balanceDifference / 100).toFixed(2)}. Expected: $${(expectedBalance / 100).toFixed(2)}, Actual: $${(actualBalance / 100).toFixed(2)}`,
+      message: `Balance mismatch of $${(balanceDifference / 100).toFixed(
+        2
+      )}. Expected: $${(expectedBalance / 100).toFixed(2)}, Actual: $${(
+        actualBalance / 100
+      ).toFixed(2)}`,
     });
   }
 
@@ -1584,13 +1719,15 @@ async function auditPlayerBalanceInternal(ctx: any, playerId: Id<"players">) {
     issues.push({
       type: "NEGATIVE_BALANCE",
       severity: "MEDIUM",
-      message: `Player has negative balance of $${(actualBalance / 100).toFixed(2)}`,
+      message: `Player has negative balance of $${(actualBalance / 100).toFixed(
+        2
+      )}`,
     });
   }
 
   // Check for duplicate loan transactions
-  const loanTransactions = receivedTransactions.filter(
-    (tx: any) => tx.description.includes("Loan received")
+  const loanTransactions = receivedTransactions.filter((tx: any) =>
+    tx.description.includes("Loan received")
   );
   const txByTimestamp = new Map<number, typeof loanTransactions>();
   for (const tx of loanTransactions) {

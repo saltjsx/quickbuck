@@ -46,6 +46,8 @@ export default function Panel() {
   // @ts-ignore
   const deleteProduct = useMutation(api.moderation?.deleteProductAsMod);
   // @ts-ignore
+  const bulkDeleteProducts = useMutation(api.moderation?.bulkDeleteProducts);
+  // @ts-ignore
   const deleteCrypto = useMutation(api.moderation?.deleteCryptoAsMod);
   // @ts-ignore
   const setPlayerBalance = useMutation(api.moderation?.setPlayerBalance);
@@ -95,9 +97,80 @@ export default function Panel() {
     baseVolatility: "",
   });
 
+  // Bulk product selection state
+  const [selectedProducts, setSelectedProducts] = useState<Set<Id<"products">>>(
+    new Set()
+  );
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteReason, setBulkDeleteReason] = useState("");
+  const [productSearchQuery, setProductSearchQuery] = useState("");
+
   const showMessage = (message: string) => {
     setActionMessage(message);
     setTimeout(() => setActionMessage(""), 5000);
+  };
+
+  const toggleProductSelection = (productId: Id<"products">) => {
+    const newSelected = new Set(selectedProducts);
+    if (newSelected.has(productId)) {
+      newSelected.delete(productId);
+    } else {
+      newSelected.add(productId);
+    }
+    setSelectedProducts(newSelected);
+  };
+
+  const getFilteredProducts = () => {
+    if (!products?.products) return [];
+
+    if (!productSearchQuery.trim()) {
+      return products.products;
+    }
+
+    const query = productSearchQuery.toLowerCase();
+    return products.products.filter(
+      (p: any) =>
+        p.name.toLowerCase().includes(query) ||
+        p.companyName.toLowerCase().includes(query)
+    );
+  };
+
+  const toggleAllProducts = () => {
+    const filtered = getFilteredProducts();
+    if (!filtered || filtered.length === 0) return;
+
+    if (selectedProducts.size === filtered.length) {
+      setSelectedProducts(new Set());
+    } else {
+      const allIds = new Set(filtered.map((p: any) => p._id));
+      setSelectedProducts(allIds);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (!bulkDeleteReason.trim()) {
+      showMessage("✗ Please enter a reason for deletion");
+      return;
+    }
+
+    if (selectedProducts.size === 0) {
+      showMessage("✗ No products selected");
+      return;
+    }
+
+    try {
+      const result = await bulkDeleteProducts({
+        productIds: Array.from(selectedProducts),
+        reason: bulkDeleteReason,
+      });
+
+      showMessage(`✓ ${result.message}`);
+      setSelectedProducts(new Set());
+      setShowBulkDeleteModal(false);
+      setBulkDeleteReason("");
+    } catch (e: any) {
+      showMessage("✗ Error: " + e.message);
+    }
   };
 
   if (moderationAccess === undefined) {
@@ -798,15 +871,65 @@ export default function Panel() {
 
         {activeTab === "products" && (
           <div className="products-section">
-            <h2>Product Management</h2>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "20px",
+                gap: "10px",
+                flexWrap: "wrap",
+              }}
+            >
+              <h2 style={{ margin: 0 }}>Product Management</h2>
+              <input
+                type="text"
+                placeholder="Search products or companies..."
+                value={productSearchQuery}
+                onChange={(e) => setProductSearchQuery(e.target.value)}
+                style={{
+                  padding: "6px 10px",
+                  border: "2px inset #dfdfdf",
+                  fontFamily: '"MS Sans Serif", "Tahoma", sans-serif',
+                  minWidth: "200px",
+                  background: "#ffffff",
+                }}
+              />
+              {selectedProducts.size > 0 && (
+                <button
+                  onClick={() => setShowBulkDeleteModal(true)}
+                  className="retro-button btn-danger"
+                  style={{ fontSize: "14px" }}
+                >
+                  🗑️ Delete Selected ({selectedProducts.size})
+                </button>
+              )}
+            </div>
             {products === undefined ? (
               <div className="loading">Loading products...</div>
-            ) : products.length === 0 ? (
+            ) : !products.products || products.products.length === 0 ? (
               <div className="no-data">No products found</div>
+            ) : getFilteredProducts().length === 0 ? (
+              <div className="no-data">No products match your search</div>
             ) : (
               <table className="retro-table">
                 <thead>
                   <tr>
+                    <th style={{ width: "40px" }}>
+                      <input
+                        type="checkbox"
+                        checked={
+                          getFilteredProducts().length > 0 &&
+                          selectedProducts.size === getFilteredProducts().length
+                        }
+                        onChange={toggleAllProducts}
+                        style={{
+                          cursor: "pointer",
+                          width: "16px",
+                          height: "16px",
+                        }}
+                      />
+                    </th>
                     <th>Name</th>
                     <th>Company</th>
                     <th>Price</th>
@@ -816,8 +939,27 @@ export default function Panel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {products.map((product: any) => (
-                    <tr key={product._id}>
+                  {getFilteredProducts().map((product: any) => (
+                    <tr
+                      key={product._id}
+                      style={{
+                        backgroundColor: selectedProducts.has(product._id)
+                          ? "#e6f7ff"
+                          : "transparent",
+                      }}
+                    >
+                      <td>
+                        <input
+                          type="checkbox"
+                          checked={selectedProducts.has(product._id)}
+                          onChange={() => toggleProductSelection(product._id)}
+                          style={{
+                            cursor: "pointer",
+                            width: "16px",
+                            height: "16px",
+                          }}
+                        />
+                      </td>
                       <td>{product.name}</td>
                       <td>{product.companyName}</td>
                       <td>${(product.price / 100).toFixed(2)}</td>
@@ -1156,6 +1298,49 @@ export default function Panel() {
               </button>
             </div>
           </form>
+        </div>
+      </div>
+
+      {/* Bulk Delete Modal */}
+      <div
+        className={`warning-modal-overlay ${
+          showBulkDeleteModal ? "visible" : ""
+        }`}
+      >
+        <div className="warning-modal-box">
+          <h3>🗑️ Bulk Delete Products</h3>
+          <p>
+            You are about to delete <strong>{selectedProducts.size}</strong>{" "}
+            product(s).
+          </p>
+          <p style={{ color: "#cc0000", fontWeight: "bold" }}>
+            ⚠️ This action cannot be undone!
+          </p>
+          <label htmlFor="bulk-delete-reason">Reason for Deletion:</label>
+          <textarea
+            id="bulk-delete-reason"
+            value={bulkDeleteReason}
+            onChange={(e) => setBulkDeleteReason(e.target.value)}
+            placeholder="Enter the reason for deleting these products..."
+            rows={4}
+          />
+          <div className="warning-modal-buttons">
+            <button
+              className="btn-cancel"
+              onClick={() => {
+                setShowBulkDeleteModal(false);
+                setBulkDeleteReason("");
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              className="btn-submit btn-danger"
+              onClick={handleBulkDelete}
+            >
+              Delete {selectedProducts.size} Product(s)
+            </button>
+          </div>
         </div>
       </div>
 
