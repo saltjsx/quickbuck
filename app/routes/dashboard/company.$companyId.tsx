@@ -1069,9 +1069,37 @@ export default function CompanyDashboardPage() {
                           </div>
 
                           <div className="space-y-2">
-                            <Label htmlFor="batch-quantity">
-                              Quantity to Order *
-                            </Label>
+                            <div className="flex items-center justify-between">
+                              <Label htmlFor="batch-quantity">
+                                Quantity to Order *
+                              </Label>
+                              {(() => {
+                                const product = products.find(
+                                  (p) => p._id === orderProductId
+                                );
+                                if (!product) return null;
+                                const productionCost = Math.floor(
+                                  product.price *
+                                    (product.productionCostPercentage ?? 0.35)
+                                );
+                                const maxAffordable = Math.floor(
+                                  company.balance / productionCost
+                                );
+                                return (
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() =>
+                                      setBatchQuantity(String(maxAffordable))
+                                    }
+                                    className="text-xs h-6"
+                                  >
+                                    Max: {maxAffordable}
+                                  </Button>
+                                );
+                              })()}
+                            </div>
                             <Input
                               id="batch-quantity"
                               type="number"
