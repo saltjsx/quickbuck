@@ -2,7 +2,11 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import { canCreateContent } from "./moderation";
-import { validateName, validateDescription, validateTags } from "./contentFilter";
+import {
+  validateName,
+  validateDescription,
+  validateTags,
+} from "./contentFilter";
 
 // Mutation: Create product (no initial stock, just the product listing)
 export const createProduct = mutation({
@@ -24,7 +28,9 @@ export const createProduct = mutation({
     // ROLE CHECK: Verify company owner can create products
     const canCreate = await canCreateContent(ctx, company.ownerId);
     if (!canCreate) {
-      throw new Error("Your account does not have permission to create products");
+      throw new Error(
+        "Your account does not have permission to create products"
+      );
     }
 
     // HARD LIMIT: Check if company has reached max products (30)
@@ -32,14 +38,19 @@ export const createProduct = mutation({
       .query("products")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
       .collect();
-    
+
     if (companyProducts.length >= 30) {
-      throw new Error("Your company has reached the maximum limit of 30 products. Delete an existing product to create a new one.");
+      throw new Error(
+        "Your company has reached the maximum limit of 30 products. Delete an existing product to create a new one."
+      );
     }
 
     // CONTENT FILTER: Validate product name, description, and tags
     const validatedName = validateName(args.name, "Product name");
-    const validatedDescription = validateDescription(args.description, "Product description");
+    const validatedDescription = validateDescription(
+      args.description,
+      "Product description"
+    );
     const validatedTags = validateTags(args.tags);
 
     // EXPLOIT FIX: Validate price is positive and safe integer
@@ -143,7 +154,9 @@ export const orderProductBatch = mutation({
     // Check if company has sufficient balance
     if (company.balance < totalCost) {
       throw new Error(
-        `Insufficient balance. Need ${totalCost / 100} but have ${company.balance / 100}`
+        `Insufficient balance. Need ${totalCost / 100} but have ${
+          company.balance / 100
+        }`
       );
     }
 
@@ -198,7 +211,7 @@ export const updateProduct = mutation({
   },
   handler: async (ctx, args) => {
     const { productId, ...updates } = args;
-    
+
     const product = await ctx.db.get(productId);
     if (!product) {
       throw new Error("Product not found");
@@ -206,15 +219,18 @@ export const updateProduct = mutation({
 
     // CONTENT FILTER: Validate updated fields if provided
     const validatedUpdates: any = { ...updates };
-    
+
     if (updates.name !== undefined) {
       validatedUpdates.name = validateName(updates.name, "Product name");
     }
-    
+
     if (updates.description !== undefined) {
-      validatedUpdates.description = validateDescription(updates.description, "Product description");
+      validatedUpdates.description = validateDescription(
+        updates.description,
+        "Product description"
+      );
     }
-    
+
     if (updates.tags !== undefined) {
       validatedUpdates.tags = validateTags(updates.tags);
     }
@@ -223,17 +239,19 @@ export const updateProduct = mutation({
     if (updates.price !== undefined && updates.price !== product.price) {
       const now = Date.now();
       const twoDaysInMs = 2 * 24 * 60 * 60 * 1000; // 2 days
-      
+
       if (product.lastPriceChange) {
         const timeSinceLastChange = now - product.lastPriceChange;
         if (timeSinceLastChange < twoDaysInMs) {
-          const hoursRemaining = Math.ceil((twoDaysInMs - timeSinceLastChange) / (60 * 60 * 1000));
+          const hoursRemaining = Math.ceil(
+            (twoDaysInMs - timeSinceLastChange) / (60 * 60 * 1000)
+          );
           throw new Error(
             `You can only change the price once every 2 days. Please wait ${hoursRemaining} more hours.`
           );
         }
       }
-      
+
       // Track the price change timestamp
       validatedUpdates.lastPriceChange = now;
     }
@@ -349,14 +367,14 @@ export const getCompanyProducts = query({
   },
   handler: async (ctx, args) => {
     const limit = args.limit || 100; // Default 100, helps with large companies
-    
+
     const products = await ctx.db
       .query("products")
       .withIndex("by_companyId", (q) => q.eq("companyId", args.companyId))
       .take(limit);
-    
+
     // Return only essential fields to reduce bandwidth
-    return products.map(p => ({
+    return products.map((p) => ({
       _id: p._id,
       name: p.name,
       description: p.description,
@@ -378,7 +396,7 @@ export const getCompanyProducts = query({
   },
 });
 
-// Query: Get all products (for marketplace)
+// Query: Get all active products (for marketplace - includes all stock levels)
 export const getAllProducts = query({
   args: {
     limit: v.optional(v.number()),
@@ -387,17 +405,17 @@ export const getAllProducts = query({
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit || 100, 200); // Default 100, max 200
     const offset = args.offset || 0;
-    
+
     // Fetch with pagination
     const allProducts = await ctx.db
       .query("products")
       .withIndex("by_isActive", (q) => q.eq("isActive", true))
       .take(1000); // Max 1000 total to prevent excessive queries
-    
+
     const paginatedProducts = allProducts.slice(offset, offset + limit);
-    
+
     // Return only essential fields for marketplace display
-    return paginatedProducts.map(p => ({
+    return paginatedProducts.map((p) => ({
       _id: p._id,
       companyId: p.companyId,
       name: p.name,
@@ -409,6 +427,53 @@ export const getAllProducts = query({
       maxPerOrder: p.maxPerOrder,
       totalSold: p.totalSold,
       qualityRating: p.qualityRating,
+      createdAt: p.createdAt,
+    }));
+  },
+});
+
+// Query: Get only in-stock products (for marketplace display)
+export const getInStockProducts = query({
+  args: {
+    limit: v.optional(v.number()),
+    offset: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const limit = Math.min(args.limit || 100, 200); // Default 100, max 200
+    const offset = args.offset || 0;
+
+    // Fetch all active products
+    const allProducts = await ctx.db
+      .query("products")
+      .withIndex("by_isActive", (q) => q.eq("isActive", true))
+      .take(1000); // Max 1000 total to prevent excessive queries
+
+    // Filter to only in-stock products
+    const inStockProducts = allProducts.filter((p) => {
+      // If stock is not defined, consider it in stock
+      if (p.stock === undefined || p.stock === null) {
+        return true;
+      }
+      // Only include products with stock > 0
+      return p.stock > 0;
+    });
+
+    const paginatedProducts = inStockProducts.slice(offset, offset + limit);
+
+    // Return only essential fields for marketplace display
+    return paginatedProducts.map((p) => ({
+      _id: p._id,
+      companyId: p.companyId,
+      name: p.name,
+      description: p.description,
+      price: p.price,
+      image: p.image,
+      tags: p.tags,
+      stock: p.stock,
+      maxPerOrder: p.maxPerOrder,
+      totalSold: p.totalSold,
+      qualityRating: p.qualityRating,
+      createdAt: p.createdAt,
     }));
   },
 });
@@ -425,14 +490,16 @@ export const searchProducts = query({
       .collect();
 
     const searchLower = args.query.toLowerCase();
-    
+
     return allProducts.filter((product) => {
       const nameMatch = product.name.toLowerCase().includes(searchLower);
-      const descMatch = product.description?.toLowerCase().includes(searchLower);
-      const tagMatch = product.tags?.some((tag) => 
+      const descMatch = product.description
+        ?.toLowerCase()
+        .includes(searchLower);
+      const tagMatch = product.tags?.some((tag) =>
         tag.toLowerCase().includes(searchLower)
       );
-      
+
       return nameMatch || descMatch || tagMatch;
     });
   },
@@ -464,10 +531,12 @@ export const getProductBatchOrders = query({
   },
   handler: async (ctx, args) => {
     const limit = Math.min(args.limit || 20, 50); // Default 20, max 50
-    
+
     const transactions = await ctx.db
       .query("transactions")
-      .withIndex("by_fromAccountId", (q) => q.eq("fromAccountId", args.companyId))
+      .withIndex("by_fromAccountId", (q) =>
+        q.eq("fromAccountId", args.companyId)
+      )
       .filter((q) => q.eq(q.field("assetType"), "product"))
       .order("desc")
       .take(limit);
@@ -476,12 +545,12 @@ export const getProductBatchOrders = query({
     const enriched = await Promise.all(
       transactions.map(async (tx) => {
         if (!tx.assetId) {
-          return { 
+          return {
             _id: tx._id,
             description: tx.description,
             amount: tx.amount,
             createdAt: tx.createdAt,
-            productName: "Unknown", 
+            productName: "Unknown",
             productImage: undefined,
             productPrice: undefined,
           };
@@ -513,7 +582,7 @@ export const getTopProductsByRevenue = query({
     const sorted = products
       .sort((a, b) => b.totalRevenue - a.totalRevenue)
       .slice(0, args.limit);
-    
+
     // Enrich with company details
     const enriched = await Promise.all(
       sorted.map(async (product) => {
@@ -525,7 +594,7 @@ export const getTopProductsByRevenue = query({
         };
       })
     );
-    
+
     return enriched;
   },
 });
@@ -540,7 +609,7 @@ export const getTopProductsBySales = query({
     const sorted = products
       .sort((a, b) => b.totalSold - a.totalSold)
       .slice(0, args.limit);
-    
+
     // Enrich with company details
     const enriched = await Promise.all(
       sorted.map(async (product) => {
@@ -552,7 +621,7 @@ export const getTopProductsBySales = query({
         };
       })
     );
-    
+
     return enriched;
   },
 });
@@ -592,4 +661,3 @@ export const getPlayerInventory = query({
     return enriched;
   },
 });
-

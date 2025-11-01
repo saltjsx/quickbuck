@@ -16,14 +16,6 @@ import {
   SelectValue,
 } from "~/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "~/components/ui/table";
-import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -34,7 +26,7 @@ import {
 import { CompanyLogo } from "~/components/ui/company-logo";
 import { formatCurrency } from "~/lib/game-utils";
 import { useAuth } from "@clerk/react-router";
-import { ShoppingCart, Package, Search, Trash2 } from "lucide-react";
+import { ShoppingCart, Package, Search, Trash2, Coins } from "lucide-react";
 import type { Id } from "convex/_generated/dataModel";
 import { getAuth } from "@clerk/react-router/ssr.server";
 import { redirect } from "react-router";
@@ -63,8 +55,8 @@ export default function MarketplacePage() {
     user ? { userId: user._id as Id<"users"> } : "skip"
   );
 
-  // Get all products and companies
-  const allProducts = useQuery(api.products.getAllProducts);
+  // Get in-stock products only and companies
+  const inStockProducts = useQuery(api.products.getInStockProducts, {});
   const allCompanies = useQuery(api.companies.getAllCompanies);
 
   // Get player's cart
@@ -79,11 +71,15 @@ export default function MarketplacePage() {
     player?._id ? { playerId: player._id } : "skip"
   );
 
+  // Get player's crypto portfolio
+  const cryptoPortfolio = useQuery(api.crypto.getMyPortfolio);
+
   // Mutations
   const addToCart = useMutation(api.cart.addToCart);
   const removeFromCart = useMutation(api.cart.removeFromCart);
   const updateQuantity = useMutation(api.cart.updateCartItemQuantity);
   const checkout = useMutation(api.cart.checkout);
+  const checkoutWithCrypto = useMutation(api.cart.checkoutWithCrypto);
 
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState("");
@@ -96,9 +92,17 @@ export default function MarketplacePage() {
 
   // Checkout state
   const [checkoutOpen, setCheckoutOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<"balance" | "crypto">(
+    "balance"
+  );
   const [checkoutAccount, setCheckoutAccount] = useState<{
     type: "player" | "company";
     id: Id<"players"> | Id<"companies">;
+  } | null>(null);
+  const [selectedCrypto, setSelectedCrypto] = useState<{
+    id: Id<"cryptocurrencies">;
+    symbol: string;
+    price: number;
   } | null>(null);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [checkoutError, setCheckoutError] = useState("");
@@ -107,11 +111,11 @@ export default function MarketplacePage() {
   const [quantities, setQuantities] = useState<Record<string, number>>({});
   const [addingToCart, setAddingToCart] = useState<string | null>(null);
 
-  // Filter and sort products
+  // Filter and sort products - only show in-stock
   const filteredProducts = useMemo(() => {
-    if (!allProducts) return [];
+    if (!inStockProducts) return [];
 
-    let filtered = allProducts.filter((product) => {
+    let filtered = inStockProducts.filter((product) => {
       // Search filter
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -150,7 +154,14 @@ export default function MarketplacePage() {
     }
 
     return filtered;
-  }, [allProducts, searchQuery, selectedCompany, minPrice, maxPrice, sortBy]);
+  }, [
+    inStockProducts,
+    searchQuery,
+    selectedCompany,
+    minPrice,
+    maxPrice,
+    sortBy,
+  ]);
 
   // Get company details
   const getCompanyDetails = (companyId: Id<"companies">) => {
@@ -214,10 +225,15 @@ export default function MarketplacePage() {
     }
   };
 
-  // Handle checkout
+  // Handle checkout with balance or crypto
   const handleCheckout = async () => {
-    if (!checkoutAccount) {
+    if (paymentMethod === "balance" && !checkoutAccount) {
       setCheckoutError("Please select an account");
+      return;
+    }
+
+    if (paymentMethod === "crypto" && !selectedCrypto) {
+      setCheckoutError("Please select a cryptocurrency");
       return;
     }
 
@@ -225,13 +241,24 @@ export default function MarketplacePage() {
     setCheckoutError("");
 
     try {
-      await checkout({
-        userId: player!._id,
-        accountType: checkoutAccount.type,
-        accountId: checkoutAccount.id,
-      });
+      if (paymentMethod === "crypto") {
+        await checkoutWithCrypto({
+          userId: player!._id,
+          accountType: "player",
+          accountId: player!._id,
+          cryptoId: selectedCrypto!.id,
+        });
+      } else {
+        await checkout({
+          userId: player!._id,
+          accountType: checkoutAccount!.type,
+          accountId: checkoutAccount!.id,
+        });
+      }
       setCheckoutOpen(false);
       setCheckoutAccount(null);
+      setSelectedCrypto(null);
+      setPaymentMethod("balance");
     } catch (err) {
       setCheckoutError(err instanceof Error ? err.message : "Checkout failed");
     } finally {
@@ -241,15 +268,30 @@ export default function MarketplacePage() {
 
   // Get cart items with product details
   const cartItems = useMemo(() => {
-    if (!cartData?.items || !allProducts) return [];
+    if (!cartData?.items || !inStockProducts) return [];
     return cartData.items.map((item) => {
-      const product = allProducts.find((p) => p._id === item.productId);
+      const product = inStockProducts.find((p) => p._id === item.productId);
       return { ...item, product };
     });
-  }, [cartData, allProducts]);
+  }, [cartData, inStockProducts]);
 
   const cartTotal = cartData?.cart?.totalPrice || 0;
   const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Calculate crypto needed if paying with crypto
+  const cryptoNeeded = useMemo(() => {
+    if (!selectedCrypto || cartTotal <= 0) return 0;
+    return cartTotal / selectedCrypto.price;
+  }, [selectedCrypto, cartTotal]);
+
+  // Check if player has enough crypto
+  const hasSufficientCrypto = useMemo(() => {
+    if (!selectedCrypto || !cryptoPortfolio) return false;
+    const cryptoBalance = cryptoPortfolio.find(
+      (p) => p.cryptoId === selectedCrypto.id
+    );
+    return cryptoBalance && cryptoBalance.balance >= cryptoNeeded;
+  }, [selectedCrypto, cryptoPortfolio, cryptoNeeded]);
 
   return (
     <div className="flex flex-1 flex-col">
@@ -260,7 +302,7 @@ export default function MarketplacePage() {
             <div>
               <h1 className="text-3xl font-bold tracking-tight">Marketplace</h1>
               <p className="text-muted-foreground">
-                Browse and purchase products from companies
+                Browse and purchase in-stock products from companies
               </p>
             </div>
 
@@ -370,7 +412,7 @@ export default function MarketplacePage() {
           </Card>
 
           {/* Products Grid */}
-          {!allProducts ? (
+          {!inStockProducts ? (
             <p className="text-sm text-muted-foreground">Loading products...</p>
           ) : filteredProducts.length === 0 ? (
             <Card>
@@ -380,7 +422,7 @@ export default function MarketplacePage() {
                   No products found
                 </h3>
                 <p className="text-sm text-muted-foreground">
-                  Try adjusting your filters
+                  Try adjusting your filters or check back later
                 </p>
               </CardContent>
             </Card>
@@ -441,8 +483,8 @@ export default function MarketplacePage() {
                       </p>
                       {product.stock !== undefined &&
                         product.stock !== null && (
-                          <p className="text-sm text-muted-foreground">
-                            Stock: {product.stock}
+                          <p className="text-sm font-medium text-blue-600">
+                            In stock: {product.stock}
                           </p>
                         )}
                     </div>
@@ -466,12 +508,7 @@ export default function MarketplacePage() {
                       <Button
                         className="flex-1"
                         onClick={() => handleAddToCart(product._id)}
-                        disabled={
-                          addingToCart === product._id ||
-                          (product.stock !== undefined &&
-                            product.stock !== null &&
-                            product.stock === 0)
-                        }
+                        disabled={addingToCart === product._id}
                       >
                         <ShoppingCart className="mr-2 h-4 w-4" />
                         {addingToCart === product._id
@@ -578,42 +615,156 @@ export default function MarketplacePage() {
                       </p>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label>Payment Account</Label>
-                      <Select
-                        value={
-                          checkoutAccount
-                            ? `${checkoutAccount.type}:${checkoutAccount.id}`
-                            : ""
-                        }
-                        onValueChange={(value) => {
-                          const [type, id] = value.split(":");
-                          setCheckoutAccount({
-                            type: type as "player" | "company",
-                            id: id as any,
-                          });
-                        }}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select account" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {player && (
-                            <SelectItem value={`player:${player._id}`}>
-                              Personal ({formatCurrency(player.balance)})
-                            </SelectItem>
-                          )}
-                          {playerCompanies?.map((company) => (
-                            <SelectItem
-                              key={company._id}
-                              value={`company:${company._id}`}
-                            >
-                              {company.name} ({formatCurrency(company.balance)})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    {/* Payment Method Selection */}
+                    <div className="space-y-3 border-t pt-4">
+                      <Label>Payment Method</Label>
+                      <div className="flex gap-2">
+                        <Button
+                          variant={
+                            paymentMethod === "balance" ? "default" : "outline"
+                          }
+                          onClick={() => {
+                            setPaymentMethod("balance");
+                            setSelectedCrypto(null);
+                          }}
+                          className="flex-1"
+                        >
+                          Balance
+                        </Button>
+                        <Button
+                          variant={
+                            paymentMethod === "crypto" ? "default" : "outline"
+                          }
+                          onClick={() => setPaymentMethod("crypto")}
+                          className="flex-1"
+                        >
+                          <Coins className="mr-2 h-4 w-4" />
+                          Crypto
+                        </Button>
+                      </div>
                     </div>
+
+                    {/* Balance Payment Account */}
+                    {paymentMethod === "balance" && (
+                      <div className="space-y-2">
+                        <Label>Payment Account</Label>
+                        <Select
+                          value={
+                            checkoutAccount
+                              ? `${checkoutAccount.type}:${checkoutAccount.id}`
+                              : ""
+                          }
+                          onValueChange={(value) => {
+                            const [type, id] = value.split(":");
+                            setCheckoutAccount({
+                              type: type as "player" | "company",
+                              id: id as any,
+                            });
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select account" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {player && (
+                              <SelectItem value={`player:${player._id}`}>
+                                Personal ({formatCurrency(player.balance)})
+                              </SelectItem>
+                            )}
+                            {playerCompanies?.map((company) => (
+                              <SelectItem
+                                key={company._id}
+                                value={`company:${company._id}`}
+                              >
+                                {company.name} (
+                                {formatCurrency(company.balance)})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+
+                    {/* Crypto Payment */}
+                    {paymentMethod === "crypto" && (
+                      <div className="space-y-3">
+                        <div className="space-y-2">
+                          <Label>Select Cryptocurrency</Label>
+                          <Select
+                            value={selectedCrypto ? selectedCrypto.id : ""}
+                            onValueChange={(value) => {
+                              const wallet = cryptoPortfolio?.find(
+                                (p) => p.cryptoId === value
+                              );
+                              if (wallet && wallet.crypto) {
+                                setSelectedCrypto({
+                                  id: wallet.cryptoId as Id<"cryptocurrencies">,
+                                  symbol: wallet.crypto.symbol,
+                                  price: wallet.crypto.currentPrice,
+                                });
+                              }
+                            }}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a cryptocurrency" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {cryptoPortfolio?.map((wallet) => (
+                                <SelectItem
+                                  key={wallet.cryptoId}
+                                  value={wallet.cryptoId}
+                                >
+                                  {wallet.crypto?.symbol || "Unknown"} -
+                                  Balance: {wallet.balance.toFixed(8)}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+
+                        {selectedCrypto && (
+                          <div className="bg-blue-50 dark:bg-blue-950 p-3 rounded-lg space-y-2">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Current price:
+                              </span>
+                              <span className="font-medium">
+                                {formatCurrency(selectedCrypto.price)}{" "}
+                                {selectedCrypto.symbol}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Amount needed:
+                              </span>
+                              <span className="font-medium">
+                                {cryptoNeeded.toFixed(8)}{" "}
+                                {selectedCrypto.symbol}
+                              </span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-muted-foreground">
+                                Your balance:
+                              </span>
+                              <span
+                                className={
+                                  hasSufficientCrypto
+                                    ? "font-medium text-green-600"
+                                    : "font-medium text-red-600"
+                                }
+                              >
+                                {cryptoPortfolio
+                                  ?.find(
+                                    (p) => p.cryptoId === selectedCrypto.id
+                                  )
+                                  ?.balance.toFixed(8) || "0"}{" "}
+                                {selectedCrypto.symbol}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {checkoutError && (
                       <div className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
@@ -634,7 +785,23 @@ export default function MarketplacePage() {
                 <Button
                   onClick={handleCheckout}
                   disabled={
-                    isCheckingOut || cartItems.length === 0 || !checkoutAccount
+                    isCheckingOut ||
+                    cartItems.length === 0 ||
+                    (paymentMethod === "balance" &&
+                      (!checkoutAccount ||
+                        (checkoutAccount.type === "player" &&
+                          player &&
+                          player.balance < cartTotal) ||
+                        (checkoutAccount.type === "company" &&
+                          playerCompanies &&
+                          playerCompanies.find(
+                            (c) => c._id === checkoutAccount.id
+                          ) &&
+                          playerCompanies.find(
+                            (c) => c._id === checkoutAccount.id
+                          )!.balance < cartTotal))) ||
+                    (paymentMethod === "crypto" &&
+                      (!selectedCrypto || !hasSufficientCrypto))
                   }
                 >
                   {isCheckingOut ? "Processing..." : "Complete Purchase"}

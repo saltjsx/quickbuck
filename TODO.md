@@ -425,19 +425,17 @@
   - [x] Transaction recording
   - [x] Run: `npm run test` to confirm all tests pass (30 tests added)
 
-**✅ SECTION 10 COMPLETE** - Marketplace fully functional with product browsing, search/filter, cart management, checkout flow, and comprehensive tests (30 tests covering search/filter logic, cart operations, stock validation, checkout validation, and transaction recording). Total: 218 tests passing!
-  - [ ] If crypto: select which crypto to use
-  - [ ] Show total price
-  - [ ] Confirm button
-  - [ ] On success: create cart items in database, create transactions, clear cart
-- [ ] 10.7. Use shadcn Card, Input, Button components throughout
-- [ ] 10.8. Write vitest tests for:
-  - [ ] Search/filter logic
-  - [ ] Cart operations (add, remove, update)
-  - [ ] Price calculations
-  - [ ] Checkout validation
-  - [ ] Account balance verification
-  - [ ] Run: `npm run test` to confirm all tests pass
+**✅ SECTION 10 COMPLETE** - Marketplace fully functional with product browsing, search/filter, cart management, checkout flow, inventory filtering, and crypto payment support!
+  - [x] Products out of stock are filtered from marketplace display
+  - [x] Crypto payment option in checkout:
+    - [x] Toggle between balance and crypto payment methods
+    - [x] Select which cryptocurrency to use for payment
+    - [x] Real-time price conversion (calculate exact amount needed)
+    - [x] Display crypto price, amount needed, and user's balance
+    - [x] Validate user has sufficient crypto balance
+  - [x] Checkout with crypto deducts exact amount based on current token price
+  - [x] All checkout transactions properly recorded
+  - [x] Comprehensive tests for search/filter logic, cart operations, stock validation, checkout validation, and transaction recording (30+ tests). Total: 218+ tests passing!
 
 ---
 
